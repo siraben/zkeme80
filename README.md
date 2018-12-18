@@ -44,16 +44,11 @@ Run each expression through `assemble-expr` (automatically checking
 for malformed expressions).  `assemble-expr` returns a record type
 that has the following fields (for a normal instruction):
 
-|--------------|-----------|---------------------------------------------------|
 | Record entry | Type      | Description                                       |
 | :-:          | :-:       | :-:                                               |
-|--------------|-----------|---------------------------------------------------|
-| cycles       | `integer` | The number of cycles this instruction takes.      |
-|--------------|-----------|---------------------------------------------------|
-| length       | `integer` | The length of the instruction, in bytes.          |
-|--------------|-----------|---------------------------------------------------|
-| gen-instr    | `lambda`  | Thunk that computes the actual instruction bytes. |
-|--------------|-----------|---------------------------------------------------|
+| `cycles`     | `integer` | The number of cycles this instruction takes.      |
+| `length`     | `integer` | The length of the instruction, in bytes.          |
+| `gen-instr`  | `lambda`  | Thunk that computes the actual instruction bytes. |
 
 The use of converting expressions into record types like this allows
 us to easily compute the length of the program (and resolve look ahead
