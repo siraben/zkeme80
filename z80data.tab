@@ -1,0 +1,541 @@
+# z80 Instruction Table
+
+#### INSTRUCTION
+# INS [MNOMIC] [VALUE]
+# MNOMIC is any series of case-insenstive characters with support for special
+# characters to define additional functionality. MNOMIC may not have whitespace.
+# Special Characters:
+#  '_': Required whitespace
+#  '-': Optional whitespace
+#  '%#<bits[s]>': Immediate value (# is a character to use to identify later)
+#  '^#<bits[s]>': Immediate value relative to PC (# is a character to use to identify later)
+#  '@#<group>': Operand (# is a character to use to identify later)
+#  '&': Special - RST value
+# 
+# VALUE is a value in binary, which may include references to immediate values and operands
+# in use above. For example, in the MNOMIC 'hello,-world_%A<16>_@B<a>', the value could be
+# '01011 %A 10110 @B'
+#
+#### OPERAND GROUP
+# OPERAND [GROUP NAME] [OPERAND NAME] [VALUE]
+# GROUP NAME is the name of the operand group this belongs to. This is used to reference the
+# group in a MNOMIC with the @ operator. OPERAND NAME is the name to match, such as A, B, IX,
+# etc. VALUE is the value in binary of this operand.
+
+# Z80 INSTRUCTION SET
+
+#### Z80 PROPERTIES
+ARCH z80
+
+#### OPERAND GROUPS
+# GROUP 1
+OPERAND g1 NZ 00
+OPERAND g1 Z  01
+OPERAND g1 NC 10
+OPERAND g1 C  11
+
+# GROUP 2
+OPERAND g2 NZ 000
+OPERAND g2 Z  001
+OPERAND g2 NC 010
+OPERAND g2 C  011
+OPERAND g2 PO 100
+OPERAND g2 PE 101
+OPERAND g2 P  110
+OPERAND g2 M  111
+
+# GROUP 3
+OPERAND g3 A    111
+OPERAND g3 B    000
+OPERAND g3 C    001
+OPERAND g3 D    010
+OPERAND g3 E    011
+OPERAND g3 H    100
+OPERAND g3 L    101
+OPERAND g3 (HL) 110
+
+# GROUP 4
+OPERAND g4 BC 0
+OPERAND g4 DE 1
+
+# GROUP 5
+OPERAND g5 I  0
+OPERAND g5 R  1
+
+# GROUP 6
+OPERAND g6 BC 00
+OPERAND g6 DE 01
+OPERAND g6 HL 10
+OPERAND g6 SP 11
+
+# GROUP 7
+OPERAND g7 BC 00
+OPERAND g7 DE 01
+OPERAND g7 HL 10
+OPERAND g7 AF 11
+
+# GROUP 8
+OPERAND g8 IX 11011101
+OPERAND g8 IY 11111101
+
+# GROUP 9
+OPERAND g9 BC 00
+OPERAND g9 DE 01
+OPERAND g9 IX 10
+OPERAND g9 SP 11
+
+# GROUP 10
+OPERAND g10 BC 00
+OPERAND g10 DE 01
+OPERAND g10 IY 10
+OPERAND g10 SP 11
+
+# Most instructions were just lifted from Learn TI-83+ Assembly in 28 Days, they've got
+# pretty nice instruction set documentation.
+#### INSTRUCTIONS
+
+# Undocumented IX/IY(H,L) instructions come first for parsing reasons
+
+# IXH
+INS ADD_A-,-IXH                         11011101 10000100
+    INS ADD_IXH                         11011101 10000100
+
+INS AND_IXH                             11011101 10100100
+    INS AND_A-,-IXH                     11011101 10100100
+
+INS CP_IXH                              11011101 10111100
+    INS A-,-CP_IXH                      11011101 10111100
+
+INS DEC_IXH                             11011101 00100101
+
+INS INC_IXH                             11011101 00100100
+
+INS LD_@A<g3>-,-IXH                     11011101 01@A100
+INS LD_IXH-,-@A<g3>                     11011101 01100@A
+INS LD_IXH-,-%A<8>                      11011101 00100110 %A
+
+INS OR_IXH                              11011101 10110100
+    INS OR_A-,-IXH                      11011101 10110100
+
+INS SBC_A-,-IXH                         11011101 10011100
+    INS SBC_IXH                         11011101 10011100
+
+INS SUB_IXH                             11011101 10010100
+    INS SUB_A-,-IXH                     11011101 10010100
+
+INS XOR_IXH                             11011101 10101100
+    INS XOR_A-,-IXH                     11011101 10101100
+
+# IXL
+INS ADD_A-,-IXL                         11011101 10000101
+    INS ADD_IXL                         11011101 10000101
+
+INS AND_IXL                             11011101 10100101
+    INS AND_A-,-IXL                     11011101 10100101
+
+INS CP_IXL                              11011101 10111101
+    INS A-,-CP_IXL                      11011101 10111101
+
+INS DEC_IXL                             11011101 00101101
+
+INS INC_IXL                             11011101 00101100
+
+INS LD_@A<g3>-,-IXL                     11011101 01@A101
+INS LD_IXL-,-@A<g3>                     11011101 01101@A
+INS LD_IXL-,-%A<8>                      11011101 00101110 %A
+
+INS OR_IXL                              11011101 10110101
+    INS OR_A-,-IXL                      11011101 10110101
+
+INS SBC_A-,-IXL                         11011101 10011101
+    INS SBC_IXL                         11011101 10011101
+
+INS SUB_IXL                             11011101 10010101
+    INS SUB_A-,-IXL                     11011101 10010101
+
+INS XOR_IXL                             11011101 10101101
+    INS XOR_A-,-IXL                     11011101 10101101
+
+# IYH
+INS ADD_A-,-IYH                         11111101 10000100
+    INS ADD_IYH                         11111101 10000100
+
+INS AND_IYH                             11111101 10100100
+    INS AND_A-,-IYH                     11111101 10100100
+
+INS CP_IYH                              11111101 10111100
+    INS A-,-CP_IYH                      11111101 10111100
+
+INS DEC_IYH                             11111101 00100101
+
+INS INC_IYH                             11111101 00100100
+
+INS LD_@A<g3>-,-IYH                     11111101 01@A100
+INS LD_IYH-,-@A<g3>                     11111101 01100@A
+INS LD_IYH-,-%A<8>                      11111101 00100110 %A
+
+INS OR_IYH                              11111101 10110100
+    INS OR_A-,-IYH                      11111101 10110100
+
+INS SBC_A-,-IYH                         11111101 10011100
+    INS SBC_IYH                         11111101 10011100
+
+INS SUB_IYH                             11111101 10010100
+    INS SUB_A-,-IYH                     11111101 10010100
+
+INS XOR_IYH                             11111101 10101100
+    INS XOR_A-,-IYH                     11111101 10101100
+
+# IYL
+INS ADD_A-,-IYL                         11111101 10000101
+    INS ADD_IYL                         11111101 10000101
+
+INS AND_IYL                             11111101 10100101
+    INS AND_A-,-IYL                     11111101 10100101
+
+INS CP_IYL                              11111101 10111101
+    INS A-,-CP_IYL                      11111101 10111101
+
+INS DEC_IYL                             11111101 00101101
+
+INS INC_IYL                             11111101 00101100
+
+INS LD_@A<g3>-,-IYL                     11111101 01@A101
+INS LD_IYL-,-@A<g3>                     11111101 01101@A
+INS LD_IYL-,-%A<8>                      11111101 00101110 %A
+
+INS OR_IYL                              11111101 10110101
+    INS OR_A-,-IYL                      11111101 10110101
+
+INS SBC_A-,-IYL                         11111101 10011101
+    INS SBC_IYL                         11111101 10011101
+
+INS SUB_IYL                             11111101 10010101
+    INS SUB_A-,-IYL                     11111101 10010101
+
+INS XOR_IYL                             11111101 10101101
+    INS XOR_A-,-IYL                     11111101 10101101
+
+#### DATA MOVEMENT
+
+INS EX_DE-,-HL                          11101011
+    INS EX_HL-,-DE                      11101011
+INS EX_AF-,-AF'                         00001000
+    INS EX_AF'-,-AF                     00001000
+INS EX_(-SP-)-,-HL                      11100011
+    INS EX_HL-,-(-SP-)                  11100011
+INS EX_(-SP-)-,-@A<g8>                  @A 11100011
+    INS EX_@A<g8>-,-(-SP-)              @A 11100011
+
+INS EXX                                 11011001
+
+INS LD_HL-,-(-%A<16>-)                  00101010 %A
+
+INS LD_@A<g3>-,-@B<g3>                  01@A@B
+
+INS LD_@A<g3>-,-(-@B<g8>-%C<8>-)        @B 01@A110 %C
+    INS LD_@A<g3>-,-(-%C<8>-+-@B<g8>-)  @B 01@A110 %C
+    INS LD_@A<g3>-,-(-@B<g8>-)          @B 01@A110 00000000
+INS LD_(-@A<g8>-%B<8>-)-,-@C<g3>        @A 01110@C %B
+    INS LD_(-%B<8>-+-@A<g8>-)-,-@C<g3>  @A 01110@C %B
+    INS LD_(-@A<g8>-)-,-@C<g3>          @A 01110@C 00000000
+
+INS LD_A-,-(-@A<g4>-)                   000@A1010
+INS LD_A-,-(-%A<16>-)                   00111010 %A
+INS LD_(-@A<g4>-)-,-A                   000@A0010
+INS LD_(-%A<16>-)-,-A                   00110010 %A
+INS LD_A-,-@A<g5>                       11101101 0101@A111
+INS LD_@A<g5>-,-A                       11101101 0100@A111
+
+INS LD_@A<g3>-,-%B<8>                   00@A110 %B
+
+INS LD_(@A<g8>-%B<8>-)-,-%C<8>          @A 00110110 %B %C
+    INS LD_(-@A<g8>-+-%B<8>-)-,-%C<8>   @A 00110110 %B %C
+    INS LD_(-%B<8>-+-@A<g8>-)-,-%C<8>   @A 00110110 %B %C
+    INS LD_(-@A<g8>-)-,-%B<8>           @A 00110110 00000000 %B
+
+INS LD_(-@A<g8>-%B<8>-)-,-%C<8>         @A 00110110 %B %C
+    INS LD_(-%B<8>-+-@A<g8>-)-,-%C<8>   @A 00110110 %B %C
+    INS LD_(-@A<g8>-)-,-%B<8>           @A 00110110 00000000 %B
+
+INS LD_SP-,-HL                          11111001
+INS LD_SP-,-@A<g8>                      @A 11111001
+
+INS LD_@A<g6>-,-(-%B<16>-)              11101101 01@A1011 %B
+INS LD_@A<g8>-,-(-%B<16>-)              @A 00101010 %B
+INS LD_@A<g6>-,-%B<16>                  00@A0001 %B
+INS LD_@A<g8>-,-%B<16>                  @A 00100001 %B
+INS LD_(-%A<16>-)-,-HL                  00100010 %A
+INS LD_(-%A<16>-)-,-@B<g6>              11101101 01@B0011 %A
+INS LD_(-%A<16>-)-,-@B<g8>              @B 00100010 %A
+INS LD_SP-,-HL                          11111001
+INS LD_SP-,-@A<g8>                      @A 11111001
+
+INS LDD                                 11101101 10101000
+
+INS LDDR                                11101101 10111000
+
+INS LDI                                 11101101 10100000
+
+INS LDIR                                11101101 10110000
+
+INS POP_@A<g7>                          11@A0001
+INS POP_@A<g8>                          @A 11100001
+
+INS PUSH_@A<g7>                         11@A0101
+INS PUSH_@A<g8>                         @A 11100101
+
+#### ARITHMETIC
+
+INS ADC_A-,-@A<g3>                      10001@A
+    INS ADC_@A<g3>-,-A                  10001@A
+    INS ADC_@A<g3>                      10001@A
+INS ADC_A-,-(-@A<g8>-%B<8>-)            @A 10001110 %B
+    INS ADC_A-,-(-%B<8>-+-@A<g8>-)      @A 10001110 %B
+    INS ADC_A-,-(-@A<g8>-)              @A 10001110 00000000
+INS ADC_HL-,-@A<g6>                     11101101 01@A1010
+INS ADC_A-,-%A<8>                       11001110 %A
+    INS ADC_%A<8>                       11001110 %A
+
+INS ADD_A-,-@A<g3>                      10000@A
+    INS ADD_-@A<g3>-,-A                 10000@A
+    INS ADD_@A<g3>                      10000@A
+INS ADD_A-,-(-@A<g8>-%B<8>-)            @A 10000110 %B
+    INS ADD_A-,-(-%B<8>-+-@A<g8>-)      @A 10000110 %B
+    INS ADD_A-,-(-@A<g8>-)              @A 10000110 00000000
+    INS ADD_-(-@A<g8>-+-%B<8>-)         @A 10000110 %B
+    INS ADD_-(-%B<8>-+-@A<g8>-)         @A 10000110 %B
+    INS ADD_-(-@A<g8>-)                 @A 10000110 00000000
+INS ADD_A-,-%A<8>                       11000110 %A
+INS ADD_HL-,-@A<g6>                     00@A1001
+INS ADD_IX-,-@A<g9>                     11011101 00@A1001
+INS ADD_IY-,-@A<g10>                    11111101 00@A1001
+
+INS CP_@A<g3>                           10111@A
+    INS CP_A-,-@A<g3>                   10111@A
+INS CP_(-@A<g8>-%B<8>-)                 @A 10111110 %B
+    INS CP_(-%B<8>-+-@A<g8>-)           @A 10111110 %B
+    INS CP_A-,-(-%B<8>-+-@A<g8>-)       @A 10111110 %B
+    INS CP_A-,-(-@A<g8>-+-%B<8>-)       @A 10111110 %B
+    INS CP_A-,-(-@A<g8>-)               @A 10111110 00000000
+    INS CP_(-@A<g8>-)                   @A 10111110 00000000
+INS CP_A-,-%A<8>                        11111110 %A
+    INS CP_%A<8>                        11111110 %A
+
+INS CPD                                 11101101 10101001
+
+INS CPDR                                11101101 10111001
+
+INS CPI                                 11101101 10100001
+
+INS CPIR                                11101101 10110001
+
+INS CPL                                 00101111
+
+INS DAA                                 00100111
+
+INS DEC_@A<g3>                          00@A101
+INS DEC_(-@A<g8>-%B<8>-)                @A 00110101 %B
+    INS DEC_(-%B<8>-+-@A<g8>-)          @A 00110101 %B
+    INS DEC_(-@A<g8>-)                  @A 00110101 00000000
+INS DEC_@A<g6>                          00@A1011
+INS DEC_@A<g8>                          @A 00101011
+
+INS INC_@A<g3>                          00@A100
+INS INC_(-@A<g8>-%B<8>-)                @A 00110100 %B
+    INS INC_(-%B<8>-+-@A<g8>-)          @A 00110100 %B
+    INS INC_(-@A<g8>-)                  @A 00110100 00000000
+INS INC_@A<g6>                          00@A0011
+INS INC_@A<g8>                          @A 00100011
+
+INS NEG                                 11101101 01000100
+
+INS SBC_HL-,-@A<g6>                     11101101 01@A0010
+INS SBC_A-,-@A<g3>                      10011@A
+    INS SBC_@A<g3>                      10011@A
+INS SBC_A-,-(-@A<g8>-%B<8>-)            @A 10011110 %B
+    INS SBC_A-,-(-%B<8>-+-@A<g8>-)      @A 10011110 %B
+    INS SBC_A-,-(-@A<g8>-)              @A 10011110 00000000
+INS SBC_A-,-%A<8>                       11011110 %A
+    INS SBC_%A<8>                       11011110 %A
+
+INS SUB_A-,-@A<g3>                      10010@A
+    INS SUB_@A<g3>                      10010@A
+INS SUB_A-,-(-@A<g8>-%B<8>-)            @A 10010110 %B
+    INS SUB_A-,-(-%B<8>-+-@A<g8>-)      @A 10010110 %B
+    INS SUB_A-,-(-@A<g8>-)              @A 10010110 00000000
+    INS SUB_(-@A<g8>-%B<8>-)            @A 10010110 %B
+    INS SUB_(-%B<8>-+-@A<g8>-)          @A 10010110 %B
+    INS SUB_(-@A<g8>-)                  @A 10010110 00000000
+INS SUB_A-,-%A<8>                       11010110 %A
+    INS SUB_%A<8>                       11010110 %A
+
+#### BIT MANIPULATION
+
+INS AND_@A<g3>                          10100@A
+    INS AND_A-,-@A<g3>                  10100@A
+INS AND_(-@A<g8>-%B<8>-)                @A 10100110 %B
+    INS AND_(-%B<8>-+-@A<g8>-)          @A 10100110 %B
+    INS AND_(-@A<g8>-)                  @A 10100110 00000000 00000000
+    INS AND_A-,-(-@A<g8>-%B<8>-)        @A 10100110 %B
+    INS AND_A-,-(-%B<8>-+-@A<g8>-)      @A 10100110 %B
+INS AND_A-,-%A<8>                       11100110 %A
+    INS AND_%A<8>                       11100110 %A
+
+INS BIT_%A<3>-,-@B<g3>                  11001011 01%A@B
+INS BIT_%A<3>-,-(-@B<g8>-%C<8>-)        @B 11001011 %C 01%A110
+    INS BIT_%A<3>-,-(-%C<8>-+-@B<g8>-)  @B 11001011 %C 01%A110
+    INS BIT_%A<3>-,-(-@B<g8>-)          @B 11001011 00000000 01%A110
+
+INS CCF 00111111
+
+INS OR_@A<g3>                           10110@A
+    INS OR_A-,-@A<g3>                   10110@A
+INS OR_(-@A<g8>-%B<8>-)                 @A 10110110 %B
+    INS OR_(-%B<8>-+-@A<g8>-)           @A 10110110 %B
+    INS OR_(-@A<g8>-)                   @A 10110110 00000000
+    INS OR_A-,-(-@A<g8>-%B<8>-)         @A 10110110 %B
+    INS OR_A-,-(-%B<8>-+-@A<g8>-)       @A 10110110 %B
+    INS OR_A-,-(-@A<g8>-)               @A 10110110 00000000
+INS OR_A-,-%A<8>                        11110110 %A
+    INS OR_%A<8>                        11110110 %A
+
+INS RES_%A<3>-,-@B<g3>                  11001011 10%A@B
+INS RES_%A<3>-,-(-@B<g8>-%C<8>-)        @B 11001011 %C 10%A110
+    INS RES_%A<3>-,-(-%C<8>-+-@B<g8>-)  @B 11001011 %C 10%A110
+    INS RES_%A<3>-,-(-@B<g8>-)          @B 11001011 00000000 10%A110
+
+INS SCF 00110111
+
+INS SET_%A<3>-,-@B<g3>                  11001011 11%A@B
+INS SET_%A<3>-,-(-@B<g8>-%C<8>-)        @B 11001011 %C 11%A110
+    INS SET_%A<3>-,-(-%C<8>-+-@B<g8>-)  @B 11001011 %C 11%A110
+    INS SET_%A<3>-,-(-@B<g8>-)          @B 11001011 00000000 11%A110
+
+INS XOR_@A<g3>                          10101@A
+    INS XOR_A-,-@A<g3>                  10101@A
+INS XOR_(-@A<g8>-%B<8>-)                @A 10101110 %B
+    INS XOR_(-%B<8>-+-@A<g8>-)          @A 10101110 %B
+    INS XOR_(-@A<g8>-)                  @A 10101110 00000000
+    INS XOR_A-,-(-@A<g8>-%B<8>-)        @A 10101110 %B
+    INS XOR_A-,-(-%B<8>-+-@A<g8>-)      @A 10101110 %B
+    INS XOR_A-,-(-@A<g8>-)              @A 10101110 00000000
+INS XOR_A-,-%A<8>                       11101110 %A
+    INS XOR_%A<8>                       11101110 %A
+
+#### SHIFT/ROTATE
+
+INS RL_@A<g3>                           11001011 00010@A
+INS RL_(-@A<g8>-%B<8>-)                 @A 11001011 %B 00010110
+    INS RL_(-%B<8>-+-@A<g8>-)           @A 11001011 %B 00010110
+    INS RL_(-@A<g8>-)                   @A 11001011 00000000 00010110
+
+INS RLA 00010111
+
+INS RLC_@A<g3>                          11001011 00000@A
+INS RLC_(-@A<g8>-%B<8>-)                @A 11001011 %B 00000110
+    INS RLC_(-%B<8>-+-@A<g8>-)          @A 11001011 %B 00000110
+    INS RLC_(-@A<g8>-)                  @A 11001011 00000000 00000110
+
+INS RLCA                                00000111
+
+INS RLD                                 11101101 01101111
+
+INS RR_@A<g3>                           11001011 00011@A
+
+INS RR_(-@A<g8>-%B<8>-)                 @A 11001011 %B 00011110
+    INS RR_(-%B<8>-+-@A<g8>-)           @A 11001011 %B 00011110
+    INS RR_(-@A<g8>-)                   @A 11001011 00000000 00011110
+
+INS RRA                                 00011111
+
+INS RRC_@A<g3>                          11001011 00001@A
+INS RRC_(-@A<g8>-%B<8>-)                @A 11001011 %B 00001110
+    INS RRC_(-%B<8>-+-@A<g8>-)          @A 11001011 %B 00001110
+    INS RRC_(-@A<g8>-)                  @A 11001011 00000000 00001110
+
+INS RRCA                                00001111
+
+INS RRD                                 11101101 01100111
+
+INS SLA_@A<g3>                          11001011 00100@A
+INS SLA_(-@A<g8>-%B<8>-)                @A 11001011 %B 00100110
+    INS SLA_(-%B<8>-+-@A<g8>-)          @A 11001011 %B 00100110
+    INS SLA_(-@A<g8>-)                  @A 11001011 00000000 00100110
+
+INS SRA_@A<g3>                          11001011 00101@A
+INS SRA_(-@A<g8>-%B<8>-)                @A 11001011 %B 00101110
+    INS SRA_(-%B<8>-+-@A<g8>-)          @A 11001011 %B 00101110
+    INS SRA_(-@A<g8>-)                  @A 11001011 00000000 00101110
+
+INS SRL_@A<g3>                          11001011 00111@A
+INS SRL_(-@A<g8>-%B<8>-)                @A 11001011 %B 00111110
+    INS SRL_(-%B<8>-+-@A<g3>-)          @A 11001011 %B 00111110
+    INS SRL_(-@A<g3>-)                  @A 11001011 00000000 00111110
+
+#### CONTROL
+
+INS CALL_@A<g2>-,-%B<16>                11@A100 %B
+INS CALL_%A<16>                         11001101 %A
+
+INS DJNZ_^A<8>                          00010000 ^A
+
+INS JP_(-HL-)                           11101001
+INS JP_HL                               11101001
+INS JP_(-@A<g8>-)                       @A 11101001
+
+INS JP_@A<g2>-,-%B<16>                  11@A010 %B
+INS JP_%A<16>                           11000011 %A
+
+INS JR_@A<g1>-,-^B<8>                   001@A000 ^B
+INS JR_^A<8>                            00011000 ^A
+
+INS NOP                                 00000000
+
+INS RET                                 11001001
+INS RET_@A<g2>                          11@A000
+
+INS RETI                                11101101 01001101
+
+INS RETN                                11101101 01000101
+
+INS RST_&A                              11&A111
+
+#### HARDWARE
+
+INS DI                                  11110011
+
+INS EI                                  11111011
+
+INS HALT                                01110110
+
+INS IM_0                                11101101 01000110
+INS IM_1                                11101101 01010110
+INS IM_2                                11101101 01011110
+
+INS IN_@A<g3>-,-(-C-)                   11101101 01@A000
+INS IN_A-,-(-%A<8>-)                    11011011 %A
+
+INS IND                                 11101101 10101010
+
+INS INDR                                11101101 10111010
+
+INS INI                                 11101101 10100010
+
+INS INIR                                11101101 10110010
+
+INS OTDR                                11101101 10111011
+
+INS OTIR                                11101101 10110011
+
+INS OUT_(-C-)-,-@A<g3>                  11101101 01@A001
+INS OUT_(-%A<8>-)-,-A                   11010011 %A
+
+INS OUTD                                11101101 10101011
+
+INS OUTI                                11101101 10100011
+
+# HARDWARE
+INS IN_(-C-)                            11101101 01110000
+    INS IN_F-,-(-C-)                    11101101 01110000
+INS OUT_(-C-)-,-0                       11101101 01110001
