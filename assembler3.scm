@@ -85,9 +85,11 @@
 
 (define (unsigned-nat? x)
   (and (integer? x) (>= x 0)))
+
 (define (8-bit-imm? x)
   (and (unsigned-nat? x)
        (> (ash 1 8) x)))
+
 (define (16-bit-imm-or-label? x)
   (or (symbol? x)
       (and (unsigned-nat? x)
@@ -282,7 +284,9 @@
     (((? condition? a) (? 16-bit-imm-or-label? b))
      (assemble-cond-call a b))
     ((? 16-bit-imm-or-label? a)
-     (assemble-uncond-call a))))
+     (assemble-uncond-call a))
+    (_
+     (error (format #f "Invalid operands to call: ~a" args)))))
 
 (define (assemble-dw word-list)
   (make-inst 0
@@ -363,8 +367,24 @@
     (_
      (error (format #f "Invalid operands to dec: ~a" arg)))))
 
-(define (assemble-bit arg)
-  ())
+(define (assemble-inc-8-bit-reg arg)
+  (make-inst (if (eqv? arg '(hl)) 11 4)
+             1
+             `(,(make-opcode (lookup arg ld-regs) 3 #b00000100))))
+
+(define (assemble-inc-16-bit-reg arg)
+  (make-inst 6
+             1
+             `(,(make-opcode (lookup arg 16-bit-regs) 4 #b00000011))))
+
+(define (assemble-inc arg)
+  (match arg
+    ((? 8-bit-reg? a)
+     (assemble-inc-8-bit-reg a))
+    ((? 16-bit-reg? a)
+     (assemble-inc-16-bit-reg a))))
+(define (assemble-bit imm3 arg)
+  '())
 
 (define (assemble-expr expr)
   (match expr
@@ -398,6 +418,8 @@
      (assemble-xor arg))
     (`(dec ,arg)
      (assemble-dec arg))
+    (`(inc ,arg)
+     (assemble-inc arg))
     (_
      (error (format #f "Unknown expression: ~s\n" expr))))
   )
