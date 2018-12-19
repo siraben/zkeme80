@@ -37,6 +37,12 @@
     (p . #b110)
     (m . #b111)))
 
+(define jr-condition-codes
+  '((nz . #b00)
+    (z  . #b01)
+    (nc . #b10)
+    (c  . #b11)))
+
 (define (lookup key alist)
   (let ((match (assoc key alist)))
     (if match
@@ -249,6 +255,9 @@
         (format #t "Adding label ~a (0x~4,'0x)\n" name *pc*)
         (set! *labels* `((,name . ,*pc*) . ,*labels*)))))
 
+
+(define (advance-pc! count)
+  (set! *pc* (+ *pc* count)))
 (define (assemble-label name)
   (add-label! name)
   '())
@@ -281,6 +290,52 @@
      (assemble-cond-jp a b))
     (((? 16-bit-imm-or-label? a))
      (assemble-uncond-jp a))))
+
+
+(define (signed-8-bit-imm? x)
+  (and (integer? x)
+       (>= 127 (abs x))))
+
+(define (jr-simm8-convert x)
+  (if (negative? x)
+      (+ 256 x)
+      x)
+  )
+
+(define (resolve-jr-label-or-simm x)
+  (if (symbol? x)
+      (let* ((dest (resolve-label x))
+             (offset (- dest *pc*)))
+        (format #t "~a\n" *pc*)
+        ;; Compute the offset from the current program counter
+        (if (not (signed-8-bit-imm? offset))
+            (error (format #f "Offset ~a too far for 8-bit signed.\n" offset))
+            (jr-simm8-convert offset)))
+      (and (signed-8-bit-imm? x)
+           (jr-simm8-convert (- x *pc*)))))
+
+(define (assemble-cond-jr cond simm8)
+  (make-inst 9.5
+             2
+             (let ((simm8 (resolve-jr-label-or-simm simm8)))
+               `(,(make-opcode (lookup cond condition-codes) 3 #b00100000)
+                 ,simm8))))
+
+(define (assemble-uncond-jr simm8)
+  (make-inst 12
+             2
+             (let ((simm8 (resolve-jr-label-or-simm simm8)))
+               `(#b00011000
+                 ;; Follwed by a signed byte, -127 to +127
+                 ,simm8))))
+
+(define (assemble-jr args)
+  (match args
+    (((? condition? a) b)
+     (assemble-cond-jr a b))
+    (((? 16-bit-imm-or-label? a))
+     (assemble-uncond-jr a))
+    ))
 
 
 (define (assemble-cond-call cond imm16)
@@ -448,6 +503,8 @@
      (error (format #f "Invalid operands to adc: ~a" arg)))))
 
 (define (assemble-expr expr)
+  ;; Pattern match EXPR against the valid instructions and dispatch to
+  ;; the corresponding sub-assembler.
   (match expr
     (((? simple-op? a))
      (assemble-simple a))
@@ -461,8 +518,12 @@
      (assemble-label name))
     (`(org ,(? 16-bit-imm? a))
      (assemble-org a))
+    ;; Some instructions have multiple possible arguments, they should
+    ;; be handled by the sub-assembler.
     (`(jp . ,args)
      (assemble-jp args))
+    (`(jr . ,args)
+     (assemble-jr args))
     (`(call . ,args)
      (assemble-call args))
     (`(bit ,imm3 ,arg)
@@ -493,10 +554,10 @@
 
 (define *pc* 0)
 (define *labels* 0)
-(define (reset-labels-and-pc!)
-  (set! *labels* '())
+(define (reset-pc!)
   (set! *pc* 0))
-
+(define (reset-labels!)
+  (set! *labels* '()))
 
 (define (write-bytevector-to-file bv fn)
   (let ((port (open-output-file fn)))
@@ -534,31 +595,53 @@
 
 ;; (assemble-to-file sample-prog "out.bin")
 
-;; Use a Z80 disassembler to verify the output.
-
-
-
 (define (pass1 exprs)
   ;; Check each instruction for correct syntax and produce code
   ;; generating thunks.  Meanwhile, increment PC accordingly and build
   ;; up labels.
   
-  (reset-labels-and-pc!)
+  (reset-labels!)
+  (reset-pc!)
   (format #t "Pass one...\n")
-  
-  (delq '() (map-in-order (lambda (x)
-                            (if (procedure? x)
-                                (begin (x) '())
-                                (let ((res (assemble-expr x)))
-                                  (if (inst? res)
-                                      (set! *pc* (+ *pc* (inst-length res))))
-                                  res)))
-                          exprs)))
+
+  ;; Every assembled instruction, or inlined procedure should return a
+  ;; value.  A value of () indicates that it will not be included in
+  ;; pass 2.
+  (filter
+   (lambda (x) (not (null? x)))
+   (map-in-order
+    (lambda (x)
+      (if (procedure? x)
+          ;; Evaluate an inlined procedure (could do anything(!)).
+          (let ((macro-val (x)))
+            ;; But that procedure has to return () or an instruction
+            ;; record.
+            (if (not (or (null? macro-val)
+                         (inst? macro-val)))
+                (error (format #f
+                               "Error during pass one: macro did not return an instruction record: instead got ~a.  PC: ~a\n"
+                               macro-val
+                               *pc*))
+                macro-val))
+
+          ;; Assemble a normal instruction.
+          (let ((res (assemble-expr x)))
+            (if (inst? res)
+                (advance-pc! (inst-length res)))
+            res)))
+    exprs)))
 
 (define (pass2 insts)
+  (reset-pc!)
   (format #t "Pass two...\n")
   ;; Force the code generating thunks.  All labels should be resolved by now.
-  (map-in-order gen-inst insts)
+  (map-in-order
+   (lambda (x)
+     (if (not (inst? x))
+         (error (format #f "Error during pass two: not an instruction record: ~a. PC: ~a." x (num->hex *pc*))))
+     (advance-pc! (inst-length x))
+     (gen-inst x))
+   insts)
   )
 
 (define (assemble-prog prog)
@@ -567,24 +650,36 @@
 (define (string s)
   `(,@(map char->integer (string->list s)) 0))
 
-
+;; At assembly time, print the value of the program counter.
 (define PRINT-PC
   (lambda ()
-    (format #t "~a\n" (num->hex *pc*))))
+    (format #t "~a\n" (num->hex *pc*))
+    ;; Macros need to return () or an instruction record..
+    '()))
 
+;; Multiple pushes.
 (define (push* l)
   (map (lambda (x) `(push ,x))
        l))
 
+;; Multple pops.
 (define (pop* l)
   (map (lambda (x) `(pop ,x))
        l))
 
+;; Multiple calls.
 (define (call* l)
   (map (lambda (x) `(call ,x))
        l))
 
-;; Assembling this program should yield an exactly
+;; Relative jumps like JR $+3
+;; Write ,(jr-rel 3) instead in the quasi-quoted program.
+(define (jr-rel amount)
+  (lambda () (assemble-expr `(jr `,(+ *pc* ,amount))))
+  )
+;; Assembling this program should yield an exactly identical binary to
+;; that of the smiley-os kernel.  Which means this should be a valid
+;; OS.
 (define smiley-os
   `((jp boot)
     (ld d e)
@@ -667,14 +762,14 @@
     (bit 0 a)
     ;; Here we are diverging from the binary.  Maybe use jr instead of
     ;; jp?
-    (jp nz int-handle-on)
+    (jr nz int-handle-on)
     (bit 1 a)
-    (jp nz int-handle-timer1)
+    (jr nz int-handle-timer1)
     (bit 2 a)
-    (jp nz int-handle-timer2)
+    (jr nz int-handle-timer2)
     (bit 4 a)
-    (jp nz int-handle-link)
-    (jp sys-interrupt-done)
+    (jr nz int-handle-link)
+    (jr sys-interrupt-done)
     
     (label int-handle-on)
     (in a (3))
@@ -682,7 +777,7 @@
     (out (3) a)
     (set 0 a)
     (out (3) a)
-    (jp sys-interrupt-done)
+    (jr sys-interrupt-done)
     
     (label int-handle-timer1)
     (in a (3))
@@ -690,7 +785,7 @@
     (out (3) a)
     (set 1 a)
     (out (3) a)
-    (jp sys-interrupt-done)
+    (jr sys-interrupt-done)
 
     (label int-handle-timer2)
     (in a (3))
@@ -698,7 +793,7 @@
     (out (3) a)
     (set 2 a)
     (out (3) a)
-    (jp sys-interrupt-done)
+    (jr sys-interrupt-done)
     
     (label int-handle-link)
     (in a (3))
@@ -715,5 +810,6 @@
     ,@(pop* '(iy ix hl de bc af))
     (ei)
     (ret)
+    
     ,PRINT-PC
     ))
