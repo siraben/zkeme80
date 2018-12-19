@@ -211,6 +211,13 @@
                ,(lsb addr)
                ,(msb addr))))
 
+(define (assemble-ld-a-imm16 addr)
+  (make-inst 13
+             3
+             `(#b00111010
+               ,(lsb addr)
+               ,(msb addr))))
+
 (define (assemble-ld args)
   (match args
     (('a (? ir-reg? b))
@@ -219,6 +226,8 @@
      (assemble-ld-reg8-reg8 a b))
     (('a ((? 16-bit-reg? b)))
      (assemble-ld-a-ireg16 b))
+    (('a ((? 16-bit-imm-or-label? b)))
+     (assemble-ld-a-imm16 b))
     ((((? 16-bit-reg? b)) 'a)
      (assemble-ld-ireg16-a b))
     ((((? 16-bit-imm-or-label? a)) 'a)
@@ -555,7 +564,39 @@
     ((? 8-bit-imm? a)
      (assemble-and-8-bit-imm a))
     (_
-     (error (format #f "Invalid operands to xor: ~a" arg)))))
+     (error (format #f "Invalid operands to and: ~a" arg)))))
+
+(define (assemble-or-8-bit-reg a)
+  (make-inst (if (eqv? a '(hl)) 7 4)
+             1
+             `(,(make-opcode (lookup a ld-regs) 0 #b10110000))))
+
+(define (assemble-or-8-bit-imm a)
+  (make-inst 7
+             2
+             `(#b11110110
+               ,a)))
+
+(define (assemble-or arg)
+  (match arg
+    ((? 8-bit-reg? a)
+     (assemble-or-8-bit-reg a))
+    ((? 8-bit-imm? a)
+     (assemble-or-8-bit-imm a))
+    (_
+     (error (format #f "Invalid operands to or: ~a" arg)))))
+
+(define (assemble-ret-cond c)
+  (make-inst 8
+             1
+             `(,(make-opcode (lookup c condition-codes) 3 #b11000000))))
+
+(define (assemble-ret arg)
+  (match arg
+    ((? condition? a)
+     (assemble-ret-cond a))
+    (_
+     (error (format #f "Invalid operands to ret: ~a" arg)))))
 
 (define (assemble-expr expr)
   ;; Pattern match EXPR against the valid instructions and dispatch to
@@ -587,6 +628,8 @@
      (assemble-res imm3 arg))
     (`(set ,imm3 ,arg)
      (assemble-set imm3 arg))
+    (`(ret ,arg)
+     (assemble-ret arg))
     (`(db ,arg)
      (assemble-db arg))
     (`(dw ,arg)
@@ -597,6 +640,8 @@
      (assemble-in `(,dest ,src)))
     (`(xor ,arg)
      (assemble-xor arg))
+    (`(or ,arg)
+     (assemble-or arg))
     (`(dec ,arg)
      (assemble-dec arg))
     (`(inc ,arg)
@@ -745,9 +790,13 @@
         (add-label! sym val))
     '()))
 
-;; Assembling this program should yield an exactly identical binary to
-;; that of the smiley-os kernel.  Which means this should be a valid
-;; OS.
+;; Assembling this program should yield a bit-for-bit identical binary
+;; to that of the SmileyOS kernel (a minimal OS that draws a smiley to
+;; the screen).  I'm using it because it's the "minimum viable" OS, as
+;; it includes everything from unlocking flash to unlocking the screen
+;; and other stuff I'm not currently interested in.
+
+(define swap-sector #x38)
 (define smiley-os
   `(,(equ 'flash-executable-ram #x8000)
     ,(equ 'flash-executable-ram-size 100)
@@ -927,11 +976,11 @@
     (and (hl))
     (ld b a)
     (ld a #xaa)
-    (ld (#x0aaa) a)
+    (ld (#xaaa) a)
     (ld a #x55)
-    (ld (#x0555) a)
+    (ld (#x555) a)
     (ld a #xa0)
-    (ld (#x0aaa) a)
+    (ld (#xaaa) a)
     (ld (hl) b)
     (label local-label2)
     (ld a b)
@@ -943,6 +992,7 @@
     (label write-flash-byte-done)
     (ld (hl) #xf0)
     (ret)
+    
     (label write-flash-byte-ram-end)
     
     (label write-flash-buffer)
@@ -951,13 +1001,151 @@
     (push af)
     (di)
     ,@(push* '(hl de bc hl de bc))
-    (ld hl #x1e6)
+    (ld hl write-flash-buffer-ram)
     (ld de flash-executable-ram)
     (ld bc #x2c)
     (ldir)
     ,@(pop* '(bc de hl))
     (call flash-executable-ram)
+    ,@(pop* '(bc de hl af))
+    (jp po local-label3)
+    (ei)
+    (label local-label3)
+    (pop af)
+    (ret)
 
+    (label write-flash-buffer-ram)
+    (label write-flash-buffer-loop)
+    (ld a #xaa)
+    (ld (#xaaa) a)
+    (ld a #x55)
+    (ld (#x555) a)
+    (ld a #xa0)
+    (ld (#xaaa) a)
+    (ld a (hl))
+    (ld (de) a)
+    (inc de)
+    (dec bc)
+    
+    (label local-label4)
+    (xor (hl))
+    (bit 7 a)
+    (jr z local-label5)
+    (bit 5 a)
+    (jr z local-label4)
+    (ld a #xf0)
+    (ld (0) a)
+    (ret)
+    (label local-label5)
+    (inc hl)
+    (ld a b)
+    (or a)
+    (jr nz write-flash-buffer-loop)
+    (ld a c)
+    (or a)
+    (jr nz write-flash-buffer-loop)
+    (ret)
+    
+    (label write-flash-buffer-ram-end)
+    
+    (label erase-flash-sector)
+    (push bc)
+    (ld b a)
+    (push af)
+    (ld a i)
+    (ld a i)
+    (push af)
+    (di)
+    (ld a b)
+    ,@(push* '(hl de bc hl de bc))
+    (ld hl erase-flash-sector-ram)
+    (ld de flash-executable-ram)
+    (ld bc #x30)
+    (ldir)
+    ,@(pop* '(bc de hl))
+    (call flash-executable-ram)
+    ,@(pop* '(bc de hl af))
+    (jp po local-label6)
+    (ei)
+    (label local-label6)
+    (pop af)
+    (pop bc)
+    (ret)
+    
+    (label erase-flash-sector-ram)
+    (out (6) a)
+    (ld a #xaa)
+    (ld (#x0aaa) a)
+    (ld a #x55)
+    (ld (#x0555) a)
+    (ld a #x80)
+    (ld (#x0aaa) a)
+    (ld a #xaa)
+    (ld (#x0aaa) a)
+    (ld a #x55)
+    (ld (#x0555) a)
+    (ld a #x30)
+    (ld (#x4000) a)
+    (label local-label7)
+    (ld a (#x4000))
+    (bit 7 a)
+    (ret nz)
+    (bit 5 a)
+    (jr z local-label7)
+    (ld a #xf0)
+    (ld (#x4000) a)
+    (ret)
+    (label erase-flash-sector-ram-end)
+
+    (label erase-flash-page)
+    ,@(push* '(af bc af))
+    (call copy-sector-to-swap)
+    (pop af)
+    (push af)
+    (call erase-flash-sector)
+    (pop af)
+    (ld c a)
+    (and #b11111100)
+    (ld b ,swap-sector)
+    (label local-label8)
+    (cp c)
+    (jr z local-label9)
+    (call copy-flash-page)
+    (label local-label9)
+    (inc b)
+    (inc a)
+    (push af)
+    (ld a b)
+    (and #b11111100)
+    (or a)
+    (jr z local-label10)
+    (pop af)
+    (jr local-label8)
+    (label local-label10)
+    ,@(pop* '(af bc af))
+    (ret)
+    (label erase-flash-page-ram)
+    (label copy-sector-to-swap)
+    (push af)
+    (ld a ,swap-sector)
+    (call erase-flash-sector)
+    (pop af)
+    (push bc)
+    (ld b a)
+    (push af)
+    (ld a i)
+    (ld a i)
+    (push af)
+    (di)
+    (ld a b)
+    (and #b11111100)
+    (push hl)
+    (push de)
+    (ld hl copy-sector-to-swap-ram)
     
     ,PRINT-PC
     ))
+
+(define (reload-and-assemble-to-file prog file)
+  (load "assembler3.scm")
+  (assemble-to-file prog file))
