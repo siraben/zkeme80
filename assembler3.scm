@@ -102,6 +102,9 @@
 (define (num->binary n)
   (format #f "~8,'0b" n))
 
+(define (num->hex n)
+  (format #f "~2,'0x" n))
+
 (define (16-bit-reg? x)
   (lookup x 16-bit-regs))
 
@@ -167,6 +170,19 @@
              1
              `(,(make-opcode (lookup reg16 16-bit-regs) 4 #b00000010))))
 
+(define ld-index-imm16-regs
+  '((ix . #b11011101)
+    (iy . #b11111101)))
+
+(define (assemble-ld-index-imm16 ireg imm16)
+  (make-inst 14
+             4
+             (let ((imm16 (resolve-label imm16)))
+               `(,(lookup ireg ld-index-imm16-regs)
+                 #b00100001
+                 ,(lsb imm16)
+                 ,(msb imm16)))))
+
 (define (assemble-ld args)
   (match args
     (((? 8-bit-reg? a) (? 8-bit-reg? b))
@@ -181,6 +197,8 @@
      (assemble-ld-reg16-imm16 a b))
     (('hl ((? 16-bit-imm-or-label? b)))
      (assemble-ld-hl-iimm16 b))
+    (((? index-reg? a) (? 16-bit-imm-or-label? b))
+     (assemble-ld-index-imm16 a b))
     (_
      (error (format #f "Invalid operands to ld: ~a" args))))
   )
@@ -227,7 +245,9 @@
 (define (add-label! name)
   (if (assv name *labels*)
       (error (format #f "Cannot add another label of ~a" name))
-      (set! *labels* `((,name . ,*pc*) . ,*labels*))))
+      (begin
+        (format #t "Adding label ~a (0x~4,'0x)\n" name *pc*)
+        (set! *labels* `((,name . ,*pc*) . ,*labels*)))))
 
 (define (assemble-label name)
   (add-label! name)
@@ -257,9 +277,9 @@
 
 (define (assemble-jp args)
   (match args
-    (((? condition? a) (? 16-bit-imm-or-label? b))
+    (((? condition? a) b)
      (assemble-cond-jp a b))
-    ((? 16-bit-imm-or-label? a)
+    (((? 16-bit-imm-or-label? a))
      (assemble-uncond-jp a))))
 
 
@@ -283,7 +303,7 @@
   (match args
     (((? condition? a) (? 16-bit-imm-or-label? b))
      (assemble-cond-call a b))
-    ((? 16-bit-imm-or-label? a)
+    (((? 16-bit-imm-or-label? a))
      (assemble-uncond-call a))
     (_
      (error (format #f "Invalid operands to call: ~a" args)))))
@@ -360,10 +380,17 @@
              1
              `(,(make-opcode (lookup a ld-regs) 3 #b00000101))))
 
+(define (assemble-dec-16-bit-reg a)
+  (make-inst 6
+             1
+             `(,(make-opcode (lookup a 16-bit-regs) 4 #b00001011))))
+
 (define (assemble-dec arg)
   (match arg
     ((? 8-bit-reg? a)
      (assemble-dec-8-bit-reg a))
+    ((? 16-bit-reg? a)
+     (assemble-dec-16-bit-reg a))
     (_
      (error (format #f "Invalid operands to dec: ~a" arg)))))
 
@@ -383,8 +410,42 @@
      (assemble-inc-8-bit-reg a))
     ((? 16-bit-reg? a)
      (assemble-inc-16-bit-reg a))))
-(define (assemble-bit imm3 arg)
-  '())
+
+(define (assemble-bit imm3 reg8)
+  (make-inst (if (eqv? reg8 '(hl)) 12 8)
+             2
+             `(#b11001011
+               ,(make-opcode imm3
+                             3
+                             (make-opcode (lookup reg8 ld-regs) 0 #b01000000)))))
+
+(define (assemble-res imm3 reg8)
+  (make-inst (if (eqv? reg8 '(hl)) 15 8)
+             2
+             `(#b11001011
+               ,(make-opcode imm3
+                             3
+                             (make-opcode (lookup reg8 ld-regs) 0 #b10000000)))))
+
+(define (assemble-set imm3 reg8)
+  (make-inst (if (eqv? reg8 '(hl)) 15 8)
+             2
+             `(#b11001011
+               ,(make-opcode imm3
+                             3
+                             (make-opcode (lookup reg8 ld-regs) 0 #b11000000)))))
+
+(define (assemble-adc-8-bit-reg reg)
+  (make-inst (if (eqv? reg '(hl)) 7 4)
+             1
+             `(,(make-opcode (lookup reg ld-regs) 0 #b10001000))))
+
+(define (assemble-adc arg)
+  (match arg
+    (`(a ,(? 8-bit-reg? a))
+     (assemble-adc-8-bit-reg a))
+    (_
+     (error (format #f "Invalid operands to adc: ~a" arg)))))
 
 (define (assemble-expr expr)
   (match expr
@@ -392,20 +453,24 @@
      (assemble-simple a))
     (`(ld ,dest ,src)
      (assemble-ld `(,dest ,src)))
-    (`(push ,(? 16-bit-reg? a))
+    (`(push ,a)
      (assemble-push a))
-    (`(pop ,(? 16-bit-reg? a))
+    (`(pop ,a)
      (assemble-pop a))
     (`(label ,name)
      (assemble-label name))
     (`(org ,(? 16-bit-imm? a))
      (assemble-org a))
-    (`(jp ,args)
+    (`(jp . ,args)
      (assemble-jp args))
-    (`(call ,args)
+    (`(call . ,args)
      (assemble-call args))
     (`(bit ,imm3 ,arg)
      (assemble-bit imm3 arg))
+    (`(res ,imm3 ,arg)
+     (assemble-res imm3 arg))
+    (`(set ,imm3 ,arg)
+     (assemble-set imm3 arg))
     (`(db ,arg)
      (assemble-db arg))
     (`(dw ,arg)
@@ -420,6 +485,8 @@
      (assemble-dec arg))
     (`(inc ,arg)
      (assemble-inc arg))
+    (`(adc . ,args)
+     (assemble-adc args))
     (_
      (error (format #f "Unknown expression: ~s\n" expr))))
   )
@@ -459,6 +526,9 @@
 (define (assemble-to-binary prog)
   (map num->binary (flatten (assemble-prog prog))))
 
+(define (assemble-to-hex prog)
+  (map num->hex (flatten (assemble-prog prog))))
+
 (define (assemble-to-file prog filename)
   (write-bytevector-to-file (u8-list->bytevector (flatten (assemble-prog prog))) filename))
 
@@ -474,121 +544,176 @@
   ;; up labels.
   
   (reset-labels-and-pc!)
+  (format #t "Pass one...\n")
   
   (delq '() (map-in-order (lambda (x)
-                            (let ((res (assemble-expr x)))
-                              (if (inst? res)
-                                  (set! *pc* (+ *pc* (inst-length res))))
-                              res))
+                            (if (procedure? x)
+                                (begin (x) '())
+                                (let ((res (assemble-expr x)))
+                                  (if (inst? res)
+                                      (set! *pc* (+ *pc* (inst-length res))))
+                                  res)))
                           exprs)))
 
 (define (pass2 insts)
+  (format #t "Pass two...\n")
   ;; Force the code generating thunks.  All labels should be resolved by now.
-  (map-in-order gen-inst insts))
+  (map-in-order gen-inst insts)
+  )
 
 (define (assemble-prog prog)
   (pass2 (pass1 prog)))
 
-;; A more extensive test program for the assembler.
-(define boot-prog
+(define (string s)
+  `(,@(map char->integer (string->list s)) 0))
+
+
+(define PRINT-PC
+  (lambda ()
+    (format #t "~a\n" (num->hex *pc*))))
+
+(define (push* l)
+  (map (lambda (x) `(push ,x))
+       l))
+
+(define (pop* l)
+  (map (lambda (x) `(pop ,x))
+       l))
+
+(define (call* l)
+  (map (lambda (x) `(call ,x))
+       l))
+
+;; Assembling this program should yield an exactly
+(define smiley-os
   `((jp boot)
-    ;; Notice because this is Scheme we have access to all the
-    ;; wonderful magic of quasi-quotation.
-    (db ,(map char->integer (string->list "SK")))
-    (db (0 0 #b00110011))
-    ,@(make-list 48 '(ret))
-    (jp sys-interrupt)
-    (db ,(make-list 24 0))
+    (ld d e)
+    (ld c e)
+    (nop)
+    (nop)
+    (dec sp)
+    (ret)
+    ,@(apply append (make-list 5 `(,@ (make-list 7 '(nop))
+                                      (ret))))
+    ,@(make-list 7 '(nop))
+    (jp #xe9)
+    ,@(make-list 24 '(nop))
     (jp boot)
     (db (#xff #xa5 #xff))
+    
     (label boot)
-    (label shutdown)
     (di)
-    (ld a 6)
+    (ld a #x6)
     (out (4) a)
     (ld a #x81)
     (out (7) a)
     (ld sp 0)
-    (call sleep)
-    (label restart)
-    (label reboot)
+    (call #x3e7)
     (di)
     (ld sp 0)
     (ld a 6)
     (out (4) a)
     (ld a #x81)
     (out (7) a)
-    (ld a 3)
+    (ld a #x3)
     (out (#xe) a)
     (xor a)
     (out (#xf) a)
-    (call unlock-flash)
+    (call #x414)
     (xor a)
     (out (#x25) a)
     (dec a)
     (out (#x26) a)
     (out (#x23) a)
     (out (#x22) a)
-    (call lock-flash)
+    (call #x42a)
     (ld a 1)
     (out (#x20) a)
-    (label unlock-flash)
-    (ret)
-    (label lock-flash)
-    (ret)
-    (label sleep)
-    (ret)
-    (label sys-interrupt)))
+    (ld a #xb)
+    (out (3) a)
+    (ld hl #x8000)
+    (ld (hl) 0)
+    (ld de #x8001)
+    (ld bc #x7fff)
+    (ldir)
 
-(define os-prog
-  `((jp boot)
-    (db ,(make-list 50 0))
-    (dw (12))
-    (db ,(make-list 24 0))
+    ;; Arbitrarily complicated macros!
+    ,@(apply append (map (lambda (x)
+                           `((ld a ,x)
+                             (call #x50f)
+                             (out (#x10) a)))
+                         '(5 1 3 #x17 #xb #xef)))
+    
+    (ld iy #x8100)
+    (ld hl #xe5)
+    (ld b 4)
+    (ld de 0)
+    ,@(call* '(#x866 #x4ca #xbb4 #xbad))
     (jp boot)
-    (dw (#x0a55a))
-    (label boot)
-    (jp start-of-os)
+    (ld d b)
+    (nop)
+    (adc a b)
+    (ld (hl) b)
     (label sys-interrupt)
+    (di)
+    ,@(push* '(af bc de hl ix iy))
     (exx)
-    (db (#b00001000))
+    ((ex af afs))
+    ,@(push* '(af bc de hl))
+    (jp #x14d)
     (in a (4))
+    ;; The disassembler on JStified gets buggy here.  I got this
+    ;; information by reading the ASM source.
     (bit 0 a)
-    (jp nz handle-on)
+    ;; Here we are diverging from the binary.  Maybe use jr instead of
+    ;; jp?
+    (jp nz int-handle-on)
     (bit 1 a)
-    (jp nz handle-timer1)
+    (jp nz int-handle-timer1)
     (bit 2 a)
-    (jp nz handle-timer2)
+    (jp nz int-handle-timer2)
     (bit 4 a)
-    (jp nz handle-link)
-    (jp interrupt-done)
-    (label handle-on)
+    (jp nz int-handle-link)
+    (jp sys-interrupt-done)
+    
+    (label int-handle-on)
     (in a (3))
     (res 0 a)
     (out (3) a)
     (set 0 a)
     (out (3) a)
-    (jp interrupt-done)
-    (label handle-timer1)
+    (jp sys-interrupt-done)
+    
+    (label int-handle-timer1)
     (in a (3))
     (res 1 a)
     (out (3) a)
     (set 1 a)
     (out (3) a)
-    (jp interrupt-done)
-    (label handle-timer2)
+    (jp sys-interrupt-done)
+
+    (label int-handle-timer2)
+    (in a (3))
+    (res 2 a)
+    (out (3) a)
+    (set 2 a)
+    (out (3) a)
+    (jp sys-interrupt-done)
+    
+    (label int-handle-link)
     (in a (3))
     (res 4 a)
     (out (3) a)
     (set 4 a)
     (out (3) a)
-    (label interrupt-done)
-    (db (#b00001000))
+    
+    (label sys-interrupt-done)
+    
+    ,@(pop* '(hl de bc af))
     (exx)
+    ((ex af afs))
+    ,@(pop* '(iy ix hl de bc af))
     (ei)
     (ret)
-    (label start-of-os)
-    (label bruh)
-    (inc hl)
-    (jp bruh)
-    (ret)))
+    ,PRINT-PC
+    ))
