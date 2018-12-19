@@ -27,6 +27,10 @@
     (l . #b101)
     ((hl) . #b110)))
 
+(define ir-regs
+  '((i . 0)
+    (r . 1)))
+
 (define condition-codes
   '((nz . #b000)
     (z  . #b001)
@@ -47,7 +51,9 @@
   (let ((match (assoc key alist)))
     (if match
         (cdr match)
-        #f)))
+        (begin
+          (format #t "Failed to lookup: ~a\n" key)
+          #f))))
 
 (define (index-reg? reg)
   (memq reg '(ix iy)))
@@ -117,6 +123,9 @@
 ;; Unsure of register group, so this solution for now.
 (define (8-bit-reg? x)
   (member x '(a b c d e f h l ixl ixh i r (hl))))
+
+(define (ir-reg? x)
+  (lookup x ir-regs))
 
 (define (reg? x)
   (or (16-bit-reg? x)  (8-bit-reg? x)))
@@ -189,14 +198,31 @@
                  ,(lsb imm16)
                  ,(msb imm16)))))
 
+(define (assemble-ld-ir-reg ir)
+  (make-inst 9
+             2
+             `(#b11101101
+               ,(make-opcode (lookup ir ir-regs) 3 #b01010111))))
+
+(define (assemble-ld-iimm16-a addr)
+  (make-inst 13
+             3
+             `(#b00110010
+               ,(lsb addr)
+               ,(msb addr))))
+
 (define (assemble-ld args)
   (match args
+    (('a (? ir-reg? b))
+     (assemble-ld-ir-reg b))
     (((? 8-bit-reg? a) (? 8-bit-reg? b))
      (assemble-ld-reg8-reg8 a b))
     (('a ((? 16-bit-reg? b)))
      (assemble-ld-a-ireg16 b))
     ((((? 16-bit-reg? b)) 'a)
      (assemble-ld-ireg16-a b))
+    ((((? 16-bit-imm-or-label? a)) 'a)
+     (assemble-ld-iimm16-a a))
     (((? 8-bit-reg? a) (? 8-bit-imm? b))
      (assemble-ld-reg8-imm8 a b))
     (((? 16-bit-reg? a) (? 16-bit-imm-or-label? b))
@@ -205,6 +231,7 @@
      (assemble-ld-hl-iimm16 b))
     (((? index-reg? a) (? 16-bit-imm-or-label? b))
      (assemble-ld-index-imm16 a b))
+    
     (_
      (error (format #f "Invalid operands to ld: ~a" args))))
   )
@@ -248,18 +275,18 @@
         (make-inst (car res) (cadr res) (caddr res))
         (error (format #f "Operation not found: ~a" a)))))
 
-(define (add-label! name)
+(define (add-label! name val)
   (if (assv name *labels*)
       (error (format #f "Cannot add another label of ~a" name))
       (begin
-        (format #t "Adding label ~a (0x~4,'0x)\n" name *pc*)
-        (set! *labels* `((,name . ,*pc*) . ,*labels*)))))
+        (format #t "Adding label ~a with value 0x~4,'0x\n" name val)
+        (set! *labels* `((,name . ,val) . ,*labels*)))))
 
 
 (define (advance-pc! count)
   (set! *pc* (+ *pc* count)))
 (define (assemble-label name)
-  (add-label! name)
+  (add-label! name *pc*)
   '())
 
 (define (assemble-org new-pc)
@@ -306,7 +333,7 @@
   (if (symbol? x)
       (let* ((dest (resolve-label x))
              (offset (- dest *pc*)))
-        (format #t "~a\n" *pc*)
+        ;; (format #t "~a\n" *pc*)
         ;; Compute the offset from the current program counter
         (if (not (signed-8-bit-imm? offset))
             (error (format #f "Offset ~a too far for 8-bit signed.\n" offset))
@@ -423,10 +450,18 @@
              1
              `(,(make-opcode (lookup a ld-regs) 0 #b10101000))))
 
+(define (assemble-xor-8-bit-imm a)
+  (make-inst 7
+             2
+             `(#b11101110
+               ,a)))
+
 (define (assemble-xor arg)
   (match arg
     ((? 8-bit-reg? a)
      (assemble-xor-8-bit-reg a))
+    ((? 8-bit-imm? a)
+     (assemble-xor-8-bit-imm a))
     (_
      (error (format #f "Invalid operands to xor: ~a" arg)))))
 
@@ -502,6 +537,26 @@
     (_
      (error (format #f "Invalid operands to adc: ~a" arg)))))
 
+(define (assemble-and-8-bit-reg a)
+  (make-inst (if (eqv? a '(hl)) 7 4)
+             1
+             `(,(make-opcode (lookup a ld-regs) 0 #b10100000))))
+
+(define (assemble-and-8-bit-imm a)
+  (make-inst 7
+             2
+             `(#b11100110
+               ,a)))
+
+(define (assemble-and arg)
+  (match arg
+    ((? 8-bit-reg? a)
+     (assemble-and-8-bit-reg a))
+    ((? 8-bit-imm? a)
+     (assemble-and-8-bit-imm a))
+    (_
+     (error (format #f "Invalid operands to xor: ~a" arg)))))
+
 (define (assemble-expr expr)
   ;; Pattern match EXPR against the valid instructions and dispatch to
   ;; the corresponding sub-assembler.
@@ -548,6 +603,8 @@
      (assemble-inc arg))
     (`(adc . ,args)
      (assemble-adc args))
+    (`(and ,arg)
+     (assemble-and arg))
     (_
      (error (format #f "Unknown expression: ~s\n" expr))))
   )
@@ -640,7 +697,9 @@
      (if (not (inst? x))
          (error (format #f "Error during pass two: not an instruction record: ~a. PC: ~a." x (num->hex *pc*))))
      (advance-pc! (inst-length x))
-     (gen-inst x))
+     (let ((res (gen-inst x)))
+       (format #t "PC: ~a ~a\n" (num->hex *pc*) res)
+       res))
    insts)
   )
 
@@ -677,11 +736,22 @@
 (define (jr-rel amount)
   (lambda () (assemble-expr `(jr `,(+ *pc* ,amount))))
   )
+
+;; Constant symbols. VAL must be an integer
+(define (equ sym val)
+  (lambda ()
+    (if (not (16-bit-imm? val))
+        (error (format #f "Error in equ: Cannot set ~a to ~a." sym val))
+        (add-label! sym val))
+    '()))
+
 ;; Assembling this program should yield an exactly identical binary to
 ;; that of the smiley-os kernel.  Which means this should be a valid
 ;; OS.
 (define smiley-os
-  `((jp boot)
+  `(,(equ 'flash-executable-ram #x8000)
+    ,(equ 'flash-executable-ram-size 100)
+    (jp boot)
     (ld d e)
     (ld c e)
     (nop)
@@ -755,13 +825,10 @@
     (exx)
     ((ex af afs))
     ,@(push* '(af bc de hl))
-    (jp #x14d)
+    (jp usb-interrupt)
+    (label interrupt-resume)
     (in a (4))
-    ;; The disassembler on JStified gets buggy here.  I got this
-    ;; information by reading the ASM source.
     (bit 0 a)
-    ;; Here we are diverging from the binary.  Maybe use jr instead of
-    ;; jp?
     (jr nz int-handle-on)
     (bit 1 a)
     (jr nz int-handle-timer1)
@@ -810,6 +877,87 @@
     ,@(pop* '(iy ix hl de bc af))
     (ei)
     (ret)
+    (label usb-interrupt)
+    (in a (#x55))
+    (bit 0 a)
+    (jr z usb-unknown-event)
+    (bit 2 a)
+    (jr z usb-line-event)
+    (bit 4 a)
+    (jr z usb-protocol-event)
+    (jp interrupt-resume)
+    (label usb-unknown-event)
+    (jp interrupt-resume)
+    (label usb-line-event)
+
+    (in a (#x56))
+    (xor #xff)
+    (out (#x57) a)
+    (jp #xfb)
+
+    (label usb-protocol-event)
+    ,@(map (lambda (x) `(in a (,x)))
+           '(#x82 #x83 #x84 #x85 #x86))
+
+    (jp interrupt-resume)
+    
+    (label write-flash-byte)
+    (push bc)
+    (ld b a)
+    (push af)
+    (ld a i)
+    (push af)
+    (di)
+    (ld a b)
+    ,@(push* '(hl de bc hl de bc))
+
+    (ld hl write-flash-byte-ram)
+    (ld de flash-executable-ram)
+    (ld bc #x1f)
+    (ldir)
+    ,@(pop* '(bc de hl))
+    (call flash-executable-ram)
+    ,@(pop* '(bc de hl af))
+    (jp po local-label1)
+    (ei)
+    (label local-label1)
+    ,@(pop* '(af bc))
+    (ret)
+    (label write-flash-byte-ram)
+    (and (hl))
+    (ld b a)
+    (ld a #xaa)
+    (ld (#x0aaa) a)
+    (ld a #x55)
+    (ld (#x0555) a)
+    (ld a #xa0)
+    (ld (#x0aaa) a)
+    (ld (hl) b)
+    (label local-label2)
+    (ld a b)
+    (xor (hl))
+    (bit 7 a)
+    (jr z write-flash-byte-done)
+    (bit 5 (hl))
+    (jr z local-label2)
+    (label write-flash-byte-done)
+    (ld (hl) #xf0)
+    (ret)
+    (label write-flash-byte-ram-end)
+    
+    (label write-flash-buffer)
+    (push af)
+    (ld a i)
+    (push af)
+    (di)
+    ,@(push* '(hl de bc hl de bc))
+    (ld hl #x1e6)
+    (ld de flash-executable-ram)
+    (ld bc #x2c)
+    (ldir)
+    ,@(pop* '(bc de hl))
+    (call flash-executable-ram)
+
     
     ,PRINT-PC
     ))
