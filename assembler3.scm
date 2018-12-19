@@ -211,7 +211,7 @@
     (rra          .  (0 1 (#b00011111)))
     (rla          .  (0 1 (#b00010111)))
     (rrca         .  (0 1 (#b00001111)))
-    ((ex af afp)  .  (0 1 (#b00001000)))
+    ((ex af afs)  .  (0 1 (#b00001000)))
     (rlca         .  (0 1 (#b00000111)))
     (nop          .  (0 1 (#b00000000)))
     ))
@@ -318,6 +318,27 @@
     (_
      (error (format #f "Invalid operands to out: ~a" arg)))))
 
+(define (assemble-in-a-iimm8 imm8)
+  (make-inst 11
+             2
+             `(#b11011011
+               ,imm8)))
+
+(define (assemble-in-reg8-ic reg)
+  (make-inst 12
+             2
+             `(#b11101011
+               ,(make-opcode (lookup reg ld-regs) 3 #b01000000))))
+
+(define (assemble-in arg)
+  (match arg
+    (('a ((? 8-bit-imm? p)))
+     (assemble-in-a-iimm8 p))
+    (`(,(? 8-bit-reg? r) (c))
+     (assemble-in-reg8-ic r))
+    (_
+     (error (format #f "Invalid operands to out: ~a" arg)))))
+
 (define (assemble-xor-8-bit-reg a)
   (make-inst (if (eqv? a '(hl)) 7 4)
              1
@@ -342,6 +363,9 @@
     (_
      (error (format #f "Invalid operands to dec: ~a" arg)))))
 
+(define (assemble-bit arg)
+  ())
+
 (define (assemble-expr expr)
   (match expr
     (((? simple-op? a))
@@ -360,12 +384,16 @@
      (assemble-jp args))
     (`(call ,args)
      (assemble-call args))
+    (`(bit ,imm3 ,arg)
+     (assemble-bit imm3 arg))
     (`(db ,arg)
      (assemble-db arg))
     (`(dw ,arg)
      (assemble-dw arg))
     (`(out ,dest ,src)
      (assemble-out `(,dest ,src)))
+    (`(in ,dest ,src)
+     (assemble-in `(,dest ,src)))
     (`(xor ,arg)
      (assemble-xor arg))
     (`(dec ,arg)
@@ -380,14 +408,6 @@
   (set! *labels* '())
   (set! *pc* 0))
 
-(define (assemble-prog exprs)
-  (reset-labels-and-pc!)
-  
-  (map-in-order (lambda (x)
-                  (let* ((res (assemble-expr x)))
-                    (set! *pc* (+ *pc* (length res)))
-                    res))
-                exprs))
 
 (define (write-bytevector-to-file bv fn)
   (let ((port (open-output-file fn)))
@@ -497,3 +517,56 @@
     (label sleep)
     (ret)
     (label sys-interrupt)))
+
+(define os-prog
+  `((jp boot)
+    (db ,(make-list 50 0))
+    (dw (12))
+    (db ,(make-list 24 0))
+    (jp boot)
+    (dw (#x0a55a))
+    (label boot)
+    (jp start-of-os)
+    (label sys-interrupt)
+    (exx)
+    (db (#b00001000))
+    (in a (4))
+    (bit 0 a)
+    (jp nz handle-on)
+    (bit 1 a)
+    (jp nz handle-timer1)
+    (bit 2 a)
+    (jp nz handle-timer2)
+    (bit 4 a)
+    (jp nz handle-link)
+    (jp interrupt-done)
+    (label handle-on)
+    (in a (3))
+    (res 0 a)
+    (out (3) a)
+    (set 0 a)
+    (out (3) a)
+    (jp interrupt-done)
+    (label handle-timer1)
+    (in a (3))
+    (res 1 a)
+    (out (3) a)
+    (set 1 a)
+    (out (3) a)
+    (jp interrupt-done)
+    (label handle-timer2)
+    (in a (3))
+    (res 4 a)
+    (out (3) a)
+    (set 4 a)
+    (out (3) a)
+    (label interrupt-done)
+    (db (#b00001000))
+    (exx)
+    (ei)
+    (ret)
+    (label start-of-os)
+    (label bruh)
+    (inc hl)
+    (jp bruh)
+    (ret)))
