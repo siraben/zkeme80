@@ -285,6 +285,7 @@
     (rrd          .  (0 2 (#b11101101 #b01100111)))
     (reti         .  (0 2 (#b11101101 #b01001101)))
     (retn         .  (0 2 (#b11101101 #b01000101)))
+    (neg          .  (8 2 (#b11101101 #b01000100)))
     (ei           .  (0 1 (#b11111011)))
     (di           .  (0 1 (#b11110011)))
     ((ex de hl)   .  (0 1 (#b11101011)))
@@ -294,6 +295,7 @@
     (halt         .  (0 1 (#b01110110)))
     (ccf          .  (0 1 (#b00111111)))
     (scf          .  (0 1 (#b00110111)))
+    (cpl          .  (4 1 (#b00101111)))
     (rra          .  (0 1 (#b00011111)))
     (rla          .  (0 1 (#b00010111)))
     (rrca         .  (0 1 (#b00001111)))
@@ -473,7 +475,7 @@
   (match arg
     (('a ((? 8-bit-imm? p)))
      (assemble-in-a-iimm8 p))
-    (`(,(? 8-bit-reg? r) (c))
+    (((? 8-bit-reg? r) '(c))
      (assemble-in-reg8-ic r))
     (_
      (error (format #f "Invalid operands to out: ~a" arg)))))
@@ -627,6 +629,19 @@
     (_
      (error (format #f "Invalid operands to add: ~a" arg)))))
 
+(define (assemble-sub-reg8 a)
+  (make-inst (if (eqv? a '(hl)) 7 4)
+             1
+             `(,(make-opcode (lookup a ld-regs) 0 #b10010000))))
+
+(define (assemble-sub arg)
+  (match arg
+    (((? 8-bit-reg? a))
+     (assemble-sub-reg8 a))
+    (_
+     (error (format #f "Invalid operands to sub: ~a" arg)))))
+
+
 (define (assemble-ret arg)
   (match arg
     ((? condition? a)
@@ -639,10 +654,19 @@
              1
              `(,(make-opcode (lookup arg ld-regs) 0 #b10111000))))
 
+(define (assemble-cp-imm8 arg)
+  (make-inst 7
+             2
+             `(#b11111110
+               ,arg)))
+
+
 (define (assemble-cp arg)
   (match arg
     ((? 8-bit-reg? arg)
      (assemble-cp-reg8 arg))
+    ((? 8-bit-imm? arg)
+     (assemble-cp-imm8 arg))
     (_
      (error (format #f "Invalid operands to cp: ~a" arg)))))
 
@@ -714,6 +738,19 @@
                  ,simm8))))
 
 
+(define (assemble-srl-reg8 a)
+  (make-inst (if (eqv? a '(hl)) 15 8)
+             2
+             `(#b11001011
+               ,(make-opcode (lookup a ld-regs) 0 #b00111000))))
+
+(define (assemble-srl arg)
+  (match arg
+    ((? 8-bit-reg? a)
+     (assemble-srl-reg8 a))
+    (_
+     (error (format #f "Invalid operands to srl: ~a" arg)))))
+
 (define (assemble-expr expr)
   ;; Pattern match EXPR against the valid instructions and dispatch to
   ;; the corresponding sub-assembler.
@@ -766,6 +803,8 @@
      (assemble-inc arg))
     (`(add . ,args)
      (assemble-add args))
+    (`(sub . ,args)
+     (assemble-sub args))
     (`(sbc . ,args)
      (assemble-sbc args))
     (`(adc . ,args)
@@ -780,6 +819,8 @@
      (assemble-rl arg))
     (`(djnz ,arg)
      (assemble-djnz arg))
+    (`(srl ,arg)
+     (assemble-srl arg))
     (_
      (error (format #f "Unknown expression: ~s\n" expr))))
   )
@@ -919,6 +960,13 @@
         (error (format #f "Error in equ: Cannot set ~a to ~a." sym val))
         (add-label! sym val))
     '()))
+
+(define-syntax with-regs-preserve
+  (syntax-rules ()
+    ((_ (reg reg* ...) body body* ...)
+     `(,@(push* '(reg reg* ...))
+       body body* ...
+       ,@(pop* (reverse '(reg reg* ...)))))))
 
 ;; Assembling this program should yield a bit-for-bit identical binary
 ;; to that of the SmileyOS kernel (a minimal OS that draws a smiley to
@@ -1650,7 +1698,153 @@
     (label end-qs)
     ,@(pop* '(af bc de hl))
     (ret)
+
+    ;; display.asm
+    (label clear-buffer)
+    ,@(push* '(hl de bc iy))
+    (pop hl)
+    (ld (hl) 0)
+    (ld d h)
+    (ld e l)
+    (inc de)
+    (ld bc 767)
+    (ldir)
+
+    ,@(pop* '(bc de hl))
+    (ret)
+
+    (label buffer-to-lcd)
+    (label buf-copy)
+    (label fast-copy)
+    (label safe-copy)
+    ,@(push* '(hl bc af de))
+    (ld a i)
+    (push af)
+    (di)
+    (push iy)
+    (pop hl)
+    (ld c #x10)
+    (ld a #x80)
+
+    (label set-row)
+    (db (#xed #x70))
+    (jp m set-row)
+    (out (#x10) a)
+    (ld de 12)
+    (ld a #x20)
+
+    (label col)
+    ;; (in f (c)) is not in the data sheet, hm.
+    (db (#xed #x70))
+
+    (jp m col)
+    (out (#x10) a)
+    (push af)
+    (ld b 64)
     
+    (label row)
+    (ld a (hl))
+    (label row-wait)
+    (db (#xed #x70))
+
+    (jp m row-wait)
+    (out (#x11) a)
+    (add hl de)
+    (djnz row)
+    (pop af)
+    (dec h)
+    (dec h)
+    (dec h)
+    (inc hl)
+    (inc a)
+    (cp #x2c)
+    (jp nz col)
+    (pop af)
+    (jp po local-label17)
+    (ei)
+    
+    (label local-label17)
+    ,@(pop* '(de af bc hl))
+    (ret)
+    
+    (label lcd-delay)
+    (push af)
+    (label local-label18)
+    (in a (#x10))
+    (rla)
+    (jr c local-label18)
+    (pop af)
+    (ret)
+
+    (label get-pixel)
+    (ld h 0)
+    (ld d h)
+    (ld e l)
+    (add hl hl)
+    (add hl de)
+    (add hl hl)
+    (add hl hl)
+    (ld e a)
+    ,@(make-list 3 '(srl e))
+    (add hl de)
+    (push iy)
+    (pop de)
+    (add hl de)
+    (and 7)
+    (ld b a)
+    (ld a #x80)
+    (ret z)
+
+    (label local-label19)
+    (rrca)
+    (djnz local-label19)
+    (ret)
+    
+    (label pixel-on)
+    (label set-pixel)
+    ,@(with-regs-preserve (hl de af bc)
+                          (call get-pixel)
+                          (or (hl))
+                          (ld (hl) a))
+    (ret)
+
+    (label pixel-off)
+    (label reset-pixel)
+    ,@(with-regs-preserve (hl de af bc)
+                          (call get-pixel)
+                          (cpl)
+                          (and (hl))
+                          (ld (hl) a))
+    (ret)
+
+    (label invert-pixel)
+    (label pixel-flip)
+    (label pixel-invert)
+    (label flip-pixel)
+    ,@(with-regs-preserve (hl de af bc)
+                          (call get-pixel)
+                          (xor (hl))
+                          (ld (hl) a))
+    (ret)
+
+    (label draw-line)
+    (label draw-line-or)
+    ,@(with-regs-preserve (hl de bc af ix iy)
+                          (call draw-line2))
+    (ret)
+
+    (label draw-line2)
+    (ld a h)
+    (cp d)
+    (jp nc no-swap-x)
+    ((ex de hl))
+
+    (label no-swap-x)
+    (ld a h)
+    (sub d)
+    (jp nc pos-x)
+    (neg)
+    (label pos-x)
     
     ,PRINT-PC
     ))
