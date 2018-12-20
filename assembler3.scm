@@ -52,7 +52,8 @@
     (if match
         (cdr match)
         (begin
-          (format #t "Failed to lookup: ~a\n" key)
+          ;; Verbose
+          ;; (format #t "Failed to lookup: ~a\n" key)
           #f))))
 
 (define (index-reg? reg)
@@ -155,7 +156,7 @@
 
 (define (assemble-ld-a-ireg16 reg)
   (make-inst 14
-             3
+             1
              `(,(make-opcode (lookup reg ld-iregs) 4 #b00001010))))
 
 ;; Least significant byte.
@@ -236,6 +237,8 @@
 
 (define (assemble-ld args)
   (match args
+    ('(sp hl)
+     (assemble-ld-sp-hl))
     (('a (? ir-reg? b))
      (assemble-ld-ir-reg b))
     (((? 8-bit-reg? a) (? 8-bit-reg? b))
@@ -250,8 +253,7 @@
      (assemble-ld-iimm16-a a))
     (((? 8-bit-reg? a) (? 8-bit-imm? b))
      (assemble-ld-reg8-imm8 a b))
-    ('(sp hl)
-     (assemble-ld-sp-hl))
+
     (((? 16-bit-reg? a) (? 16-bit-imm-or-label? b))
      (assemble-ld-reg16-imm16 a b))
     (((? 16-bit-reg? a) ((? 16-bit-imm-or-label? b)))
@@ -807,7 +809,7 @@
   (map-in-order
    (lambda (x)
      (if (not (inst? (car x)))
-         (error (format #f "Error during pass two: not an instruction record: ~a. PC: ~a." x (num->hex *pc*))))
+         (error (format #f "Error during pass two: not an instruction record: ~a. PC: ~a." (car x) (num->hex *pc*))))
      (advance-pc! (inst-length (car x)))
      (let ((res (gen-inst (car x))))
        (format #t "PC: ~a ~a\n" (num->hex *pc*) (cdr x))
@@ -1177,7 +1179,7 @@
     (label local-label8)
     (cp c)
     (jr z local-label9)
-    (call copy-flash-page)
+    (call #x32d)
     (label local-label9)
     (inc b)
     (inc a)
@@ -1195,6 +1197,7 @@
     (label erase-flash-page-ram)
     (label copy-sector-to-swap)
     (push af)
+    ;; (db (#xff #xff #xff))
     (ld a ,swap-sector)
     (call erase-flash-sector)
     (pop af)
@@ -1209,7 +1212,8 @@
     (and #b11111100)
     (push hl)
     (push de)
-    (ld hl copy-sector-to-swap-ram)
+    ;; (ld hl copy-sector-to-swap-ram)
+    (ld hl #x2db)
     (push af)
     (ld a 1)
     (out (5) a)
@@ -1219,7 +1223,8 @@
     (pop af)
     (ld hl #x4000)
     (add hl sp)
-    (call #x8000)
+    (ld sp hl)
+    (call #xc000)
     (xor a)
     (out (5) a)
     (ld hl 0)
@@ -1275,6 +1280,7 @@
     (jr nz copy-sector-to-swap-loop)
     (in a (7))
     (inc a)
+    
     (out (7) a)
     (in a (6))
     (inc a)
@@ -1296,15 +1302,17 @@
     (di)
     (ld a d)
     ,@(push* '(hl de af bc))
-    (ld hl copy-flash-page-ram)
+    ;; (ld hl copy-flash-page-ram)
+    (ld hl #x36c)
     (ld a 1)
     (out (5) a)
-    (ld de (#xc000))
+    (ld de #xc000)
     (ld bc #x42)
     (ldir)
     (pop bc)
     (pop af)
     (ld hl #x4000)
+    ;; Forgetting a byte?
     (add hl sp)
     (ld sp hl)
     (call #xc000)
@@ -1369,6 +1377,26 @@
     ,PRINT-PC
     ))
 
+;; Take n elements from a list
+(define (take n list)
+  (if (or (zero? n) (null? list))
+      '()
+      (cons (car list)
+            (take (1- n) (cdr list)))))
+
+;; For debugging purposes.  Assemble the program and find the
+;; instruction that is at the specified byte address.
+(define (assemble-find-instr-byte byte prog)
+  (let ((partial-asm (pass1 prog)))
+    (let loop ((pc 0)
+               (rest-insts partial-asm))
+      (cond ((null? rest-insts) (error "Reached end of program before specified byte address."))
+            ((>= pc byte)
+             ;; Take 4 for context.
+             (map cdr (take 4 rest-insts)))
+            (else
+             (loop (+ pc (inst-length (caar rest-insts)))
+                   (cdr rest-insts)))))))
 
 (define (reload-and-assemble-to-file prog file)
   (load "assembler3.scm")
