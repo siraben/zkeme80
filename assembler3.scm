@@ -180,6 +180,17 @@
                  ,(lsb imm16)
                  ,(msb imm16)))))
 
+
+(define (assemble-ld-reg16-iimm16 reg16 imm16)
+  (make-inst 20
+             4
+             (let ((imm16 (resolve-label imm16)))
+               `(#b11101101
+                 ,(make-opcode (lookup reg16 16-bit-regs) 4 #b01001011)
+                 ,(lsb imm16)
+                 ,(msb imm16)))))
+
+
 (define (assemble-ld-ireg16-a reg16)
   (make-inst 7
              1
@@ -218,6 +229,11 @@
                ,(lsb addr)
                ,(msb addr))))
 
+(define (assemble-ld-sp-hl)
+  (make-inst 6
+             1
+             `(#b11111001)))
+
 (define (assemble-ld args)
   (match args
     (('a (? ir-reg? b))
@@ -234,12 +250,17 @@
      (assemble-ld-iimm16-a a))
     (((? 8-bit-reg? a) (? 8-bit-imm? b))
      (assemble-ld-reg8-imm8 a b))
+    ('(sp hl)
+     (assemble-ld-sp-hl))
     (((? 16-bit-reg? a) (? 16-bit-imm-or-label? b))
      (assemble-ld-reg16-imm16 a b))
+    (((? 16-bit-reg? a) ((? 16-bit-imm-or-label? b)))
+     (assemble-ld-reg16-iimm16 a b))
     (('hl ((? 16-bit-imm-or-label? b)))
      (assemble-ld-hl-iimm16 b))
     (((? index-reg? a) (? 16-bit-imm-or-label? b))
      (assemble-ld-index-imm16 a b))
+
     
     (_
      (error (format #f "Invalid operands to ld: ~a" args))))
@@ -345,7 +366,7 @@
         ;; (format #t "~a\n" *pc*)
         ;; Compute the offset from the current program counter
         (if (not (signed-8-bit-imm? offset))
-            (error (format #f "Offset ~a too far for 8-bit signed.\n" offset))
+            (error (format #f "Offset ~a too far for 8-bit signed." offset))
             (jr-simm8-convert offset)))
       (and (signed-8-bit-imm? x)
            (jr-simm8-convert (- x *pc*)))))
@@ -591,12 +612,52 @@
              1
              `(,(make-opcode (lookup c condition-codes) 3 #b11000000))))
 
+(define (assemble-add-hl-reg16 a)
+  (make-inst 11
+             1
+             `(,(make-opcode (lookup a 16-bit-regs) 4 #b00001001))))
+
+(define (assemble-add arg)
+  (match arg
+    (('hl (? 16-bit-reg? a))
+     (assemble-add-hl-reg16 a))
+    (_
+     (error (format #f "Invalid operands to add: ~a" arg)))))
+
 (define (assemble-ret arg)
   (match arg
     ((? condition? a)
      (assemble-ret-cond a))
     (_
      (error (format #f "Invalid operands to ret: ~a" arg)))))
+
+(define (assemble-cp-reg8 arg)
+  (make-inst (if (eqv? arg '(hl)) 7 4)
+             1
+             `(,(make-opcode (lookup arg ld-regs) 0 #b10111000))))
+
+(define (assemble-cp arg)
+  (match arg
+    ((? 8-bit-reg? arg)
+     (assemble-cp-reg8 arg))
+    (_
+     (error (format #f "Invalid operands to cp: ~a" arg)))))
+
+
+(define (assemble-sbc-hl-reg16 a)
+  (make-inst 15
+             2
+             `(#b11101101
+               ,(make-opcode (lookup a 16-bit-regs) 4 #b01000010))))
+
+(define (assemble-sbc arg)
+  (match arg
+    (('hl (? 16-bit-reg? a))
+     (assemble-sbc-hl-reg16 a))
+    (_
+     (error (format #f "Invalid operands to sbc: ~a" arg)))))
+
+
 
 (define (assemble-expr expr)
   ;; Pattern match EXPR against the valid instructions and dispatch to
@@ -640,12 +701,18 @@
      (assemble-in `(,dest ,src)))
     (`(xor ,arg)
      (assemble-xor arg))
+    (`(cp ,arg)
+     (assemble-cp arg))
     (`(or ,arg)
      (assemble-or arg))
     (`(dec ,arg)
      (assemble-dec arg))
     (`(inc ,arg)
      (assemble-inc arg))
+    (`(add . ,args)
+     (assemble-add args))
+    (`(sbc . ,args)
+     (assemble-sbc args))
     (`(adc . ,args)
      (assemble-adc args))
     (`(and ,arg)
@@ -710,12 +777,12 @@
   ;; value.  A value of () indicates that it will not be included in
   ;; pass 2.
   (filter
-   (lambda (x) (not (null? x)))
+   (lambda (x) (not (null? (car x))))
    (map-in-order
-    (lambda (x)
-      (if (procedure? x)
+    (lambda (expr)
+      (if (procedure? expr)
           ;; Evaluate an inlined procedure (could do anything(!)).
-          (let ((macro-val (x)))
+          (let ((macro-val (expr)))
             ;; But that procedure has to return () or an instruction
             ;; record.
             (if (not (or (null? macro-val)
@@ -724,13 +791,13 @@
                                "Error during pass one: macro did not return an instruction record: instead got ~a.  PC: ~a\n"
                                macro-val
                                *pc*))
-                macro-val))
+                (cons macro-val expr)))
 
           ;; Assemble a normal instruction.
-          (let ((res (assemble-expr x)))
+          (let ((res (assemble-expr expr)))
             (if (inst? res)
                 (advance-pc! (inst-length res)))
-            res)))
+            (cons res expr))))
     exprs)))
 
 (define (pass2 insts)
@@ -739,11 +806,11 @@
   ;; Force the code generating thunks.  All labels should be resolved by now.
   (map-in-order
    (lambda (x)
-     (if (not (inst? x))
+     (if (not (inst? (car x)))
          (error (format #f "Error during pass two: not an instruction record: ~a. PC: ~a." x (num->hex *pc*))))
-     (advance-pc! (inst-length x))
-     (let ((res (gen-inst x)))
-       (format #t "PC: ~a ~a\n" (num->hex *pc*) res)
+     (advance-pc! (inst-length (car x)))
+     (let ((res (gen-inst (car x))))
+       (format #t "PC: ~a ~a\n" (num->hex *pc*) (cdr x))
        res))
    insts)
   )
@@ -1124,6 +1191,7 @@
     (label local-label10)
     ,@(pop* '(af bc af))
     (ret)
+    
     (label erase-flash-page-ram)
     (label copy-sector-to-swap)
     (push af)
@@ -1142,9 +1210,165 @@
     (push hl)
     (push de)
     (ld hl copy-sector-to-swap-ram)
+    (push af)
+    (ld a 1)
+    (out (5) a)
+    (ld de #xc000)
+    (ld bc #x52)
+    (ldir)
+    (pop af)
+    (ld hl #x4000)
+    (add hl sp)
+    (call #x8000)
+    (xor a)
+    (out (5) a)
+    (ld hl 0)
+    (add hl sp)
+    (ld bc #x4000)
+    (or a)
+    (sbc hl bc)
+    (ld sp hl)
+    ,@(pop* '(de hl af))
+    (jp po local-label11)
+    (ei)
+    (label local-label11)
+    (pop af)
+    (pop bc)
+    (ret)
+    (label copy-sector-to-swap-ram)
+    (out (7) a)
+    (ld a ,swap-sector)
+    (out (6) a)
+    (label copy-sector-to-swap-preloop)
+    (ld hl #x8000)
+    (ld de #x4000)
+    (ld bc #x4000)
+    (label copy-sector-to-swap-loop)
+    (ld a #xaa)
+    (ld (#xaaa) a)
+    (ld a #x55)
+    (ld (#x555) a)
+    (ld a #xa0)
+    (ld (#xaaa) a)
+    (ld a (hl))
+    (ld (de) a)
+    (inc de)
+    (dec bc)
+    (label local-label12)
+    (xor (hl))
+    (bit 7 a)
+    (jr z local-label13)
+    (bit 5 a)
+    (jr z local-label12)
+    (ld a #xf0)
+    (ld (0) a)
+    (ld a #x81)
+    (out (7) a)
+    (ret)
+    (label local-label13)
+    (inc hl)
+    (ld a b)
+    (or a)
+    (jr nz copy-sector-to-swap-loop)
+    (ld a c)
+    (or a)
+    (jr nz copy-sector-to-swap-loop)
+    (in a (7))
+    (inc a)
+    (out (7) a)
+    (in a (6))
+    (inc a)
+    (out (6) a)
+    (and #b00000011)
+    (or a)
+    (jr nz copy-sector-to-swap-preloop)
+    (ld a #x81)
+    (out (7) a)
+    (ret)
     
+    (label copy-flash-page)
+    (push de)
+    (ld d a)
+    (push af)
+    (ld a i)
+    (ld a i)
+    (push af)
+    (di)
+    (ld a d)
+    ,@(push* '(hl de af bc))
+    (ld hl copy-flash-page-ram)
+    (ld a 1)
+    (out (5) a)
+    (ld de (#xc000))
+    (ld bc #x42)
+    (ldir)
+    (pop bc)
+    (pop af)
+    (ld hl #x4000)
+    (add hl sp)
+    (ld sp hl)
+    (call #xc000)
+    (xor a)
+    (out (5) a)
+    (ld hl 0)
+    (add hl sp)
+    (ld bc #x4000)
+    (or a)
+    (sbc hl bc)
+    (ld sp hl)
+    ,@(pop* '(de hl bc af))
+    (jp po local-label14)
+    (ei)
+    (label local-label14)
+    (pop af)
+    (ret)
+
+    (label copy-flash-page-ram)
+    (out (6) a)
+    (ld a b)
+    (out (7) a)
+
+    (label copy-flash-page-preloop)
+    (ld hl #x8000)
+    (ld de #x4000)
+    (ld bc #x4000)
+    (label copy-flash-page-loop)
+    (ld a #xaa)
+    (ld (#xaaa) a)
+    (ld a #x55)
+    (ld (#x555) a)
+    (ld a #xa0)
+    (ld (#xaaa) a)
+    (ld a (hl))
+    (ld (de) a)
+    (inc de)
+    (dec bc)
+    (label local-label15)
+    (xor (hl))
+    (bit 7 a)
+    (jr z local-label16)
+    (bit 5 a)
+    (jr z local-label15)
+    (ld a #xf0)
+    (ld (0) a)
+    (ld a #x81)
+    (out (7) a)
+    (ret)
+    (label local-label16)
+    (inc hl)
+    (ld a b)
+    (or a)
+    (jr nz copy-flash-page-loop)
+    (ld a c)
+    (or a)
+    (jr nz copy-flash-page-loop)
+    (ld a #x81)
+    (out (7) a)
+    (ret)
+    (label copy-flash-page-ram-end)
     ,PRINT-PC
     ))
+
 
 (define (reload-and-assemble-to-file prog file)
   (load "assembler3.scm")
