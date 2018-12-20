@@ -306,7 +306,7 @@
     (ret          .  (0 1 (#b11001001)))
     (halt         .  (0 1 (#b01110110)))
     (ccf          .  (0 1 (#b00111111)))
-    (scf          .  (0 1 (#b00110111)))
+    (scf          .  (4 1 (#b00110111)))
     (cpl          .  (4 1 (#b00101111)))
     (rra          .  (0 1 (#b00011111)))
     (rla          .  (0 1 (#b00010111)))
@@ -1024,14 +1024,13 @@
 
 ;; For debugging purposes.  Assemble the program and find the
 ;; instruction that is at the specified byte address.
-(define (assemble-find-instr-byte byte prog)
+(define (assemble-find-instr-byte byte prog context)
   (let ((partial-asm (pass1 prog)))
     (let loop ((pc 0)
                (rest-insts partial-asm))
       (cond ((null? rest-insts) (error "Reached end of program before specified byte address."))
             ((>= pc byte)
-             ;; Take 4 for context.
-             (map cdr (take 4 rest-insts)))
+             (map cdr (take context rest-insts)))
             (else
              (loop (+ pc (inst-length (caar rest-insts)))
                    (cdr rest-insts)))))))
