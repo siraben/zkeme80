@@ -119,7 +119,8 @@
                              (call lcd-delay)
                              (out (#x10) a)))
                          '(5 1 3 #x17 #xb #xef)))
-    
+
+    ;; "main", after everything has been set up.
     (ld iy #x8100)
     (ld hl smiley-face)
     (ld b 4)
@@ -134,6 +135,18 @@
     (pop iy)
     (call flush-keys)
     (call wait-key)
+    (push iy)
+    (ld iy #x8100)
+    (ld e 10)
+    (ld l 10)
+    (ld b 10)
+    (ld c 10)
+    (call rect-or)
+    (call fast-copy)
+    (call flush-keys)
+    (call wait-key)
+    (pop iy)
+
     (jp shutdown)
 
     (label smiley-face)
