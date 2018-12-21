@@ -986,7 +986,9 @@
                                "Error during pass one: macro did not return an instruction record: instead got ~a.  PC: ~a\n"
                                macro-val
                                *pc*))
-                (cons macro-val expr)))
+                (begin (if (inst? macro-val)
+                           (advance-pc! (inst-length macro-val)))
+                       (cons macro-val expr))))
 
           ;; Assemble a normal instruction.
           (let ((res (assemble-expr expr)))

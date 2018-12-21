@@ -55,11 +55,11 @@
 (define smiley-os
   `(,(equ 'flash-executable-ram #x8000)
     ,(equ 'flash-executable-ram-size 100)
+    
     (jp boot)
-    (ld d e)
-    (ld c e)
-    (nop)
-    (nop)
+    (db ,(map char->integer (string->list "SK")))
+    (db (0 0))
+
     (dec sp)
     (ret)
     ,@(apply append (make-list 5 `(,@ (make-list 7 '(nop))
@@ -73,7 +73,7 @@
     (label boot)
     (label shutdown)
     (di)
-    (ld a #x6)
+    (ld a 6)
     (out (4) a)
     (ld a #x81)
     (out (7) a)
@@ -129,24 +129,19 @@
     (call fast-copy)
     (call flush-keys)
     (call wait-key)
-    (push iy)
     (ld iy 0)
     (call fast-copy)
-    (pop iy)
     (call flush-keys)
     (call wait-key)
-    (push iy)
     (ld iy #x8100)
     (ld e 10)
     (ld l 10)
-    (ld b 10)
+    (ld b 20)
     (ld c 10)
     (call rect-or)
     (call fast-copy)
     (call flush-keys)
     (call wait-key)
-    (pop iy)
-
     (jp shutdown)
 
     (label smiley-face)
@@ -2050,10 +2045,10 @@
     
     ,(lambda () 
        (let ((res (assemble-expr `(db ,(make-list
-                                    (- #xf0000
-                                       *pc*) #xff)))))
-            (set! *pc* #xf0000)
-            res))
+                                        (- #xf0000 *pc*)
+                                        #xff)))))
+         ;; (set! *pc* #xf0000)
+         res))
     
     ;; What the hell is this code doing at address 0xf0000?
     (db (#xc7 #xed #x57 #xea #x08 #x40 #xed #x57 #xf5 #xf3 #x3e #x01 #x00 #x00 #xed #x56))
@@ -2062,8 +2057,8 @@
 
     ,PRINT-PC
     ,(lambda () (assemble-expr `(db ,(make-list
-                                      (- #x100000
-                                         *pc*) #xff))))
+                                      (- #x100000 *pc*)
+                                      #xff))))
     
     ,PRINT-PC))
 
@@ -2071,3 +2066,9 @@
   `((push hl)
     ,(lambda ()
        (assemble-expr `(db ,(make-list (- 10 *pc*) 0))))))
+
+;; Essential code that modifies sets an interrupt mode of 1 and writes to port #x14.
+(define wtf-prog
+      `((db (#xc7 #xed #x57 #xea #x08 #x40 #xed #x57 #xf5 #xf3 #x3e #x01 #x00 #x00 #xed #x56))
+       (db (#xf3 #xd3 #x14 #xf1 #xe0 #xfb #xc9 #xed #x57 #xea #x1e #x40 #xed #x57 #xf5 #xf3))
+       (db (#xaf #x00 #x00 #xed #x56 #xf3 #xd3 #x14 #xf1 #xe0 #xfb #xc9 #x00 #xff #xff #xff))))
