@@ -71,10 +71,11 @@
       (db ,(string->bytes name))
       (label ,label))))
 
+(define (defword name flags label)
+  `(,@(defcode name flags label)
+    (call docol)))
 
 (define *link-pointer* 0)
-
-
 
 (define next-sub
   `((label next-sub)
@@ -136,6 +137,14 @@
     (pop hl)
     (sbc hl bc)
     ,@hl-to-bc
+    ,@next
+
+    ,@(defcode "*" 0 '*)
+    ,@push-de-rs
+    (pop de)
+    (call mul-16-by-16)
+    ,@hl-to-bc
+    ,@pop-de-rs
     ,@next
 
     ,@(defcode "LIT" 0 'lit)
@@ -210,12 +219,65 @@
     (pop bc)
     ,@next
 
+    ,@(defcode "SWAP" 0 'swap)
+    (pop hl)
+    (push bc)
+    ,@hl-to-bc
+    ,@next
+
     ,@(defcode "OVER" 0 'over)
     (pop hl)
     (push hl)
     (push bc)
     ,@hl-to-bc
-    ,@next    
+    ,@next
+
+    ,@(defcode "ROT" 0 'rot)
+    ,@push-de-rs
+    (pop hl)
+    (pop de)
+    (push hl)
+    (push bc)
+    ((ex de hl))
+    ,@hl-to-bc
+    ,@pop-de-rs
+    ,@next
+
+    ,@(defcode "-ROT" 0 '-rot)
+    ,@push-de-rs
+    (pop hl)
+    (pop de)
+    (push bc)
+    (push de)
+    ,@hl-to-bc
+    ,@pop-de-rs
+    ,@next
+
+    ,@(defcode "1+" 0 '1+)
+    (inc bc)
+    ,@next
+
+    ,@(defcode "1-" 0 '1-)
+    (dec bc)
+    ,@next
+    
+    ,@(defcode "!" 0 '!)
+    (pop hl)
+    (ld a l)
+    (ld (bc) a)
+    (inc bc)
+    (ld a h)
+    (ld (bc) a)
+    (pop bc)
+    ,@next
+
+    ,@(defcode "@" 0 '@)
+    (ld a (bc))
+    (ld l a)
+    (inc bc)
+    (ld a (bc))
+    (ld h a)
+    ,@hl-to-bc
 
     ;; Draw a region of memory to the screen.
     ;; ( addr --  )
@@ -270,17 +332,51 @@
     (ld iy screen-buffer)
     (call clear-buffer)
     ,@next
-        
+
+    ;; Draw a sprite to the screen.
+    ;; ( sprite_addr height x y -- )
+    ,@(defcode "PUT-SPRITE-OR" 0 'put-sprite-or-forth)
+    (ld iy screen-buffer)
+    ,@push-de-rs
+    (ld e c)
+    (pop bc)
+    (ld d c)
+    (pop bc)
+    (ld b c)
+    (pop hl)
+    (call put-sprite-or)
+    ,@pop-de-rs
+    ,@next
+
+    ,@(defcode ">R" 0 '>r)
+    ,@push-bc-rs
+    (pop bc)
+    ,@next
+    
+    ,@(defcode ">R" 0 'r>)    
+    (push bc)
+    ,@pop-bc-rs
+    ,@next
+
+    ;; Plot a character to the screen.
+    ;; ( char x y -- )
+    ,@(defword "PLOT-CHAR" 0 'plot-char)
+    (dw (>r >r lit 6 * lit 1+ lit kernel-font + lit 5 r> r>))
+    (dw (put-sprite-or-forth))
+    (dw (exit))
     
     (label main)
-    ;; Test rect-xor and rect-or.
-    (dw (lit 30 lit 30 lit 10 lit 10 rect-or-forth
-             lit 35 lit 35 lit 10 lit 10 rect-xor-forth plot key
+    (dw (lit smiley-face lit 4 lit 10 lit 20 put-sprite-or-forth plot key))
+    (dw (lit 3 lit 0 lit 0 plot-char))
+    (dw (lit 30 lit 30 lit 20 lit 20 rect-or-forth
+             lit 40 lit 40 lit 20 lit 20 rect-xor-forth plot key
              clear-screen plot poweroff)
         )
     ;; Keep trying to read a key until one is pressed.
     ;; (dw (keyc ?dup zbranch ,(- 65536 6) poweroff))
-    
+    ,(lambda ()
+       (format #t "End of forth.asm: 0x")
+       (PRINT-PC))
     ))
 
 (define fast-memview-forth-prog

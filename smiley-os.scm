@@ -10,6 +10,8 @@
 (load "util.scm")
 (load "display.scm")
 (load "keyboard.scm")
+(load "math.scm")
+(load "font.scm")
 ;; Essential code that modifies sets an interrupt mode of 1 and writes
 ;; to port #x14.
 (define wtf-prog
@@ -30,19 +32,26 @@
     ,@util-asm
     ,@display-asm
     ,@keyboard-asm
+    ,@math-asm
+    ,@font-asm
+
+    ,(lambda ()
+       (format #t "End of smiley-os: 0x")
+       (PRINT-PC))
     
     ,(lambda ()
        (assemble-expr `(db ,(make-list
                              (- #xf0000 *pc*)
                              #xff))))
     
-    ,@wtf-prog
 
-    ,PRINT-PC
-    
+    ,@wtf-prog
     ,fill-until-end
     
-    ,PRINT-PC))
+    ,(lambda ()
+       (format #t "End of binary: 0x")
+       (PRINT-PC))
+    ))
 
 (define (make-rom filename)
   (assemble-to-file smiley-os filename))

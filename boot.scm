@@ -50,27 +50,7 @@
                          '(5 1 3 #x17 #xb #xef)))
 
     ;; "main", after everything has been set up.
-    (ld iy screen-buffer)
-    (ld hl smiley-face)
-    (ld b 4)
-    (ld de 0)
-    (call put-sprite-or)
-    (call fast-copy)
-    (call flush-keys)
-    (call wait-key)
-    ;; (ld iy 0)
-    ;; (call fast-copy)
-    ;; (call flush-keys)
-    ;; (call wait-key)
-    ;; (ld iy #x8100)
-    ;; (ld e 10)
-    ;; (ld l 10)
-    ;; (ld b 20)
-    ;; (ld c 10)
-    ;; (call rect-or)
-    ;; (call fast-copy)
-    ;; (call flush-keys)
-    ;; (call wait-key)
+    ;; Just go straight to the Forth portion!
     ,@forth-prog
     (jp shutdown)
 

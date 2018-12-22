@@ -427,7 +427,8 @@
      (assemble-cond-jr a b))
     (((? 16-bit-imm-or-label? a))
      (assemble-uncond-jr a))
-    ))
+    (_
+     (error (format #f "Invalid operands to jr: ~a" args)))))
 
 
 (define (assemble-cond-call cond imm16)
@@ -461,13 +462,17 @@
              (flatten (map
                        (lambda (x)
                          (let ((x (if (symbol? x) (resolve-label x) x)))
-                           (list (lsb x) (msb x))))
+                           (if x
+                               (list (lsb x) (msb x))
+                               (error (format #f "Invalid word in dw: ~a" x)))))
                        word-list))))
 
 (define (assemble-db byte-list)
   (make-inst 0
              (length byte-list)
-             byte-list))
+             (if (all-sat? 8-bit-imm? byte-list)
+                 byte-list
+                 (error (format #f "Invalid byte in db: ~a" byte-list)))))
 
 (define (assemble-out-iimm8-a port)
   (make-inst 11
@@ -975,6 +980,11 @@
       '()
       (append (car l) (flatten (cdr l)))))
 
+(define (all-sat? p l)
+  (cond ((null? l) #t)
+        ((p (car l)) (all-sat? p (cdr l)))
+        (else #f)))
+
 (define (assemble-to-binary prog)
   (map num->binary (flatten (assemble-prog prog))))
 
@@ -1034,22 +1044,20 @@
          (error (format #f "Error during pass two: not an instruction record: ~a. PC: ~a." (car x) (num->hex *pc*))))
      (advance-pc! (inst-length (car x)))
      (let ((res (gen-inst (car x))))
+       (if verbose?
+           (format #t "PC: ~a ~a\n" (num->hex *pc*) (cdr x)))
        ;; Verbose
-       (cond (verbose?
-              (format #t "PC: ~a ~a\n" (num->hex *pc*) (cdr x)))
-             ((not (= (inst-length (car x)) (length res)))
-              (error (format #f "Instruction length declared does not match actual: Expected length ~a, got length ~a of expression ~a\n PC: ~a" (inst-length (car x)) (length res) res *pc*)))
-             ((not (all-sat? 8-bit-imm? res))
-              (error "Invalid byte: PC: ~a" *pc*))
-             (else
-              res))))
+       (cond 
+        ((not (= (inst-length (car x)) (length res)))
+         (error (format #f "Instruction length declared does not match actual: Expected length ~a, got length ~a of expression ~a\n PC: ~a" (inst-length (car x)) (length res) res *pc*)))
+        ((not (all-sat? 8-bit-imm? res))
+         (error (format #f "Invalid byte at ~4'0x: ~a" *pc* res)))
+        (else
+         res))))
    insts)
   )
 
-(define (all-sat? p l)
-  (cond ((null? l) #t)
-        ((p (car l)) (all-sat? p (cdr l)))
-        (else #f)))
+
 
 (define (assemble-prog prog)
   (pass2 (pass1 prog)))

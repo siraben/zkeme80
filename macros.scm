@@ -26,7 +26,12 @@
 ;; Relative jumps like JR $+3
 ;; Write ,(jr-rel 3) instead in the quasi-quoted program.
 (define (jr-rel amount)
-  (lambda () (assemble-expr `(jr `,(+ *pc* ,amount))))
+  (lambda () (assemble-expr `(jr ,(+ *pc* amount))))
+  )
+
+;; With a flag
+(define (jr-rel-f flag amount)
+  (lambda () (assemble-expr `(jr ,flag ,(+ *pc* amount))))
   )
 
 ;; Constant symbols. VAL must be an integer
@@ -48,3 +53,6 @@
   (lambda ()
     (assemble-expr
      `(db ,(make-list (- #x100000 *pc*) #xff)))))
+
+(define (n-copies-of n expr)
+  (apply append (make-list n expr)))

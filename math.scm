@@ -1,0 +1,18 @@
+(define math-asm
+  `((label mul-16-by-16)
+    (ld hl 0)
+    (ld a 16)
+    (label mul-16-loop)
+    (add hl hl)
+    (rl e)
+    (rl d)
+    (jp nc no-mul-16)
+    (add hl bc)
+    (jp nc no-mul-16)
+    (inc de)
+    (label no-mul-16)
+    (dec a)
+    (jp nz mul-16-loop)
+    (ret)
+    ))
+
