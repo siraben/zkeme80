@@ -1,4 +1,4 @@
-;; Let's see if we can make a simple Forth system
+;; Forth portion of the operating system.
 
 (define next
   `((jp next-sub)))
@@ -39,10 +39,17 @@
     (ld d (+ ix 0))
     (inc ix)))
 
+(define hl-to-bc
+  `((ld b h)
+    (ld c l)))
+
+(define hl-to-de
+  `((ld d h)
+    (ld e l)))
 
 (define reset-link
   (lambda ()
-    (set! prev-pointer 0)
+    (set! *link-pointer* 0)
     '()))
 
 (define make-link
@@ -50,8 +57,8 @@
     ;; We need to compute and return the instruction record for the
     ;; previous byte, but perform the side effect of changing the link
     ;; pointer as well.
-    (let ((out (assemble-expr `(dw (,prev-pointer)))))
-      (set! prev-pointer *pc*)
+    (let ((out (assemble-expr `(dw (,*link-pointer*)))))
+      (set! *link-pointer* *pc*)
       out)))
 
 (define (string->bytes x)
@@ -65,24 +72,9 @@
       (label ,label))))
 
 
-(define prev-pointer 0)
-(define linked-list-prog
-  `((db ,(string->bytes "This is a Forth interpreter!"))
-    ,@(defcode "EXIT" 0 'exit)
-    (db ,(string->bytes "hi I'm code"))
-    ,@(defcode "DUP" 0 'dup)
-    (db ,(string->bytes "hi I'm more code"))
-    ,@(defcode "DROP" 0 'drop)
-    (db ,(string->bytes "zkeme80"))
-    ))
+(define *link-pointer* 0)
 
-(define hl-to-bc
-  `((ld b h)
-    (ld c l)))
 
-(define hl-to-de
-  `((ld d h)
-    (ld e l)))
 
 (define next-sub
   `((label next-sub)
