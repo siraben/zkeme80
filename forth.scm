@@ -39,68 +39,18 @@
     (ld d (+ ix 0))
     (inc ix)))
 
-;; (define *word-count* 0)
-;; (define make-link-pointer-label
-;;   (string->symbol (format #f "forth-word~a" (number->string *word-count*))))
 
-;; (define (defcode name flags label)
-
-;;   ;; need to use lambda somehow
-;;   (let ((prev *link-pointer*)
-;;         (len (string-length name)))
-;;     `((label ,make-link-pointer-label)
-;;       (dw (,prev))
-;;       (db (,(+ len flags)))
-;;       (db ,(string name)))))
-
-(define hl-to-bc
-  `((ld b h)
-    (ld c l)))
-;; (define forth-prog
-;;   `((label next-sub)
-;;     (ld a (de))
-;;     (ld l a)
-;;     (inc de)
-;;     (ld a (de))
-;;     (ld h a)
-;;     (inc de)
-;;     (jp (hl))
-;;     (label docol)
-;;     ,@push-de-rs
-;;     (pop de)
-;;     ,@next
-
-;;     ,@(defcode "EXIT" 0 'exit)
-;;     ,@pop-de-rs
-;;     ,@next
-
-;;     ,@(defcode "DUP" 0 'dup)
-;;     (push bc)
-;;     ,@next
-
-;;     ,@(defcode "+" 0 'add)
-;;     (pop hl)
-;;     (add hl bc)
-;;     ,@hl-to-bc
-;;     ,@next
-
-;;     ,@(defcode "-" 0 'sub)
-;;     (xor a)
-;;     (pop hl)
-;;     (sbc hl bc)
-;;     ,@hl-to-bc
-;;     ,@next
-
-
-
-;;     ))
+(define reset-link
+  (lambda ()
+    (set! prev-pointer 0)
+    '()))
 
 (define make-link
   (lambda ()
     ;; We need to compute and return the instruction record for the
     ;; previous byte, but perform the side effect of changing the link
     ;; pointer as well.
-    (let ((out (assemble-expr `(db (,prev-pointer)))))
+    (let ((out (assemble-expr `(dw (,prev-pointer)))))
       (set! prev-pointer *pc*)
       out)))
 
@@ -109,10 +59,10 @@
 
 (define (defcode name flags label)
   (let ((len (string-length name)))
-    `((label ,label)
-      ,make-link
+    `(,make-link
       (db (,(+ len flags)))
-      (db ,(string->bytes name)))))
+      (db ,(string->bytes name))
+      (label ,label))))
 
 
 (define prev-pointer 0)
@@ -125,3 +75,81 @@
     ,@(defcode "DROP" 0 'drop)
     (db ,(string->bytes "zkeme80"))
     ))
+
+(define hl-to-bc
+  `((ld b h)
+    (ld c l)))
+
+(define next-sub
+  `((label next-sub)
+    (ld a (de))
+    (ld l a)
+    (inc de)
+    (ld a (de))
+    (ld h a)
+    (inc de)
+    (jp (hl))))
+
+(define docol-sub
+  `((label docol)
+    ,@push-de-rs
+    (pop de)
+    ,@next))
+
+(define forth-prog
+  `(,reset-link
+    (ld bc #x1234)
+    (ld de main)
+    (ld ix #x8200)
+    (ld sp 0)
+    ,@next
+    ,@next-sub
+
+    ,@docol-sub
+
+
+    ,@(defcode "EXIT" 0 'exit)
+    ,@pop-de-rs
+    ,@next
+
+    ,@(defcode "DUP" 0 'dup)
+    (push bc)
+    ,@next
+
+    ,@(defcode "+" 0 'add)
+    (pop hl)
+    (add hl bc)
+    ,@hl-to-bc
+    ,@next
+
+    ,@(defcode "-" 0 'sub)
+    (xor a)
+    (pop hl)
+    (sbc hl bc)
+    ,@hl-to-bc
+    ,@next
+
+    ,@(defcode "LIT" 0 'lit)
+    (ld a (de))
+    (ld l a)
+    (inc de)
+    (ld a (de))
+    (ld h a)
+    (inc de)
+    (push bc)
+    ,@hl-to-bc
+    ,@next
+
+    ,@(defcode "OMEGA" 0 'omega)
+    (label foo)
+    (jp foo)
+    
+    (label main)
+    (dw (lit 3 lit 5 add omega))
+    ;; ,fill-until-end
+    ))
+
+(define fill-until-end
+  (lambda () (assemble-expr `(db ,(make-list
+                                   (- #x100000 *pc*)
+                                   #xff)))))

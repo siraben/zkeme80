@@ -244,6 +244,15 @@
                ,(make-opcode (lookup a ld-regs) 3 #b01000110)
                ,c)))
 
+(define (assemble-ld-index-reg8 a b c)
+  (make-inst 19
+             3
+             `(,(lookup a ld-index-imm16-regs)
+               ,(make-opcode (lookup c ld-regs) 0 #b01110000)
+               ,b)))
+
+
+
 (define (assemble-ld args)
   (match args
     ('(sp hl)
@@ -274,7 +283,11 @@
      (assemble-ld-hl-iimm16 b))
     (((? index-reg? a) (? 16-bit-imm-or-label? b))
      (assemble-ld-index-imm16 a b))
-    
+    ((('+ (? index-reg? a) (? 8-bit-imm? b)) (? 8-bit-reg? c))
+     (assemble-ld-index-reg8 a b c))
+    ((('+ (? 8-bit-imm? b) (? index-reg? a)) (? 8-bit-reg? c))
+     (assemble-ld-index-reg8 a b c))
+
     
     (_
      (error (format #f "Invalid operands to ld: ~a" args))))
@@ -360,10 +373,14 @@
 
 (define (assemble-jp args)
   (match args
+    ((('hl))
+     (make-inst 4 1 `(#b11101001)))
     (((? condition? a) b)
      (assemble-cond-jp a b))
     (((? 16-bit-imm-or-label? a))
-     (assemble-uncond-jp a))))
+     (assemble-uncond-jp a))
+    (_
+     (error (format #f "Invalid operands to jp: ~a" args)))))
 
 
 (define (signed-8-bit-imm? x)
@@ -523,14 +540,23 @@
              1
              `(,(make-opcode (lookup a 16-bit-regs) 4 #b00001011))))
 
+(define (assemble-dec-index-reg a)
+  (make-inst 10
+             2
+             `(,(lookup a ld-index-imm16-regs)
+               #b00101011)))
+
 (define (assemble-dec arg)
   (match arg
     ((? 8-bit-reg? a)
      (assemble-dec-8-bit-reg a))
     ((? 16-bit-reg? a)
      (assemble-dec-16-bit-reg a))
+    ((? index-reg? a)
+     (assemble-dec-index-reg a))
     (_
      (error (format #f "Invalid operands to dec: ~a" arg)))))
+
 
 (define (assemble-inc-8-bit-reg arg)
   (make-inst (if (eqv? arg '(hl)) 11 4)
@@ -1009,9 +1035,16 @@
      (let ((res (gen-inst (car x))))
        ;; Verbose
        (if verbose? (format #t "PC: ~a ~a\n" (num->hex *pc*) (cdr x)))
+       (if (not (all-sat? 8-bit-imm? res))
+           (error "Invalid byte: PC: ~a" *pc*))
        res))
    insts)
   )
+
+(define (all-sat? p l)
+  (cond ((null? l) #t)
+        ((p (car l)) (all-sat? p (cdr l)))
+        (else #f)))
 
 (define (assemble-prog prog)
   (pass2 (pass1 prog)))
