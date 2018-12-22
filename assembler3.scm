@@ -339,7 +339,8 @@
   (if (assv name *labels*)
       (error (format #f "Cannot add another label of ~a" name))
       (begin
-        (format #t "Adding label ~a with value 0x~4,'0x\n" name val)
+        (if verbose?
+            (format #t "Adding label ~a with value 0x~4,'0x\n" name val))
         (set! *labels* `((,name . ,val) . ,*labels*)))))
 
 

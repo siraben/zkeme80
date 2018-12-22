@@ -43,3 +43,8 @@
      `(,@(push* '(reg reg* ...))
        body body* ...
        ,@(pop* (reverse '(reg reg* ...)))))))
+
+(define fill-until-end
+  (lambda () (assemble-expr `(db ,(make-list
+                                   (- #x100000 *pc*)
+                                   #xff)))))

@@ -22,6 +22,7 @@
 (define smiley-os
   `(,(equ 'flash-executable-ram #x8000)
     ,(equ 'flash-executable-ram-size 100)
+    ,(equ 'screen-buffer #x8100)
     
     ,@header-asm
     ,@boot-asm
@@ -30,21 +31,19 @@
     ,@util-asm
     ,@display-asm
     ,@keyboard-asm
-
     
-    ,(lambda () 
-       (let ((res (assemble-expr `(db ,(make-list
-                                        (- #xf0000 *pc*)
-                                        #xff)))))
-         res))
+    ,(lambda ()
+       (assemble-expr `(db ,(make-list
+                             (- #xf0000 *pc*)
+                             #xff))))
     
     ,@wtf-prog
 
     ,PRINT-PC
-    ,(lambda () (assemble-expr `(db ,(make-list
-                                      (- #x100000 *pc*)
-                                      #xff))))
+    
+    ,fill-until-end
     
     ,PRINT-PC))
 
-
+(define (make-rom filename)
+  (assemble-to-file smiley-os filename))

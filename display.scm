@@ -683,7 +683,7 @@
     (djnz put-loop3)
     (ret)
 
-    (label rectxor)
+    (label rect-xor)
     (ld a 96)
     (sub e)
     (ret c)
