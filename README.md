@@ -10,11 +10,22 @@ to have the required modules to support things like bytevectors and
 `sfri-9` records.  Works on Guile, hasn't been tested on other
 implementations.
 
+## Building the operating system
+Thanks to `clever` on `#nixos`, if you clone the repository and run
+the following:
+
+```shell
+nix-build tilem.nix -A runit && ./result
+```
+
+A TI calculator emulator will be built and my ROM will be loaded.  Try
+it today!
+
 ## Motivation
 Existing assemblers for the Z80 (and other instruction sets) are
 extremely lacking in their macro abilities.  This limits their
-abstraction abilities, especially when the programmer wishes to create
-data structures in assembly through macros (e.g. a linked list of
+abstraction, especially when the programmer wishes to create data
+structures in assembly through macros (e.g. a linked list of
 dictionary entries).  What better macro system exists than Lisp?
 
 ## Files included

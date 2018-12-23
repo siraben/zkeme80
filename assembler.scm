@@ -3,6 +3,8 @@
              (rnrs bytevectors)
              (srfi srfi-9))
 
+;; set! this to #t to see debugging information.  Note that `lookup`
+;; will complain a lot but generally it's fine.
 (define verbose? #f)
 
 ;; Turns out these things care called "register groups", bit-fields
@@ -123,9 +125,8 @@
 (define (16-bit-reg? x)
   (lookup x 16-bit-regs))
 
-;; Unsure of register group, so this solution for now.
 (define (8-bit-reg? x)
-  (member x '(a b c d e f h l ixl ixh i r (hl))))
+  (member x '(a b c d e f h l i r (hl))))
 
 (define (ir-reg? x)
   (lookup x ir-regs))
@@ -141,6 +142,7 @@
                              (make-opcode (lookup dest ld-regs)
                                           3
                                           #b01000000)))))
+
 (define (assemble-ld-reg8-imm8 reg8 imm8)
   (make-inst (if (eqv? reg8 '(hl)) 10 7)
              2
@@ -287,7 +289,6 @@
      (assemble-ld-index-reg8 a b c))
     ((('+ (? 8-bit-imm? b) (? index-reg? a)) (? 8-bit-reg? c))
      (assemble-ld-index-reg8 a b c))
-
     
     (_
      (error (format #f "Invalid operands to ld: ~a" args))))
@@ -343,9 +344,9 @@
             (format #t "Adding label ~a with value 0x~4,'0x\n" name val))
         (set! *labels* `((,name . ,val) . ,*labels*)))))
 
-
 (define (advance-pc! count)
   (set! *pc* (+ *pc* count)))
+
 (define (assemble-label name)
   (add-label! name *pc*)
   '())
@@ -715,6 +716,7 @@
              2
              `(#b11000110
                ,a)))
+
 (define (assemble-add arg)
   (match arg
     (('hl (? 16-bit-reg? a))
@@ -858,7 +860,6 @@
                  ;; Follwed by a signed byte, -127 to +127
                  ,simm8))))
 
-
 (define (assemble-srl-reg8 a)
   (make-inst (if (eqv? a '(hl)) 15 8)
              2
@@ -960,21 +961,6 @@
     (put-bytevector port bv)
     (close-port port)))
 
-(define sample-prog
-  '((org #x0000)
-    (label foo)
-    (ld hl #x1234)
-    (push hl)
-    (ret)
-
-    (call foo)
-    (jp end) ;; test look-ahead labels
-    (ld a (hl))
-    (ldir)
-    (pop bc)
-    (ld (bc) a)
-    (label end)))
-
 (define (flatten l)
   (if (null? l)
       '()
@@ -993,8 +979,6 @@
 
 (define (assemble-to-file prog filename)
   (write-bytevector-to-file (u8-list->bytevector (flatten (assemble-prog prog))) filename))
-
-;; (assemble-to-file sample-prog "out.bin")
 
 (define (pass1 exprs)
   ;; Check each instruction for correct syntax and produce code
@@ -1057,11 +1041,8 @@
    insts)
   )
 
-
-
 (define (assemble-prog prog)
   (pass2 (pass1 prog)))
-
 
 ;; Take n elements from a list
 (define (take n list)
