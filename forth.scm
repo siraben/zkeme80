@@ -364,14 +364,33 @@
     (dw (>r >r lit 6 * lit 1+ lit kernel-font + lit 5 r> r>))
     (dw (put-sprite-or-forth))
     (dw (exit))
-    
+
+    ;; Draw a string to the screen
+    ;; ( str_addr x y -- )
+    ,@(defcode "PLOT-STR" 0 'plot-str)
+    ,@push-de-rs
+    (ld e c)
+    (pop bc)
+    (ld d c)
+    (pop hl)
+    (ld iy screen-buffer)
+    (call draw-str-xor)
+    ,@pop-de-rs
+    (pop bc)
+    ,@next
+
+    (label title1)
+    (db ,(string "Welcome to Ben's"))
+    (label title2)
+    (db ,(string "Forth-based OS!"))
+
     (label main)
-    (dw (lit smiley-face lit 4 lit 10 lit 20 put-sprite-or-forth plot key))
-    (dw (lit 3 lit 0 lit 0 plot-char))
-    (dw (lit 30 lit 30 lit 20 lit 20 rect-or-forth
-             lit 40 lit 40 lit 20 lit 20 rect-xor-forth plot key
-             clear-screen plot poweroff)
-        )
+    (dw (lit title1 lit 16 lit 0 plot-str))
+    (dw (lit title2 lit 18 lit 8 plot-str))
+    (dw (lit smiley-face lit 4 lit 40 lit 20 put-sprite-or-forth plot key))
+    (dw (lit 30 lit 30 lit 20 lit 20 rect-xor-forth
+        lit 40 lit 40 lit 20 lit 20 rect-xor-forth plot key
+        clear-screen plot poweroff))
     ;; Keep trying to read a key until one is pressed.
     ;; (dw (keyc ?dup zbranch ,(- 65536 6) poweroff))
     ,(lambda ()

@@ -12,6 +12,7 @@
 (load "keyboard.scm")
 (load "math.scm")
 (load "font.scm")
+(load "text.scm")
 ;; Essential code that modifies sets an interrupt mode of 1 and writes
 ;; to port #x14.
 (define wtf-prog
@@ -34,7 +35,8 @@
     ,@keyboard-asm
     ,@math-asm
     ,@font-asm
-
+    ,@text-asm
+    
     ,(lambda ()
        (format #t "End of smiley-os: 0x")
        (PRINT-PC))
