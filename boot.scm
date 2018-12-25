@@ -41,6 +41,7 @@
     (ld bc #x7fff)
     (ldir)
 
+    
     ;; Arbitrarily complicated macros!
     ,@(apply append (map (lambda (x)
                            `((ld a ,x)
@@ -51,7 +52,7 @@
 
     ;; "main", after everything has been set up.
     ;; Just go straight to the Forth portion!
-    ,@forth-prog
+    ,@forth-asm
     (jp shutdown)
 
     (label smiley-face)

@@ -103,6 +103,13 @@
     (pop af)
     (ret)
 
+    (label unprotect-ram)
+    (xor a)
+    (out (25) a)
+    (dec a)
+    (out (26) a)
+    (ret)
+
     (label cp-hl-de)
     (push hl)
     (or a)

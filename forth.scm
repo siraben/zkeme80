@@ -43,6 +43,10 @@
   `((ld b h)
     (ld c l)))
 
+(define bc-to-hl
+  `((ld h b)
+    (ld l c)))
+
 (define hl-to-de
   `((ld d h)
     (ld e l)))
@@ -75,6 +79,38 @@
   `(,@(defcode name flags label)
     (call docol)))
 
+(define *var-list* '())
+(define *var-count* 0)
+(define (next-var-addr!)
+  (set! *var-count* (1+ *var-count*))
+  (+ #x83fe (* 2 *var-count*)))
+
+(define reset-var
+  (lambda ()
+    (set! *var-list* '())
+    (set! *var-count* 0)
+    '()))
+
+
+;; We must relocate these variables elsewhere, where RAM is writable.
+(define (defvar name label default)
+  ;; Store the list of variable default values.
+  (set! *var-list* `(,default . ,*var-list*))
+  (let ((var-label (string->symbol (format #f "var-~a" label)))
+        (var-addr (next-var-addr!)))
+    
+    `(,(lambda () (add-label! var-label var-addr) '())
+      ,@(defcode name 0 label)
+      (push bc)
+      (ld bc ,var-addr)
+      ,@next)))
+
+;; (lit* '(1 2 3 4 5)) => (lit 1 lit 2 ...)
+(define (lit* l)
+  (if (null? l)
+      '()
+      `(lit ,(car l) . ,(lit* (cdr l)))))
+
 (define *link-pointer* 0)
 
 (define next-sub
@@ -93,37 +129,82 @@
     (pop de)
     ,@next))
 
-(define forth-prog
-  `(,reset-link
-    ;; Reasonable settings for Forth's stacks.
-    (ld de main)
-    (ld ix #xc000)
-    (ld sp 0)
-    ,@next
-    ,@next-sub
 
-    ,@docol-sub
-
-    (label tru)
-    (ld bc 1)
+(define forth-stack-words
+  `(,@(defcode "DUP" 0 'dup)
+    (push bc)
     ,@next
     
-    (label fal)
-    (ld bc 0)
+    ,@(defcode "DROP" 0 'drop)
+    (pop bc)
     ,@next
 
-    ,@(defcode "EXIT" 0 'exit)
+    ,@(defcode "SWAP" 0 'swap)
+    (pop hl)
+    (push bc)
+    ,@hl-to-bc
+    ,@next
+
+    ,@(defcode ">R" 0 '>r)
+    ,@push-bc-rs
+    (pop bc)
+    ,@next
+    
+    ,@(defcode "R>" 0 'r>)    
+    (push bc)
+    ,@pop-bc-rs
+    ,@next
+
+    ,@(defcode "OVER" 0 'over)
+    (pop hl)
+    (push hl)
+    (push bc)
+    ,@hl-to-bc
+    ,@next
+
+    ,@(defcode "ROT" 0 'rot)
+    ,@push-de-rs
+    (pop hl)
+    (pop de)
+    (push hl)
+    (push bc)
+    ((ex de hl))
+    ,@hl-to-bc
     ,@pop-de-rs
     ,@next
 
-    ,@(defcode "DUP" 0 'dup)
+    ,@(defcode "-ROT" 0 '-rot)
+    ,@push-de-rs
+    (pop hl)
+    (pop de)
     (push bc)
+    (push de)
+    ,@hl-to-bc
+    ,@pop-de-rs
     ,@next
 
-    ,@(defcode "?DUP" 0 '?dup)
-    (ld hl 0)
-    (call cp-hl-bc)
-    (jp nz dup)
+    ,@(defcode "2DROP" 0 '2drop)
+    (pop bc)
+    (pop bc)
+    ,@next
+
+    ,@(defcode "2DUP" 0 '2dup)
+    (pop hl)
+    (push hl)
+    (push bc)
+    (push hl)
+    ,@next))
+
+(define forth-math-words
+  `(,@(defcode ">>" 0 '>>)
+    (push de)
+    (ld d b)
+    (ld e c)
+    (srl d)
+    (rr e)
+    (ld b d)
+    (ld c e)
+    (pop de)
     ,@next
 
     ,@(defcode "+" 0 '+)
@@ -146,6 +227,254 @@
     ,@hl-to-bc
     ,@pop-de-rs
     ,@next
+    
+    ,@(defcode "/MOD" 0 '/mod)
+    ,@push-de-rs
+    (ld d b)
+    (ld e c)
+    (pop bc)
+    (ld a b)
+    ;;  ac by de and places the quotient in ac and the remainder in hl 
+    (label div-ac-by-de)
+    (ld	hl 0)
+    (ld	b 16)
+
+    (label div-ac-de-loop)
+    (db (#xcb #x31)) ;; sll c
+    (rla)
+    (adc hl hl)
+    (sbc hl de)
+    (jr	nc div-ac-de-local)
+    (add hl de)
+    (dec c)
+    (label div-ac-de-local)
+    
+    (djnz div-ac-de-loop)
+    (ld b a)
+    (push hl)
+    ,@pop-de-rs
+    ,@next
+    
+    ,@(defword "/" 0 '/)
+    (dw (/mod swap drop exit))
+    
+    ,@(defcode "1+" 0 '1+)
+    (inc bc)
+    ,@next
+
+    ,@(defcode "1-" 0 '1-)
+    (dec bc)
+    ,@next
+
+    ,@(defcode "2-" 0 '2-)
+    (dec bc)
+    (dec bc)
+    ,@next))
+
+(define forth-memory-words
+  `(,@(defcode "!" 0 '!)
+    (pop hl)
+    (ld a l)
+    (ld (bc) a)
+    (inc bc)
+    (ld a h)
+    (ld (bc) a)
+    (pop bc)
+    ,@next
+
+    ,@(defcode "@" 0 '@)
+    (ld a (bc))
+    (ld l a)
+    (inc bc)
+    (ld a (bc))
+    (ld h a)
+    ,@hl-to-bc
+    ,@next
+    
+    ,@(defcode "+!" 2 '+!)
+    (pop hl)
+    (push de)
+    (ld a (bc))
+    (ld e a)
+    (inc bc)
+    (ld a (bc))
+    (ld d a)
+    (dec bc)
+    (add hl de)
+    (ld a l)
+    (ld (bc) a)
+    (inc bc)
+    (ld a h)
+    (ld (bc) a)
+    (inc bc)
+
+    (pop de)
+    (pop bc)
+    ,@next
+
+    ,@(defcode "-!" 2 '-!)
+    (pop hl)
+    (push de)
+    (ld a (bc))
+    (ld e a)
+    (inc bc)
+    (ld a (bc))
+    (ld d a)
+    (dec bc)
+    (xor a)
+    ((ex de hl))
+    (sbc hl de)
+
+    (ld a l)
+    (ld (bc) a)
+    (inc bc)
+    (ld a h)
+    (ld (bc) a)
+    (pop de)
+    ,@next
+
+    ,@(defcode "C!" 0 'c!)
+    (pop hl)
+    (ld a l)
+    (ld (bc) a)
+    (pop bc)
+    ,@next
+
+    ,@(defcode "C@" 0 'c@)
+    (ld a (bc))
+    (ld c a)
+    (ld b 0)
+    ,@next
+
+    ,@(defcode "C@C!" 0 'c@c!)
+    (pop hl)
+    (ld a (bc))
+    (ld (hl) a)
+    (inc hl)
+    (inc bc)
+    (push hl)
+    ,@next
+
+    ,@(defcode "CMOVE" 0 'cmove)
+    ,@push-de-rs
+    (pop de)
+    (pop hl)
+    (ldir)
+    ,@pop-de-rs
+    (pop bc)
+    ,@next))
+
+(define forth-graphics-words
+  `(;; Draw a rectangle using OR
+    ;; ( x y width height -- )
+    ,@(defcode "RECT-OR" 0 'rect-or-forth)
+    (ld b c)
+    (pop hl)
+    (ld c l)
+    (pop hl)
+    ,@push-de-rs
+    (pop de)
+    (ld iy screen-buffer)
+    (call rect-or)
+    ,@pop-de-rs
+    (pop bc)
+    ,@next
+
+    ;; Draw a rectangle using XOR
+    ;; ( x y width height -- )
+    ,@(defcode "RECT-XOR" 0 'rect-xor-forth)
+    (ld b c)
+    (pop hl)
+    (ld c l)
+    (pop hl)
+    ,@push-de-rs
+    (pop de)
+    (ld iy screen-buffer)
+    (call rect-xor)
+    (call fast-copy)
+    ,@pop-de-rs
+    (pop bc)
+    ,@next
+
+    ,@(defcode "CLEAR-SCREEN" 0 'clear-screen)
+    (ld iy screen-buffer)
+    (call clear-buffer)
+    (call fast-copy)
+    ,@next
+
+    ;; Draw a sprite to the screen.
+    ;; ( sprite_addr height x y -- )
+    ,@(defcode "PUT-SPRITE-OR" 0 'put-sprite-or-forth)
+    (ld iy screen-buffer)
+    ,@push-de-rs
+    (ld e c)
+    (pop bc)
+    (ld d c)
+    (pop bc)
+    (ld b c)
+    (pop hl)
+    (call put-sprite-or)
+    ,@pop-de-rs
+    ,@next
+
+        ;; Draw a region of memory to the screen.
+    ;; ( addr --  )
+    ,@(defcode "DRAW" 0 'draw)
+    (push bc)
+    (pop iy)
+    (pop bc)
+    (call fast-copy)
+    ,@next
+
+    ;; Plot the default memory screen (starting at address #x8100)
+    ,@(defcode "PLOT" 0 'plot)
+    (ld iy screen-buffer)
+    (call fast-copy)
+    ,@next    
+
+))
+
+(define forth-vars
+  `(,@(defvar "STATE" 'state 1)
+    ,@(defvar "LATEST" 'latest 0)
+    ,@(defvar "SP0" 'sp0 0)
+    ,@(defvar "HERE" 'here 'os-end)
+    ,@(defvar "CUR-COL" 'cur-col 0)
+    ,@(defvar "CUR-ROW" 'cur-row 0)
+    ,@(defvar "BASE" 'base 10)
+    ,@(defvar "S0" 's0 0)))
+
+
+(define forth-asm
+  `(,reset-link
+    ,reset-var
+    ;; Reasonable settings for Forth's stacks.
+    (ld de main)
+    (ld ix #xc000)
+    (ld sp 65534)
+    ,@next
+    ,@next-sub
+
+    ,@docol-sub
+
+    (label tru)
+    (ld bc 1)
+    ,@next
+    
+    (label fal)
+    (ld bc 0)
+    ,@next
+
+    ,@(defcode "EXIT" 0 'exit)
+    ,@pop-de-rs
+    ,@next
+
+    ,@(defcode "?DUP" 0 '?dup)
+    (ld hl 0)
+    (call cp-hl-bc)
+    (jp nz dup)
+    ,@next
+
 
     ,@(defcode "LIT" 0 'lit)
     (ld a (de))
@@ -198,7 +527,13 @@
     (pop hl)
     (call cp-hl-bc)
     (jp z fal)
-    (jp tru)    
+    (jp tru)
+
+    ,@(defcode "<" 0 '<)
+    (pop hl)
+    (call cp-hl-bc)
+    (jp c tru)
+    (jp fal)
 
     ,@(defcode "KEYC" 0 'keyc)
     (call get-key)
@@ -215,202 +550,158 @@
     (ld c a)
     ,@next
 
-    ,@(defcode "DROP" 0 'drop)
-    (pop bc)
-    ,@next
-
-    ,@(defcode "SWAP" 0 'swap)
-    (pop hl)
-    (push bc)
-    ,@hl-to-bc
-    ,@next
-
-    ,@(defcode "OVER" 0 'over)
-    (pop hl)
-    (push hl)
-    (push bc)
-    ,@hl-to-bc
-    ,@next
-
-    ,@(defcode "ROT" 0 'rot)
-    ,@push-de-rs
-    (pop hl)
-    (pop de)
-    (push hl)
-    (push bc)
-    ((ex de hl))
-    ,@hl-to-bc
-    ,@pop-de-rs
-    ,@next
-
-    ,@(defcode "-ROT" 0 '-rot)
-    ,@push-de-rs
-    (pop hl)
-    (pop de)
-    (push bc)
-    (push de)
-    ,@hl-to-bc
-    ,@pop-de-rs
-    ,@next
-
-    ,@(defcode "1+" 0 '1+)
-    (inc bc)
-    ,@next
-
-    ,@(defcode "1-" 0 '1-)
-    (dec bc)
-    ,@next
-    
-    ,@(defcode "!" 0 '!)
-    (pop hl)
-    (ld a l)
-    (ld (bc) a)
-    (inc bc)
-    (ld a h)
-    (ld (bc) a)
-    (pop bc)
-    ,@next
-
-    ,@(defcode "@" 0 '@)
-    (ld a (bc))
-    (ld l a)
-    (inc bc)
-    (ld a (bc))
-    (ld h a)
-    ,@hl-to-bc
-
-    ;; Draw a region of memory to the screen.
-    ;; ( addr --  )
-    ,@(defcode "DRAW" 0 'draw)
-    (push bc)
-    (pop iy)
-    (pop bc)
-    (call fast-copy)
-    ,@next
-
-    ;; Plot the default memory screen (starting at address #x8100)
-    ,@(defcode "PLOT" 0 'plot)
-    (ld iy screen-buffer)
-    (call fast-copy)
-    ,@next    
+    ,@forth-stack-words
+    ,@forth-math-words
+    ,@forth-memory-words
+    ,@forth-graphics-words
 
     ;; Shut down the calculator.
     ,@(defcode "POWEROFF" 0 'poweroff)
     (jp shutdown)
 
-    ;; Draw a rectangle using OR
-    ;; ( x y width height -- )
-    ,@(defcode "RECT-OR" 0 'rect-or-forth)
-    (ld b c)
-    (pop hl)
-    (ld c l)
-    (pop hl)
-    ,@push-de-rs
-    (pop de)
-    (ld iy screen-buffer)
-    (call rect-or)
-    ,@pop-de-rs
-    (pop bc)
-    ,@next
 
-    ;; Draw a rectangle using XOR
-    ;; ( x y width height -- )
-    ,@(defcode "RECT-XOR" 0 'rect-xor-forth)
-    (ld b c)
-    (pop hl)
-    (ld c l)
-    (pop hl)
-    ,@push-de-rs
-    (pop de)
-    (ld iy screen-buffer)
-    (call rect-xor)
-    ,@pop-de-rs
-    (pop bc)
-    ,@next
-
-    ,@(defcode "CLEAR-SCREEN" 0 'clear-screen)
-    (ld iy screen-buffer)
-    (call clear-buffer)
-    ,@next
-
-    ;; Draw a sprite to the screen.
-    ;; ( sprite_addr height x y -- )
-    ,@(defcode "PUT-SPRITE-OR" 0 'put-sprite-or-forth)
-    (ld iy screen-buffer)
-    ,@push-de-rs
-    (ld e c)
-    (pop bc)
-    (ld d c)
-    (pop bc)
-    (ld b c)
-    (pop hl)
-    (call put-sprite-or)
-    ,@pop-de-rs
-    ,@next
-
-    ,@(defcode ">R" 0 '>r)
-    ,@push-bc-rs
-    (pop bc)
-    ,@next
-    
-    ,@(defcode ">R" 0 'r>)    
-    (push bc)
-    ,@pop-bc-rs
-    ,@next
 
     ;; Plot a character to the screen.
-    ;; ( char x y -- )
-    ,@(defword "PLOT-CHAR" 0 'plot-char)
-    (dw (>r >r lit 6 * lit 1+ lit kernel-font + lit 5 r> r>))
-    (dw (put-sprite-or-forth))
-    (dw (exit))
-
-    ;; Draw a string to the screen
-    ;; ( str_addr x y -- )
-    ,@(defcode "PLOT-STR" 0 'plot-str)
+    ;; ( char -- )
+    ,@(defcode "EMIT" 0 'emit)
     ,@push-de-rs
-    (ld e c)
-    (pop bc)
-    (ld d c)
-    (pop hl)
+    (ld a (var-cur-col))
+    (ld d a)
+    (ld a (var-cur-row))
+    (ld e a)
+    ;; Character to print
+    (ld a c)
     (ld iy screen-buffer)
-    (call draw-str-xor)
+    (call draw-char)
+    (call fast-copy)
+    (ld a d)
+    (ld (var-cur-col) a)
+    (ld a e)
+    (ld (var-cur-row) a)    
     ,@pop-de-rs
     (pop bc)
     ,@next
+
+    ;; Carriage return
+    ,@(defcode "CR" 0 'cr)
+    ,@push-de-rs
+    (ld a (var-cur-col))
+    (ld d a)
+    (ld a (var-cur-row))
+    (ld e a)
+    (call newline)
+    (ld a d)
+    (ld (var-cur-col) a)
+    (ld a e)
+    (ld (var-cur-row) a)    
+    ,@pop-de-rs
+    ,@next
+
+    ;; Draw a string to the screen
+    ;; ( str_addr -- )
+    ,@(defcode "PLOT-STR" 0 'plot-str)
+    ,@push-de-rs
+    (ld a (var-cur-col))
+    (ld d a)
+    (ld a (var-cur-row))
+    (ld e a)
+    ,@bc-to-hl
+    (ld iy screen-buffer)
+    (ld b 98)
+    (ld c 64)
+    (ld a 0)
+    (call wrap-str)
+    (call fast-copy)
+    (ld a d)
+    (ld (var-cur-col) a)
+    (ld a e)
+    (ld (var-cur-row) a)
+    ,@pop-de-rs
+    (pop bc)
+    ,@next
+
+    ,@forth-vars
+
+
+
+    ,@(defcode "SP@" 0 'sp@)
+    (push bc)
+    (ld (var-sp0) sp)
+    (ld hl (var-sp0))
+    ,@hl-to-bc
+    ,@next
+
+
+    ,@(defword "PAUSE" 0 'pause)
+    (dw (key drop exit))
+
+
+    ;; ( num -- )
+    ,@(defword "U." 0 'u._)
+    (dw (base @ /mod ?dup 0branch 4 u._ dup lit 10))
+    (dw (< 0branch 10 lit 48 branch 12 lit 10))
+    (dw (- lit 65 + emit exit))
+
+    ,@(defword "U." 0 'u.)
+    (dw (u._ space exit))
+
+    ,@(defword "UWIDTH" 0 'uwidth)
+    (dw (base @ / ?dup 0branch 10 uwidth 1+ branch 6))
+    (dw (lit 1 exit))
+
+    ,@(defword "SPACE" 0 'space)
+    (dw (lit ,(char->integer #\space) emit exit))
+
+    ,@(defword "SPACES" 0 'spaces)
+    (dw (lit 0 >r >r space r> r> 1+ 2dup = 0branch 65520))
+    (dw (2drop exit))
+
+    ,@(defword "U.R" 0 'u.r)
+    (dw (swap dup uwidth rot swap - spaces u._ exit))
+
+    ,@(defword "DEPTH" 0 'depth)
+    (dw (s0 @ sp@ - 2- >> exit))
+
+    ,@(defword ".S" 0 '.s)
+    (dw (lit ,(char->integer #\<) emit depth u._))
+    (dw (lit ,(char->integer #\>) emit space))
+    (dw (sp@ dup s0 @ < 0branch 18 dup @))
+    (dw (u. lit 2 + branch 65510 drop exit))
 
     (label title1)
     (db ,(string "Welcome to Ben's"))
     (label title2)
     (db ,(string "Forth-based OS!"))
-
+    (label title3)
+    (db ,(string "Press any key to continue to key demo..."))
+    (label title4)
+    (db ,(string "You pressed: "))
+    (label title5)
+    (db ,(string "As a character: "))
+    
     (label main)
-    (dw (lit title1 lit 16 lit 0 plot-str))
-    (dw (lit title2 lit 18 lit 8 plot-str))
-    (dw (lit smiley-face lit 4 lit 40 lit 20 put-sprite-or-forth plot key))
-    (dw (lit 30 lit 30 lit 20 lit 20 rect-xor-forth
-        lit 40 lit 40 lit 20 lit 20 rect-xor-forth plot key
-        clear-screen plot poweroff))
-    ;; Keep trying to read a key until one is pressed.
-    ;; (dw (keyc ?dup zbranch ,(- 65536 6) poweroff))
+    (dw (lit 10 base !))
+    (dw (lit 65534 s0 !))
+    (dw (lit title1 plot-str cr))
+    (dw (lit title2 plot-str cr pause))
+    (dw (base @ u. cr))
+    (dw (lit 1 lit 2 lit 3 lit 4))
+    (dw (.s drop drop drop drop cr))
+    (dw (lit title3 plot-str pause))
+
+    (dw (key clear-screen dup))
+    (dw (lit 0 cur-row !))    
+    (dw (lit 0 cur-col ! lit title4 plot-str u. cr))
+    (dw (lit title5 plot-str emit))
+    (dw (branch ,(- 65536 42)))
+    
+    (dw (poweroff))
+    ;; Who said we couldn't mix Forth and Scheme code?
+    ;; (dw (,@(lit* '(30 30 20 20)) rect-xor-forth
+    ;;      ,@(lit* '(40 40 20 20)) rect-xor-forth key
+    ;;      clear-screen poweroff))
     ,(lambda ()
-       (format #t "End of forth.asm: 0x")
+       (format #t "End of forth.asm: 0")
        (PRINT-PC))
     ))
 
-(define fast-memview-forth-prog
-  `(dw (lit 0 keyc drop lit 12 + draw branch ,(- 65536 14))))
-
-;; Decompiled with SEE from
-;; https://github.com/siraben/ti84-forth/blob/9088ae05a28f037f2ec6995c1fa817dea59c91a4/programs/memview.fs
-;; You may need to define more words (e.g. one, two, three, stepl... )
-;; to get this to work.
-(define memview-arrow-keys-forth-prog
-  `(dw (key dup five <> 0branch 92 over
-             draw three over = 0branch 12
-             drop step + branch 64 four over =
-             0branch 12 drop step - branch 44
-             one over = 0branch 12 drop
-             stepl + branch 24 two over =
-             0branch 12 drop stepl - branch 4
-             drop branch 65436 drop)))

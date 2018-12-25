@@ -151,9 +151,10 @@
 (define (assemble-ld-hl-iimm16 iimm16)
   (make-inst 16
              3
-             `(#b00101010
-               ,(lsb iimm16)
-               ,(msb iimm16))))
+             (let ((iimm16 (resolve-label iimm16)))
+               `(#b00101010
+                 ,(lsb iimm16)
+                 ,(msb iimm16)))))
 
 (define ld-iregs
   '((bc . #b0) (de . #b1)))
@@ -223,16 +224,18 @@
 (define (assemble-ld-iimm16-a addr)
   (make-inst 13
              3
-             `(#b00110010
-               ,(lsb addr)
-               ,(msb addr))))
+             (let ((addr (resolve-label addr)))
+               `(#b00110010
+                 ,(lsb addr)
+                 ,(msb addr)))))
 
 (define (assemble-ld-a-imm16 addr)
   (make-inst 13
              3
-             `(#b00111010
-               ,(lsb addr)
-               ,(msb addr))))
+             (let ((addr (resolve-label addr)))
+               `(#b00111010
+                 ,(lsb addr)
+                 ,(msb addr)))))
 
 (define (assemble-ld-sp-hl)
   (make-inst 6
@@ -253,7 +256,14 @@
                ,(make-opcode (lookup c ld-regs) 0 #b01110000)
                ,b)))
 
-
+(define (assemble-ld-iimm-reg16 a b)
+  (make-inst 20
+             4
+             (let ((a (resolve-label a)))
+               `(#b11101101
+                 ,(make-opcode (lookup b 16-bit-regs) 4 #b01000011)
+                 ,(lsb a)
+                 ,(msb a)))))
 
 (define (assemble-ld args)
   (match args
@@ -289,7 +299,8 @@
      (assemble-ld-index-reg8 a b c))
     ((('+ (? 8-bit-imm? b) (? index-reg? a)) (? 8-bit-reg? c))
      (assemble-ld-index-reg8 a b c))
-    
+    ((((? 16-bit-imm-or-label? a)) (? 16-bit-reg? b))
+     (assemble-ld-iimm-reg16 a b))
     (_
      (error (format #f "Invalid operands to ld: ~a" args))))
   )
@@ -633,10 +644,18 @@
              1
              `(,(make-opcode (lookup reg ld-regs) 0 #b10001000))))
 
+(define (assemble-adc-16-bit-reg reg)
+  (make-inst 15
+             2
+             `(#b11101101
+               ,(make-opcode (lookup reg 16-bit-regs) 4 #b01001010))))
+
 (define (assemble-adc arg)
   (match arg
     (`(a ,(? 8-bit-reg? a))
      (assemble-adc-8-bit-reg a))
+    (`(hl ,(? 16-bit-reg? a))
+     (assemble-adc-16-bit-reg a))
     (_
      (error (format #f "Invalid operands to adc: ~a" arg)))))
 

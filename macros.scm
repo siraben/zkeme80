@@ -8,20 +8,15 @@
     ;; Macros need to return () or an instruction record..
     '()))
 
-;; Multiple pushes.
-(define (push* l)
-  (map (lambda (x) `(push ,x))
-       l))
+(define (make-multi-op op)
+  (lambda (l)
+    (map (lambda (x) `(,op ,x))
+         l)))
 
-;; Multple pops.
-(define (pop* l)
-  (map (lambda (x) `(pop ,x))
-       l))
-
-;; Multiple calls.
-(define (call* l)
-  (map (lambda (x) `(call ,x))
-       l))
+;; Multiple operations.
+(define push* (make-multi-op 'push))
+(define pop* (make-multi-op 'pop))
+(define call* (make-multi-op 'call))
 
 ;; Relative jumps like JR $+3
 ;; Write ,(jr-rel 3) instead in the quasi-quoted program.

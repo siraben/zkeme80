@@ -37,9 +37,21 @@
     ,@font-asm
     ,@text-asm
     
+    (label os-end)
     ,(lambda ()
        (format #t "End of smiley-os: 0x")
        (PRINT-PC))
+    
+    ,(lambda ()
+       (assemble-expr `(db ,(make-list
+                             (- #x8400 *pc*)
+                             #xff))))
+
+    (dw ,(reverse *var-list*))
+    ;; ,@(if (> *var-count* 0)
+    ;;       `((db ,(make-list (* 2 *var-count*) 0)))
+    ;;       '())
+
     
     ,(lambda ()
        (assemble-expr `(db ,(make-list
@@ -48,6 +60,7 @@
     
 
     ,@wtf-prog
+
     ,fill-until-end
     
     ,(lambda ()
