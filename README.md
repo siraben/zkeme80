@@ -1,10 +1,7 @@
-# An assembler for the Z80 written in Scheme
+# An assembler and operating system for the Z80 written in Scheme
+![OS demo](demo.gif)
 
-**N.B.** this repository currently contains the assembler and a
-Forth-based operating system, the operating system will be moved to a
-separate repository in the near future.
-
-**TLDR:** `assembler.scm` is the, assembler.  There are no file
+**TLDR:** `assembler.scm` is the assembler.  There are no file
 dependencies, but your Scheme implementation needs to be recent enough
 to have the required modules to support things like bytevectors and
 `sfri-9` records.  Works on Guile, hasn't been tested on other
@@ -33,9 +30,8 @@ dictionary entries).  What better macro system exists than Lisp?
   run `(load "assembler.scm")` into your Scheme REPL and
   run`(assemble-prog sample-prog)` to see the binary data.  Run
   `(assemble-to-file sample-prog "out.bin")` to write a binary file.
-- `base.scm`, `flash.scm`, `boot.scm`, `forth.scm`, `header.scm`,
-  `interrupt.scm`, `smiley-os.scm` these are all files concerned with
-  my Forth-based operating system.  Load `smiley-os.scm` then run
+- `smiley-os.scm` and its helper files are associated with my
+  Forth-based operating system.  Load `smiley-os.scm` then run
   `(make-rom "out.rom")` to generate binary to a file `out.rom`.
 
 
