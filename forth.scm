@@ -444,6 +444,47 @@
     ,@(defvar "BASE" 'base 10)
     ,@(defvar "S0" 's0 0)))
 
+(define (make-char-lookup-table)
+  (define res (make-list 50 0))
+  (define (put-char! id char)
+    (list-set! res id (char->integer char)))
+
+  (put-char! 47 #\A)
+  (put-char! 39 #\B)
+  (put-char! 31 #\C)
+  (put-char! 46 #\D)
+  (put-char! 38 #\E)
+  (put-char! 30 #\F)
+  (put-char! 22 #\G)
+  (put-char! 48 #\H)
+  (put-char! 45 #\I)
+  (put-char! 37 #\J)
+  (put-char! 29 #\K)
+  (put-char! 21 #\L)
+  (put-char! 13 #\M)
+  (put-char! 44 #\N)
+  (put-char! 36 #\O)
+  (put-char! 28 #\P)
+  (put-char! 20 #\Q)
+  (put-char! 12 #\R)
+  (put-char! 43 #\S)
+  (put-char! 35 #\T)
+  (put-char! 27 #\U)
+  (put-char! 19 #\V)
+  (put-char! 11 #\W)
+  (put-char! 42 #\X)
+  (put-char! 34 #\Y)
+  (put-char! 26 #\Z)
+  (put-char! 9 #\newline)
+  (put-char! 2 #\backspace)
+
+  res)
+
+(define forth-char-lookup-table
+  `((label char-lookup-table)
+    (db ,(make-char-lookup-table))))
+
+
 
 (define forth-asm
   `(,reset-link
@@ -485,6 +526,35 @@
     (inc de)
     (push bc)
     ,@hl-to-bc
+    ,@next
+
+    ;; Sometimes absolute jumps are easier!
+    ,@(defcode "JUMP" 0 'jump)
+    (ld a (de))
+    (ld l a)
+    (inc de)
+    (ld a (de))
+    (ld h a)
+    ,@hl-to-de
+    ,@next
+
+    ,@(defcode "0JUMP" 0 '0jump)
+    (ld a c)
+    (cp 0)
+    (jp z zjump-maybe)
+    (jp nz zjump-fail)
+    
+    (label zjump-maybe)
+    (ld a b)
+    (cp 0)
+    (jp nz zjump-fail)
+    (pop bc)
+    (jp jump)
+    
+    (label zjump-fail)
+    (inc de)
+    (inc de)
+    (pop bc)
     ,@next
 
     ,@(defcode "BRANCH" 0 'branch)
@@ -535,6 +605,15 @@
     (jp c tru)
     (jp fal)
 
+    ,@(defcode "0=" 0 '0=)
+    (ld hl 0)
+    (call cp-hl-bc)
+    (jp c fal)
+    (jp tru)
+
+    ,@(defword "NOT" 0 'not)
+    (dw (0= exit))
+
     ,@(defcode "KEYC" 0 'keyc)
     (call get-key)
     (push bc)
@@ -550,11 +629,80 @@
     (ld c a)
     ,@next
 
+    ;; Read a key as an ASCII character.
+    ,@(defcode "AKEY" 0 'akey)
+    ,@push-de-rs
+    (call flush-keys)
+    (call wait-key)
+    (ld h 0)
+    (ld l a)
+    (ld de char-lookup-table)
+    (add hl de)
+    (ld a (hl))
+    (push bc)
+    (ld b 0)
+    (ld c a)
+    ,@pop-de-rs
+    ,@next
+
+    ,@(defcode "TO-ASCII" 0 'to-ascii)
+    (push de)
+    (ld h 0)
+    (ld l c)
+    (ld de char-lookup-table)
+    (add hl de)
+    (ld a (hl))
+    (ld c a)
+    (ld b 0)
+    (pop de)
+    ,@next
+
+    ,@(defword "ORIGIN" 0 'origin)
+    (dw (lit 0 dup cur-col ! cur-row ! exit))
+
+    ;; ( addr u -- )
+    ;; Expect u characters (or a newline, whichever comes first) and
+    ;; store them at address addr.
+    ;; Written in Forth because it's easier.
+    ,@(defword "EXPECT" 0 'expect)
+    ;; Store the address and count so we can do various checks.
+    (dw (lit expect-count ! dup lit expect-ptr !))
+    ;; And the initial pointer.
+    (dw (lit expect-ptr-initial !))
+    (label expect-loop)
+    ;; Check if we have no characters left.
+    (dw (lit expect-count @ not 0jump expect-more))
+    (dw (exit))
+    (label expect-more)
+    (dw (clear-screen origin lit expect-ptr-initial @ plot-str))
+    (dw (akey))
+    (dw (dup lit ,(char->integer #\newline) <> 0jump expect-got-newline))
+    (dw (dup lit ,(char->integer #\backspace) <> 0jump expect-got-backspace))
+    ;; General case
+    (dw (lit expect-ptr @ !))
+    (dw (lit 1 lit expect-ptr +!))
+    (dw (lit 1 lit expect-count +!))
+    (dw (jump expect-loop))
+    
+    (label expect-got-newline)
+    (dw (drop lit 0 lit expect-ptr @ ! exit))
+    
+    (label expect-got-backspace)
+    (dw (lit 0 lit expect-ptr @ !))
+    (dw (lit expect-ptr-initial @ lit expect-ptr @))
+    (dw (<> 0jump expect-loop))
+    (dw (lit 1 lit expect-ptr -!))
+    (dw (lit 1 lit expect-count +!))
+    (dw (jump expect-loop))
+    
+    
+    
     ,@forth-stack-words
     ,@forth-math-words
     ,@forth-memory-words
     ,@forth-graphics-words
-
+    ,@forth-char-lookup-table
+    
     ;; Shut down the calculator.
     ,@(defcode "POWEROFF" 0 'poweroff)
     (jp shutdown)
@@ -668,6 +816,7 @@
     (dw (sp@ dup s0 @ < 0branch 18 dup @))
     (dw (u. lit 2 + branch 65510 drop exit))
 
+
     (label title1)
     (db ,(string "Welcome to Ben's"))
     (label title2)
@@ -677,7 +826,13 @@
     (label title4)
     (db ,(string "You pressed: "))
     (label title5)
+    (db ,(string "As an ASCII code: "))
+    (label title6)
     (db ,(string "As a character: "))
+    (label title7)
+    (db ,(string "Enter a message: "))
+    (label title8)
+    (db ,(string "You typed: "))
     
     (label main)
     (dw (lit 10 base !))
@@ -687,13 +842,20 @@
     (dw (base @ u. cr))
     (dw (lit 1 lit 2 lit 3 lit 4))
     (dw (.s drop drop drop drop cr))
-    (dw (lit title3 plot-str pause))
+    (dw (lit title3 plot-str cr pause))
 
-    (dw (key clear-screen dup))
+    (dw (lit title7 plot-str cr))
+    (dw (lit input-buffer lit 10 expect cr))
+    (dw (lit title8 plot-str))
+    (dw (lit input-buffer plot-str pause))
+    (label demo-loop)
+    (dw (key clear-screen dup dup))
     (dw (lit 0 cur-row !))    
     (dw (lit 0 cur-col ! lit title4 plot-str u. cr))
-    (dw (lit title5 plot-str emit))
-    (dw (branch ,(- 65536 42)))
+    (dw (lit title5 plot-str to-ascii u. cr))
+    (dw (lit title6 plot-str to-ascii emit cr))
+    (dw (.s))
+    (dw (jump demo-loop))
     
     (dw (poweroff))
     ;; Who said we couldn't mix Forth and Scheme code?

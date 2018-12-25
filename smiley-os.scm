@@ -52,6 +52,18 @@
     ;;       `((db ,(make-list (* 2 *var-count*) 0)))
     ;;       '())
 
+    ;; This is used by Forth.
+    (label input-buffer)
+    (db ,(make-list 64 0))
+    (label word-buffer)
+    (db ,(make-list 32 0))
+    
+    (label expect-ptr-initial)
+    (dw (0))
+    (label expect-ptr)
+    (dw (0))
+    (label expect-count)
+    (dw (0))
     
     ,(lambda ()
        (assemble-expr `(db ,(make-list

@@ -1,5 +1,7 @@
 (define math-asm
-  `((label mul-16-by-16)
+  `(;; Multiplies DE and BC
+    ;; Outputs in DEHL
+    (label mul-16-by-16)
     (ld hl 0)
     (ld a 16)
     (label mul-16-loop)
