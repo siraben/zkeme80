@@ -1,4 +1,4 @@
-# An assembler and operating system for the Z80 written in Scheme
+# zkeme80 - a Forth-based OS for TI-84+ calculators written in Scheme
 ![OS demo](demo.gif)
 
 **TLDR:** `assembler.scm` is the assembler.  There are no file
