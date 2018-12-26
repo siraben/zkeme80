@@ -445,7 +445,7 @@
     ,@(defvar "S0" 's0 0)))
 
 (define (make-char-lookup-table)
-  (define res (make-list 50 0))
+  (define res (make-list 128 0))
   (define (put-char! id char)
     (list-set! res id (char->integer char)))
 
@@ -456,7 +456,7 @@
   (put-char! 38 #\E)
   (put-char! 30 #\F)
   (put-char! 22 #\G)
-  (put-char! 48 #\H)
+  (put-char! 14 #\H)
   (put-char! 45 #\I)
   (put-char! 37 #\J)
   (put-char! 29 #\K)
@@ -477,6 +477,7 @@
   (put-char! 26 #\Z)
   (put-char! 9 #\newline)
   (put-char! 2 #\backspace)
+  (put-char! 33 #\space)
 
   res)
 
@@ -675,13 +676,17 @@
     (dw (exit))
     (label expect-more)
     (dw (clear-screen origin lit expect-ptr-initial @ plot-str))
+    (dw (lit 8 cur-row +! lit ,(char->integer #\^) emit))
+    (dw (lit 8 cur-row -!))
+    (label expect-got-blank)
     (dw (akey))
+    (dw (dup 0jump expect-more))
     (dw (dup lit ,(char->integer #\newline) <> 0jump expect-got-newline))
     (dw (dup lit ,(char->integer #\backspace) <> 0jump expect-got-backspace))
     ;; General case
     (dw (lit expect-ptr @ !))
     (dw (lit 1 lit expect-ptr +!))
-    (dw (lit 1 lit expect-count +!))
+    (dw (lit 1 lit expect-count -!))
     (dw (jump expect-loop))
     
     (label expect-got-newline)
@@ -845,7 +850,7 @@
     (dw (lit title3 plot-str cr pause))
 
     (dw (lit title7 plot-str cr))
-    (dw (lit input-buffer lit 10 expect cr))
+    (dw (lit input-buffer lit 24 expect cr))
     (dw (lit title8 plot-str))
     (dw (lit input-buffer plot-str pause))
     (label demo-loop)

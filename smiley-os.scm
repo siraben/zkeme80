@@ -82,3 +82,7 @@
 
 (define (make-rom filename)
   (assemble-to-file smiley-os filename))
+
+(define (remake filename)
+  (load "smiley-os.scm")
+  (make-rom filename))
