@@ -47,7 +47,10 @@
                              (- #x8400 *pc*)
                              #xff))))
 
-    (dw ,(reverse *var-list*))
+    ,@(apply append (map (lambda (x)
+                           `((label ,(car x))
+                             (dw (,(cdr x)))))
+                         (reverse *var-list*)))
     ;; ,@(if (> *var-count* 0)
     ;;       `((db ,(make-list (* 2 *var-count*) 0)))
     ;;       '())

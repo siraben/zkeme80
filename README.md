@@ -12,7 +12,7 @@ Thanks to `clever` on `#nixos`, if you clone the repository and run
 the following:
 
 ```shell
-nix-build tilem.nix -A runit && ./result
+nix-build . -A runit && ./result
 ```
 
 A TI calculator emulator will be built and my ROM will be loaded.  Try

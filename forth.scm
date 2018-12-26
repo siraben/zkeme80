@@ -95,12 +95,12 @@
 ;; We must relocate these variables elsewhere, where RAM is writable.
 (define (defvar name label default)
   ;; Store the list of variable default values.
-  (set! *var-list* `(,default . ,*var-list*))
+  
   (let ((var-label (string->symbol (format #f "var-~a" label)))
         (var-addr (next-var-addr!)))
+    (set! *var-list* `((,var-label . ,default) .  ,*var-list*))
     
-    `(,(lambda () (add-label! var-label var-addr) '())
-      ,@(defcode name 0 label)
+    `(,@(defcode name 0 label)
       (push bc)
       (ld bc ,var-addr)
       ,@next)))
@@ -135,6 +135,12 @@
     (push bc)
     ,@next
     
+    ,@(defcode "?DUP" 0 '?dup)
+    (ld hl 0)
+    (call cp-hl-bc)
+    (jp nz dup)
+    ,@next
+    
     ,@(defcode "DROP" 0 'drop)
     (pop bc)
     ,@next
@@ -153,6 +159,38 @@
     ,@(defcode "R>" 0 'r>)    
     (push bc)
     ,@pop-bc-rs
+    ,@next
+
+    ,@(defcode "R@" 0 'r@)
+    (push bc)
+    ,@pop-hl-rs
+    ,@push-hl-rs
+    (ld c (hl))
+    (inc hl)
+    (ld b (hl))
+    ,@next
+
+    ,@(defcode "2>R" 0 '2>r)
+    (pop hl)
+    ,@push-hl-rs
+    ,@push-bc-rs
+    (pop bc)
+    ,@next
+
+    ,@(defcode "2R>" 0 '2r>)
+    (push bc)
+    ,@pop-bc-rs
+    ,@pop-hl-rs
+    (push hl)
+    ,@next
+
+    ,@(defcode "RDROP" 0 'rdrop)
+    ,@pop-hl-rs
+    ,@next
+
+    ,@(defcode "2RDROP" 0 '2rdrop)
+    ,@pop-hl-rs
+    ,@pop-hl-rs
     ,@next
 
     ,@(defcode "OVER" 0 'over)
@@ -193,7 +231,21 @@
     (push hl)
     (push bc)
     (push hl)
-    ,@next))
+    ,@next
+
+    ,@(defcode "2SWAP" 0 '2swap)
+    ,@push-de-rs
+    (pop de)
+    (pop hl)
+    ,@push-hl-rs
+    (pop hl)
+    ,@(push* '(de bc hl))
+    ,@pop-bc-rs
+    ,@pop-de-rs
+    ,@next
+    
+
+    ))
 
 (define forth-math-words
   `(,@(defcode ">>" 0 '>>)
@@ -417,7 +469,7 @@
     ,@pop-de-rs
     ,@next
 
-        ;; Draw a region of memory to the screen.
+    ;; Draw a region of memory to the screen.
     ;; ( addr --  )
     ,@(defcode "DRAW" 0 'draw)
     (push bc)
@@ -432,104 +484,71 @@
     (call fast-copy)
     ,@next    
 
-))
-
-(define forth-vars
-  `(,@(defvar "STATE" 'state 1)
-    ,@(defvar "LATEST" 'latest 0)
-    ,@(defvar "SP0" 'sp0 0)
-    ,@(defvar "HERE" 'here 'os-end)
-    ,@(defvar "CUR-COL" 'cur-col 0)
-    ,@(defvar "CUR-ROW" 'cur-row 0)
-    ,@(defvar "BASE" 'base 10)
-    ,@(defvar "S0" 's0 0)))
-
-(define (make-char-lookup-table)
-  (define res (make-list 128 0))
-  (define (put-char! id char)
-    (list-set! res id (char->integer char)))
-
-  (put-char! 47 #\A)
-  (put-char! 39 #\B)
-  (put-char! 31 #\C)
-  (put-char! 46 #\D)
-  (put-char! 38 #\E)
-  (put-char! 30 #\F)
-  (put-char! 22 #\G)
-  (put-char! 14 #\H)
-  (put-char! 45 #\I)
-  (put-char! 37 #\J)
-  (put-char! 29 #\K)
-  (put-char! 21 #\L)
-  (put-char! 13 #\M)
-  (put-char! 44 #\N)
-  (put-char! 36 #\O)
-  (put-char! 28 #\P)
-  (put-char! 20 #\Q)
-  (put-char! 12 #\R)
-  (put-char! 43 #\S)
-  (put-char! 35 #\T)
-  (put-char! 27 #\U)
-  (put-char! 19 #\V)
-  (put-char! 11 #\W)
-  (put-char! 42 #\X)
-  (put-char! 34 #\Y)
-  (put-char! 26 #\Z)
-  (put-char! 9 #\newline)
-  (put-char! 2 #\backspace)
-  (put-char! 33 #\space)
-
-  res)
-
-(define forth-char-lookup-table
-  `((label char-lookup-table)
-    (db ,(make-char-lookup-table))))
-
-
-
-(define forth-asm
-  `(,reset-link
-    ,reset-var
-    ;; Reasonable settings for Forth's stacks.
-    (ld de main)
-    (ld ix #xc000)
-    (ld sp 65534)
-    ,@next
-    ,@next-sub
-
-    ,@docol-sub
-
-    (label tru)
-    (ld bc 1)
-    ,@next
     
-    (label fal)
-    (ld bc 0)
+    ;; Plot a character to the screen.
+    ;; ( char -- )
+    ,@(defcode "EMIT" 0 'emit)
+    ,@push-de-rs
+    (ld a (var-cur-col))
+    (ld d a)
+    (ld a (var-cur-row))
+    (ld e a)
+    ;; Character to print
+    (ld a c)
+    (ld iy screen-buffer)
+    (call draw-char)
+    (call fast-copy)
+    (ld a d)
+    (ld (var-cur-col) a)
+    (ld a e)
+    (ld (var-cur-row) a)    
+    ,@pop-de-rs
+    (pop bc)
     ,@next
 
-    ,@(defcode "EXIT" 0 'exit)
+    ;; Carriage return
+    ,@(defcode "CR" 0 'cr)
+    ,@push-de-rs
+    (ld a (var-cur-col))
+    (ld d a)
+    (ld a (var-cur-row))
+    (ld e a)
+    (call newline)
+    (ld a d)
+    (ld (var-cur-col) a)
+    (ld a e)
+    (ld (var-cur-row) a)    
     ,@pop-de-rs
     ,@next
 
-    ,@(defcode "?DUP" 0 '?dup)
-    (ld hl 0)
-    (call cp-hl-bc)
-    (jp nz dup)
+    
+    ;; Draw a string to the screen
+    ;; ( str_addr -- )
+    ,@(defcode "PLOT-STR" 0 'plot-str)
+    ,@push-de-rs
+    (ld a (var-cur-col))
+    (ld d a)
+    (ld a (var-cur-row))
+    (ld e a)
+    ,@bc-to-hl
+    (ld iy screen-buffer)
+    (ld b 98)
+    (ld c 64)
+    (ld a 0)
+    (call wrap-str)
+    (call fast-copy)
+    (ld a d)
+    (ld (var-cur-col) a)
+    (ld a e)
+    (ld (var-cur-row) a)
+    ,@pop-de-rs
+    (pop bc)
     ,@next
 
+    ))
 
-    ,@(defcode "LIT" 0 'lit)
-    (ld a (de))
-    (ld l a)
-    (inc de)
-    (ld a (de))
-    (ld h a)
-    (inc de)
-    (push bc)
-    ,@hl-to-bc
-    ,@next
-
-    ;; Sometimes absolute jumps are easier!
+(define forth-logic-words
+  `(;; Sometimes absolute jumps are easier!
     ,@(defcode "JUMP" 0 'jump)
     (ld a (de))
     (ld l a)
@@ -613,9 +632,10 @@
     (jp tru)
 
     ,@(defword "NOT" 0 'not)
-    (dw (0= exit))
+    (dw (0= exit))))
 
-    ,@(defcode "KEYC" 0 'keyc)
+(define forth-text-words
+  `(,@(defcode "KEYC" 0 'keyc)
     (call get-key)
     (push bc)
     (ld b 0)
@@ -699,82 +719,202 @@
     (dw (lit 1 lit expect-ptr -!))
     (dw (lit 1 lit expect-count +!))
     (dw (jump expect-loop))
+    ))
+
+(define forth-semantics-words
+  `(,@(defcode "LIT" 0 'lit)
+    (ld a (de))
+    (ld l a)
+    (inc de)
+    (ld a (de))
+    (ld h a)
+    (inc de)
+    (push bc)
+    ,@hl-to-bc
+    ,@next
     
+    ,@(defcode "EXIT" 0 'exit)
+    ,@pop-de-rs
+    ,@next
+
+    ,@(defcode "EXECUTE" 0 'execute)
+    ,@bc-to-hl
+    (pop bc)
+    (jp (hl))
+    ,@next
+
+    ,@(defcode "'" 0 'tick)
+    (ld a (de))
+    (ld l a)
+    (inc de)
+    (ld a (de))
+    (ld h a)
+    (inc de)
+    (push bc)
+    ,@hl-to-bc
+    ,@next
+
+    ,@(defcode "," 0 'comma)
+    (call _comma)
+    (pop bc)
+    ,@next
+
+    (label _comma)
+    (push de)
+    (ld hl (var-here))
+    (ld (hl) c)
+    (inc hl)
+    (ld (hl) b)
+    (inc hl)
+    (ld de var-here)
+    ((ex de hl))
+    (ld (hl) e)
+    (inc hl)
+    (ld (hl) d)
+    (pop de)
+    (ret)
     
+    ))
+
+(define forth-shared-header
+  `(,reset-link
+    ,reset-var
+    (ld de main)
+    (ld ix #xc000)
+    (ld sp 65534)
+    ,@next
+    ,@next-sub
+
+    ,@docol-sub
+
+    (label tru)
+    (ld bc 1)
+    ,@next
     
+    (label fal)
+    (ld bc 0)
+    ,@next
+
+    ))
+(define forth-misc-words
+  `(;; Shut down the calculator.
+    ,@(defcode "POWEROFF" 0 'poweroff)
+    (jp shutdown)))
+
+(define forth-vars
+  `(,@(defvar "STATE" 'state 0)
+    ,@(defvar "LATEST" 'latest 0)
+    ,@(defvar "SP0" 'sp0 0)
+    ,@(defvar "HERE" 'here 0)
+    ,@(defvar "CUR-COL" 'cur-col 0)
+    ,@(defvar "CUR-ROW" 'cur-row 0)
+    ,@(defvar "BASE" 'base 10)
+    ,@(defvar "S0" 's0 0)))
+
+(define (make-char-lookup-table)
+  (define res (make-list 128 0))
+  (define (put-char! id char)
+    (list-set! res id (char->integer char))
+    res)
+
+  (put-char! 47 #\A)
+  (put-char! 39 #\B)
+  (put-char! 31 #\C)
+  (put-char! 46 #\D)
+  (put-char! 38 #\E)
+  (put-char! 30 #\F)
+  (put-char! 22 #\G)
+  (put-char! 14 #\H)
+  (put-char! 45 #\I)
+  (put-char! 37 #\J)
+  (put-char! 29 #\K)
+  (put-char! 21 #\L)
+  (put-char! 13 #\M)
+  (put-char! 44 #\N)
+  (put-char! 36 #\O)
+  (put-char! 28 #\P)
+  (put-char! 20 #\Q)
+  (put-char! 12 #\R)
+  (put-char! 43 #\S)
+  (put-char! 35 #\T)
+  (put-char! 27 #\U)
+  (put-char! 19 #\V)
+  (put-char! 11 #\W)
+  (put-char! 42 #\X)
+  (put-char! 34 #\Y)
+  (put-char! 26 #\Z)
+  (put-char! 9 #\newline)
+  (put-char! 2 #\backspace)
+  (put-char! 33 #\space)
+  ;; Add more characters as you need them.
+  )
+
+(define forth-char-lookup-table
+  `((label char-lookup-table)
+    (db ,(make-char-lookup-table))))
+
+(define forth-main
+  `((label title1)
+    (db ,(string "Welcome to Ben's"))
+    (label title2)
+    (db ,(string "Forth-based OS!"))
+    (label title3)
+    (db ,(string "Press any key to continue to key demo..."))
+    (label title4)
+    (db ,(string "You pressed: "))
+    (label title5)
+    (db ,(string "As an ASCII code: "))
+    (label title6)
+    (db ,(string "As a character: "))
+    (label title7)
+    (db ,(string "Enter a message: "))
+    (label title8)
+    (db ,(string "You typed: "))
+    
+    (label main)
+    (dw (origin))
+    (dw (lit 10 base !))
+    (dw (lit 65534 s0 !))
+    
+    (dw (lit title1 plot-str cr))
+    (dw (lit title2 plot-str cr pause))
+    (dw (base @ u. cr))
+    (dw (lit 1 lit 2 lit 3 lit 4))
+    (dw (.s drop drop drop drop cr))
+    (dw (lit title3 plot-str cr pause))
+
+    (dw (lit title7 plot-str cr))
+    (dw (lit input-buffer lit 24 expect cr))
+    (dw (lit title8 plot-str))
+    (dw (lit input-buffer plot-str pause))
+    (label demo-loop)
+    (dw (key clear-screen dup dup))
+    (dw (lit 0 cur-row !))    
+    (dw (lit 0 cur-col ! lit title4 plot-str u. cr))
+    (dw (lit title5 plot-str to-ascii u. cr))
+    (dw (lit title6 plot-str to-ascii emit cr))
+    (dw (.s))
+    (dw (jump demo-loop))
+    
+    (dw (poweroff))
+    ;; Who said we couldn't mix Forth and Scheme code?
+    ;; (dw (,@(lit* '(30 30 20 20)) rect-xor-forth
+    ;;      ,@(lit* '(40 40 20 20)) rect-xor-forth key
+    ;;      clear-screen poweroff))
+    ))
+
+(define forth-asm
+  `(,@forth-shared-header
+    ,@forth-semantics-words
+    ,@forth-text-words    
+    ,@forth-logic-words
     ,@forth-stack-words
     ,@forth-math-words
     ,@forth-memory-words
     ,@forth-graphics-words
     ,@forth-char-lookup-table
-    
-    ;; Shut down the calculator.
-    ,@(defcode "POWEROFF" 0 'poweroff)
-    (jp shutdown)
-
-
-
-    ;; Plot a character to the screen.
-    ;; ( char -- )
-    ,@(defcode "EMIT" 0 'emit)
-    ,@push-de-rs
-    (ld a (var-cur-col))
-    (ld d a)
-    (ld a (var-cur-row))
-    (ld e a)
-    ;; Character to print
-    (ld a c)
-    (ld iy screen-buffer)
-    (call draw-char)
-    (call fast-copy)
-    (ld a d)
-    (ld (var-cur-col) a)
-    (ld a e)
-    (ld (var-cur-row) a)    
-    ,@pop-de-rs
-    (pop bc)
-    ,@next
-
-    ;; Carriage return
-    ,@(defcode "CR" 0 'cr)
-    ,@push-de-rs
-    (ld a (var-cur-col))
-    (ld d a)
-    (ld a (var-cur-row))
-    (ld e a)
-    (call newline)
-    (ld a d)
-    (ld (var-cur-col) a)
-    (ld a e)
-    (ld (var-cur-row) a)    
-    ,@pop-de-rs
-    ,@next
-
-    ;; Draw a string to the screen
-    ;; ( str_addr -- )
-    ,@(defcode "PLOT-STR" 0 'plot-str)
-    ,@push-de-rs
-    (ld a (var-cur-col))
-    (ld d a)
-    (ld a (var-cur-row))
-    (ld e a)
-    ,@bc-to-hl
-    (ld iy screen-buffer)
-    (ld b 98)
-    (ld c 64)
-    (ld a 0)
-    (call wrap-str)
-    (call fast-copy)
-    (ld a d)
-    (ld (var-cur-col) a)
-    (ld a e)
-    (ld (var-cur-row) a)
-    ,@pop-de-rs
-    (pop bc)
-    ,@next
-
+    ,@forth-misc-words
     ,@forth-vars
-
 
 
     ,@(defcode "SP@" 0 'sp@)
@@ -821,52 +961,7 @@
     (dw (sp@ dup s0 @ < 0branch 18 dup @))
     (dw (u. lit 2 + branch 65510 drop exit))
 
-
-    (label title1)
-    (db ,(string "Welcome to Ben's"))
-    (label title2)
-    (db ,(string "Forth-based OS!"))
-    (label title3)
-    (db ,(string "Press any key to continue to key demo..."))
-    (label title4)
-    (db ,(string "You pressed: "))
-    (label title5)
-    (db ,(string "As an ASCII code: "))
-    (label title6)
-    (db ,(string "As a character: "))
-    (label title7)
-    (db ,(string "Enter a message: "))
-    (label title8)
-    (db ,(string "You typed: "))
-    
-    (label main)
-    (dw (lit 10 base !))
-    (dw (lit 65534 s0 !))
-    (dw (lit title1 plot-str cr))
-    (dw (lit title2 plot-str cr pause))
-    (dw (base @ u. cr))
-    (dw (lit 1 lit 2 lit 3 lit 4))
-    (dw (.s drop drop drop drop cr))
-    (dw (lit title3 plot-str cr pause))
-
-    (dw (lit title7 plot-str cr))
-    (dw (lit input-buffer lit 24 expect cr))
-    (dw (lit title8 plot-str))
-    (dw (lit input-buffer plot-str pause))
-    (label demo-loop)
-    (dw (key clear-screen dup dup))
-    (dw (lit 0 cur-row !))    
-    (dw (lit 0 cur-col ! lit title4 plot-str u. cr))
-    (dw (lit title5 plot-str to-ascii u. cr))
-    (dw (lit title6 plot-str to-ascii emit cr))
-    (dw (.s))
-    (dw (jump demo-loop))
-    
-    (dw (poweroff))
-    ;; Who said we couldn't mix Forth and Scheme code?
-    ;; (dw (,@(lit* '(30 30 20 20)) rect-xor-forth
-    ;;      ,@(lit* '(40 40 20 20)) rect-xor-forth key
-    ;;      clear-screen poweroff))
+    ,@forth-main
     ,(lambda ()
        (format #t "End of forth.asm: 0")
        (PRINT-PC))
