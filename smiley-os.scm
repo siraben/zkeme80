@@ -44,9 +44,11 @@
     
     ,(lambda ()
        (assemble-expr `(db ,(make-list
-                             (- #x8400 *pc*)
+                             (- #x8402 *pc*)
                              #xff))))
 
+    
+    
     ,@(apply append (map (lambda (x)
                            `((label ,(car x))
                              (dw (,(cdr x)))))
@@ -55,18 +57,59 @@
     ;;       `((db ,(make-list (* 2 *var-count*) 0)))
     ;;       '())
 
-    ;; This is used by Forth.
+    ;; Forth system variables.  Put here because it's writable when
+    ;; loaded into RAM.
+
+    ;; The current input "device", it's really a pointer to a
+    ;; arbitrary assembly code.  That code must conform to the
+    ;; following:
+    ;; Inputs: number of characters to read in BC
+    ;; Output: BC is either 0 or 1 representing failure or success
+    ;;         the input is written starting at input-buffer
+    ;; Returning: must use the ,@next macro instead of (ret).
+    ;; i.e. or make it a Forth word!
+    
+    (label current-input-device)
+    (dw (0))
+
+    ;; Transient input buffer.
     (label input-buffer)
-    (db ,(make-list 64 0))
+    (db ,(make-list 128 0))
+    (label input-ptr)
+    (dw (0))
+
+    ;; Transient word buffer.
     (label word-buffer)
     (db ,(make-list 32 0))
-    
+    (label word-ptr)
+    (dw (0))
+
+    ;; Example input device; the Forth word "EXPECT".
+    ;; See "EXPECT" in forth.scm for the source.
     (label expect-ptr-initial)
     (dw (0))
     (label expect-ptr)
     (dw (0))
     (label expect-count)
     (dw (0))
+    (label expect-col-save)
+    (dw (0))
+    (label expect-row-save)
+    (dw (0))
+
+    (label prompt-space)
+    (db ,(make-list 128 0))
+
+    (label spare)
+    (dw (65535))
+
+    (label var-latest)
+    (dw (0))
+
+
+    ;; 2K bytes of free space.
+    (label here-start)
+    (db ,(make-list 2048 0))
     
     ,(lambda ()
        (assemble-expr `(db ,(make-list
