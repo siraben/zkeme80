@@ -1510,12 +1510,39 @@
     
     ,@(defword "DEC" 0 'dec)
     (dw (lit 10 base ! exit))
+
     
     ))
 (define forth-misc-words
   `(;; Shut down the calculator.
     ,@(defcode "POWEROFF" 0 'poweroff)
-    (jp shutdown)))
+    (jp shutdown)
+
+    ,@(defcode "ERASE-SECTOR" 0 'erase-sector-forth)
+    (ld a c)
+    (di)
+    (call unlock-flash)
+    (call erase-flash-sector)
+    (call lock-flash)
+    (ei)
+    ,@next
+
+    ;; ( src dest amount -- )
+    ,@(defcode "CMOVE-FLASH" 0 'cmove-flash)
+    ,@push-de-rs    
+
+    (pop de)
+    (pop hl)
+    (di)
+    (call unlock-flash)
+    (call write-flash-buffer)
+    (call lock-flash)
+    (ei)
+    ,@pop-de-rs
+    (pop bc)
+
+    ,@next
+    ))
 
 (define forth-vars
   `(,@(defvar "STATE" 'state 0)
@@ -1534,6 +1561,8 @@
     (dw (lit here-start exit))
     ,@(defword "OS-END" 0 'os-end-const)
     (dw (lit os-end exit))
+    ,@(defword "BOOTSTRAP-START" 0 'bootstrap-start)
+    (dw (lit bootstrap-fs exit))
     ))
 
 (define (make-char-lookup-table)
@@ -1640,7 +1669,7 @@
     (dw (lit 42 emit exit))
     
     ,(lambda ()
-       (format #t "End of forth.asm: 0")
+       (format #t "End of forth.asm: 0x")
        (PRINT-PC))
     ))
 

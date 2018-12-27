@@ -1,9 +1,7 @@
-
+: TELL DROP PLOT-STRING ;
 : SHUTDOWN PAUSE POWEROFF ;
 : PAGE CLEAR-SCREEN ORIGIN ;
 : USED HERE @ H0 - ;
-
-: TELL DROP PLOT-STRING ;
 
 : . U. ;
 
@@ -49,8 +47,20 @@ SWAP THEN ;
   THEN
 ;  IMMEDIATE
 
-PAGE 16384 OS-END - . ." bytes remaining on
-page 00." PAUSE CR
+: AWAIT ." Press a key to continue." PAUSE ;
+
+PAGE
+." Welcome to siraben's
+Forth-based operating
+system.
+
+"
+16384 OS-END - . ." bytes remaining on
+page 00.
+
+"
+
+AWAIT PAGE
 
 : CELLS 2 * ;
 : SAY-DEF LATEST @ ID. ."  defined" CR ;
@@ -115,30 +125,26 @@ SAY-DEF
 
 SAY-DEF
 
-
 : SEE
 
-        WORD FIND       ( find the dictionary entry to decompile )
-
-        ( Now we search again, looking for the next word in the dictionary.  This gives us
-          the length of the word that we will be decompiling.  Well, mostly it does. )
-        HERE @          ( address of the end of the last compiled word )
-        LATEST @        ( word last curr )
+        WORD FIND
+        HERE @
+        LATEST @
         BEGIN
-                2 PICK          ( word last curr word )
-                OVER            ( word last curr word curr )
-                <>              ( word last curr word<>curr? )
-        WHILE                   ( word last curr )
-                NIP             ( word curr )
-                DUP @           ( word curr prev which becomes: word last curr )
+                2 PICK
+                OVER
+                <>
+        WHILE     
+                NIP
+                DUP @
         REPEAT
 
 
-        DROP            ( at this point, the stack is: start-of-word end-of-word )
-        SWAP            ( end-of-word start-of-word )
+        DROP         
+        SWAP         
 
-        ( begin the definition with : NAME [IMMEDIATE] )
-         58 EMIT SPACE DUP ID. SPACE
+
+        58 EMIT SPACE DUP ID. SPACE
         DUP ?IMMEDIATE IF ." IMMEDIATE " THEN
 
         >DFA            ( get the data address, ie. points after DOCOL | end-of-word start-of-data )
@@ -148,14 +154,14 @@ SAY-DEF
                 \ PAUSE
                 2DUP >
         WHILE
-                DUP @           ( end start codeword )
+                DUP @        
 
                 CASE
                 ' LIT OF                ( is it LIT ? )
                         2+ DUP @                ( get next word which is the integer constant )
                         .                       ( and print it )
                 ENDOF
-                ' LITSTRING OF             ( is it LITSTRING ? )
+                ' LITSTRING OF            
                          83 EMIT  34 EMIT SPACE ( print S"<space> )
                         2+ DUP @                ( get the length )
                         SWAP 2+ SWAP            ( end start+2 length )
@@ -219,19 +225,21 @@ SAY-DEF
         2DROP           ( restore stack )
 ;
 
-
 \ : SEE WORD FIND U. ;
 SAY-DEF
-: AWAIT ." Press a key to continue." PAUSE ;
+
 
 PAUSE PAGE
 
+." Decompiling ABORT
+"
 SEE ABORT
 
 AWAIT PAGE
 
-DEC USED . ." bytes have been used" CR
-HEX HERE @ ." HERE is at " . CR
+DEC USED . ." bytes have been
+used" CR
+HEX HERE @ ." HERE is at 0x" . CR
 
 AWAIT SHUTDOWN
 

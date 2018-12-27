@@ -1,5 +1,6 @@
 # zkeme80 - a Forth-based OS for TI-84+ calculators written in Scheme
-![OS demo](demo.gif)
+![OS screenshot](screenshot.png)
+![OS animation](demo.gif)
 
 **TLDR:** `assembler.scm` is the assembler.  There are no file
 dependencies, but your Scheme implementation needs to be recent enough

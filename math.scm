@@ -49,7 +49,6 @@
     (jr nc mul88-next-local)
     (ld l e)
     (label mul88-next-local)
-    ,PRINT-PC
     ,@(apply append
              (map (lambda (x)
                     (let ((curr (string->symbol (format #f "mul88-iter~a" (1+ x)))))

@@ -25,6 +25,7 @@
   `(,(equ 'flash-executable-ram #x8000)
     ,(equ 'flash-executable-ram-size 100)
     ,(equ 'screen-buffer #x8100)
+    ,(equ 'swap-sector #x38)
     
     ,@header-asm
     ,@boot-asm
@@ -40,11 +41,12 @@
     (label bootstrap-fs)
     ,@(include-file-as-bytes "bootstrap.fs")
 
+    
     (label os-end)
     ,(lambda ()
        (format #t "End of smiley-os: 0x")
        (PRINT-PC)
-       (format #t "There are ~a bytes left.\n" (- #x4000 *pc*))
+       (format #t "There are 0x~2,'0x bytes left for page 1.\n" (- #x4000 *pc*))
        '())
     ;; Must be less than 0x4000.
 
@@ -55,14 +57,17 @@
                              #xff))))
 
     
+
+    ,(lambda ()
+       (format #t "Start of Forth data: 0x")
+       (PRINT-PC)
+       (format #t "There are 0x~2,'0x bytes left for page 2.\n" (- #xc000 *pc*))
+       '())
     
     ,@(apply append (map (lambda (x)
                            `((label ,(car x))
                              (dw (,(cdr x)))))
                          (reverse *var-list*)))
-    ;; ,@(if (> *var-count* 0)
-    ;;       `((db ,(make-list (* 2 *var-count*) 0)))
-    ;;       '())
 
     ;; Forth system variables.  Put here because it's writable when
     ;; loaded into RAM.
@@ -117,12 +122,20 @@
     (label here-start)
     (db ,(make-list 2048 0))
 
+    ,(lambda ()
+       (format #t "End of Forth data: 0x")
+       (PRINT-PC)
+       (format #t "There are 0x~2,'0x bytes left for page 2.\n" (- #xc000 *pc*))
+       '())
 
-    
+
+    ,@(include-file-as-bytes "bootstrap.fs")
+
     ,(lambda ()
        (assemble-expr `(db ,(make-list
                              (- #xf0000 *pc*)
                              #xff))))
+
     
 
     ,@wtf-prog
