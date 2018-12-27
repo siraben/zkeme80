@@ -103,10 +103,6 @@
     (label spare)
     (dw (65535))
 
-    (label var-latest)
-    (dw (0))
-
-
     ;; 2K bytes of free space.
     (label here-start)
     (db ,(make-list 2048 0))

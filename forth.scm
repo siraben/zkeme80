@@ -1,5 +1,14 @@
 ;; Forth portion of the operating system.
 
+(use-modules (ice-9 textual-ports))
+
+(define (include-file-as-bytes filename)
+  (let* ((port (open-file filename "r"))
+         (res (get-string-all port))
+         (expr `((db ,(string res)))))
+    (close-port port)
+    expr))
+
 ;; Immediate flag
 (define immediate 128)
 
@@ -201,6 +210,13 @@
     ,@pop-hl-rs
     ,@next
 
+    ,@(defcode "SP@" 0 'sp@)
+    (push bc)
+    (ld (var-sp0) sp)
+    (ld hl (var-sp0))
+    ,@hl-to-bc
+    ,@next
+
     ,@(defcode "OVER" 0 'over)
     (pop hl)
     (push hl)
@@ -341,6 +357,57 @@
 
     ,@(defword "FALSE" 0 'false)
     (dw (lit 0 exit))
+
+    ,@(defcode "'0'" 0 'zeroc)
+    (push bc)
+    (ld bc 48)
+    ,@next
+    
+    ,@(defcode "'9'" 0 'ninec)
+    (push bc)
+    (ld bc 57)
+    ,@next
+
+    ,@(defword "WITHIN" 0 'within)
+    (dw (over - >r - r> <= exit))
+
+    ,@(defword "NUM?" 0 'num?)
+    (dw (zeroc))
+    (dw (ninec))
+    (dw (within exit))
+
+    ;; Parse a number starting at an address.
+    ;; ( addr -- num | nothing)
+    ;; The caller of PARSE-NUMBER should check the variable NUM-STATUS
+    ;; to see if the parsing suceeded.
+    
+    ;; Currently only parses base 10.
+    ,@(defword "PARSE-NUMBER" 0 'parse-number)
+    ;; Check if the first character is numeric.
+    (dw (dup c@ dup num? 0jump parse-num-fail))
+    ;; Convert the first digit.    
+    (dw (zeroc -))
+    ;; It is. Continue until end of string.
+    ;; Stack right now: ( addr n -- )
+    (label parse-num-continue)
+    (dw (swap 1+ swap)) ;; ( addr+1 n -- )
+    (label parse-num-loop)
+    ;; Check if we reached the end of string already.
+    (dw (over c@ 0jump parse-num-done))
+    ;; Nope. ( addr+1 n -- )
+    ;; Still check if it's numeric.  Since the string shouldn't
+    ;; contain spaces, we can just check for the null byte.
+    (dw (over c@ num? 0jump parse-num-fail))
+    ;; Continue.
+    (dw (over c@ zeroc - swap lit 10 * +))
+    ;; ( addr+1 nm -- )    
+    (dw (jump parse-num-continue))
+
+    (label parse-num-done)
+    (dw (swap drop))
+    (dw (lit 1 num-status ! exit))
+    (label parse-num-fail)
+    (dw (2drop lit 0 num-status ! exit))
     ))
 
 (define forth-memory-words
@@ -601,6 +668,14 @@
     (pop bc)
     ,@next
 
+    ;; Type n characters starting at addr.
+    ;; ( addr n -- )
+    ,@(defword "TYPE" 0 'type)
+    (label type-loop)
+    (dw (?dup 0jump type-done))
+    (dw (1- swap dup c@ emit 1+ swap jump type-loop))
+    (label type-done)
+    (dw (drop exit))
     ))
 
 (define forth-logic-words
@@ -685,6 +760,13 @@
     (pop hl)
     (call cp-hl-bc)
     (jp c tru)
+    (jp fal)
+
+    ,@(defcode "<=" 0 '<=)
+    ,@bc-to-hl
+    (pop bc)
+    (call cp-hl-bc)
+    (jp nc tru)
     (jp fal)
 
     ,@(defcode "0=" 0 '0=)
@@ -805,7 +887,8 @@
     ,@(defword "REFILL" 0 'refill)
     (dw (lit current-input-device @ execute))
     (dw (0jump refill-fail))
-    (dw (lit input-buffer lit input-ptr ! true exit))
+    ;; (dw (lit input-buffer lit input-ptr ! ))
+    (dw (true exit))
     (label refill-fail)
     (dw (false exit))
 
@@ -837,6 +920,8 @@
     (dw (0jump skip-space))
     (dw (dup lit ,(char->integer #\newline) <>))
     (dw (0jump skip-space))
+    (dw (dup lit ,(char->integer #\tab) <>))
+    (dw (0jump skip-space))
     (dw (dup lit ,(char->integer #\\) <>))
     (dw (0jump skip-comment))
 
@@ -858,6 +943,8 @@
     (dw (dup 0jump word-done))
     (dw (dup lit ,(char->integer #\space)   <> 0jump word-done))
     (dw (dup lit ,(char->integer #\newline) <> 0jump word-done))
+    (dw (dup lit ,(char->integer #\tab) <> 0jump word-done))
+    
     (dw (jump actual-word))
 
     (label word-done)
@@ -982,7 +1069,7 @@
     (ret)
     
     ;; Not standard compilant.
-    ,@(defword "'" 0 'tick)
+    ,@(defcode "'" 0 'tick)
     (ld a (de))
     (ld l a)
     (inc de)
@@ -1020,6 +1107,15 @@
     (bit 7 a)
     (jp z fal)
     (jp tru)
+
+    ,@(defcode "IMMEDIATE" 0 'immed)
+    (ld hl (var-latest))
+    (inc hl)
+    (inc hl)
+    (ld a 128)
+    (xor (hl))
+    (ld (hl) a)
+    ,@next
 
     ,@(defcode ">CFA" 0 '>cfa)
     (inc bc)
@@ -1085,6 +1181,7 @@
     (ld (de) a)
     (inc de)
     (ld hl docol)
+    
     (ld a l)
     (ld (de) a)
     (inc de)
@@ -1143,6 +1240,33 @@
     (dw (lit exit comma))
     (dw (latest @ hidden))
     (dw (lbrac exit))
+
+    ,@(defword "ID." 0 'id.)
+    (dw (lit 3 + plot-str exit))
+
+    ,@(defword "IF" immediate 'if)
+    (dw (tick 0branch comma here @ lit 0 comma exit))
+
+    ,@(defword "THEN" immediate 'then)
+    (dw (dup here @ swap - swap ! exit))
+
+    ,@(defword "ELSE" immediate 'else)
+    (dw (tick branch comma here @ lit 0 comma swap dup here))
+    (dw (@ swap - swap ! exit))
+
+    ,@(defword "BEGIN" immediate 'begin)
+    (dw (here @ exit)) 
+
+    ,@(defword "UNTIl" immediate 'until)
+    (dw (tick 0branch comma here @ - comma exit))
+
+    ,@(defword "AGAIN" immediate 'again)
+    (dw (tick branch comma here @ - comma exit)) 
+
+    ,@(defword "WHILE" immediate 'while)
+    (dw (tick 0branch comma here @ lit 0 comma exit))
+
+    ;; ,@(defword "LOOP" immediate 'loop)
     
     ))
 
@@ -1209,11 +1333,6 @@
     
     ,@(defword "DEC" 0 'dec)
     (dw (lit 10 base ! exit))
-
-    ,@(defcode "LATEST" 0 'latest)
-    (push bc)
-    (ld bc var-latest)
-    ,@next
     
     ))
 (define forth-misc-words
@@ -1223,12 +1342,14 @@
 
 (define forth-vars
   `(,@(defvar "STATE" 'state 0)
-    
+    ,@(defvar "LATEST" 'latest 0)
     ,@(defvar "SP0" 'sp0 0)
     ,@(defvar "HERE" 'here 'here-start)
     ,@(defvar "CUR-COL" 'cur-col 0)
     ,@(defvar "CUR-ROW" 'cur-row 0)
     ,@(defvar "BASE" 'base 10)
+    ;; Check if reading a number has failed, since we can't return -1.
+    ,@(defvar "NUM-STATUS" 'num-status 0)
     ,@(defvar "S0" 's0 0)
     ,@(defvar "R0" 'r0 0)))
 
@@ -1278,12 +1399,10 @@
 
 (define forth-main
   `(
-    ,@(defword "5" 0 '5)
-    (dw (lit 5 exit))
     ;; Example of an input device.
     (label string-input-device)
     (call docol)
-    (dw (lit default-expr lit input-buffer lit 128 cmove))
+    (dw (lit default-expr lit input-ptr !))
     (dw (lit 1 lit spare +! lit spare @))
     (dw (exit))
 
@@ -1304,11 +1423,8 @@
     (dw (lbrac refill 0jump quit-eof))
     (dw (interpret))
     (dw (?dup 0= 0jump not-ok))
-    (dw (lit ok-msg plot-str cr jump try-omore))
+    (dw (lit ok-msg plot-str cr jump try-more))
     
-    (dw (lbrac refill 0jump quit-eof))    
-    (dw (interpret))
-
     (label quit-eof)
     (dw (lit quit-eof-msg plot-str pause poweroff))
     (label not-ok)
@@ -1318,28 +1434,44 @@
     (label quit-eof-msg)
     (db ,(string "EOF from input device."))
     (label abort-msg)
-    (db ,(string "Error occurred, aborting."))
+    (db ,(string "Error occurred, aborting. Unconsumed input:"))
     ,@(defword "ABORT" 0 'abort)
-    (dw (lit abort-msg plot-str pause poweroff))
+    (dw (clear-screen origin lit abort-msg plot-str))
+    ;; Print context
+    (dw (cr lit word-buffer plot-str space lit input-ptr @ lit 24 type))
+    (dw (pause poweroff))
 
     ,@(defword "INTERPRET" 0 'interpret)
 
     (label interpret-loop)
     (dw (word ?dup 0jump try-more))
-    (dw (find ?dup 0jump undefined-word))    
+    (dw (find ?dup 0jump maybe-number))
     (dw (state @ 0jump interpret-word))
     
     (label compiling-word)
     (dw (dup ?immed 0jump compile-word))
     
-    (label run-immediate-word)
+    (label interpret-word)
     (dw (>cfa execute jump interpret-loop))
-    
+
     (label compile-word)
     (dw (>cfa comma jump interpret-loop))
     
-    (label interpret-word)
-    (dw (>cfa execute jump interpret-loop))
+
+    (label maybe-number)
+    (dw (lit word-buffer parse-number))
+    (dw (num-status @ 0jump num-fail))
+    ;; Read a number.
+    ;; If we're interpreting, just keep the number on the satck.
+    (dw (state @ 0jump interpret-loop))
+    ;; Otherwise we compile LIT and the number.
+    (label compile-num)
+    (dw (lit lit comma comma jump interpret-loop))
+
+
+    ;; Failed to read a number.
+    (label num-fail)
+    (dw (jump undefined-word))    
     
     (label undefined-word)
     (dw (lit 666 exit))
@@ -1362,8 +1494,9 @@
     (dw (lit string-input-device lit current-input-device !))
     (dw (quit))
 
+    ;; (dw (pause poweroff))
     (label default-expr)
-    (db ,(string "HEX : DOUBLE DUP + ; 5 DOUBLE U. PAUSE POWEROFF"))
+    ,@(include-file-as-bytes "bootstrap.fs")
     (label ok-msg)
     (db ,(string " ok"))
     (label not-ok-msg)
@@ -1398,13 +1531,6 @@
     ,@forth-misc-words
     ,@forth-vars
     ,@forth-meta-words
-
-    ,@(defcode "SP@" 0 'sp@)
-    (push bc)
-    (ld (var-sp0) sp)
-    (ld hl (var-sp0))
-    ,@hl-to-bc
-    ,@next
 
 
     ,@forth-main
