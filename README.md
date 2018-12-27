@@ -133,7 +133,7 @@ correctness of various Forth words.  Coverage is not 100% according to
 the standard, especially because we lack signed and floating point
 integers.
 
-![Running tests](running tests.gif)
+![Running tests](running-tests.gif)
 
 ## Limitations
 There is currently no instruction encoding (like the `z80data.tab`
