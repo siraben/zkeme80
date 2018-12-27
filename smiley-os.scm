@@ -131,7 +131,7 @@
     
     ;; 2K bytes of free space.
     (label here-start)
-    (db ,(make-list 2048 0))
+    (db ,(make-list 4096 0))
 
     ,(lambda ()
        (format #t "End of Forth data: 0x")

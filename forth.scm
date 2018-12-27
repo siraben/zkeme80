@@ -1562,6 +1562,12 @@
     (ld c (+ ix 2))
     (ld b (+ ix 3))
     ,@next
+    
+    ,@(defcode "J" 0 'curr-loop-index2)
+    (push bc)
+    (ld c (+ ix 6))
+    (ld b (+ ix 7))
+    ,@next
 
     ))
 
@@ -1681,6 +1687,26 @@
     (label invalid-bank-selected)
     (ld b 0)
     (ld c 0)
+    ,@next
+
+    ;; Find the length of a string.
+    ,@(defcode "COUNT" 0 'count)
+    (push bc)
+    ,@bc-to-hl
+    (push af)
+    (push hl)
+    (xor a)
+    (ld b a)
+    (ld c a)
+    (cpir)
+    (ld a c)
+    (cpl)
+    (ld c a)
+    (ld a b)
+    (cpl)
+    (ld b a)
+    (pop hl)
+    (pop af)
     ,@next
     ))
 

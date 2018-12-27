@@ -8,6 +8,9 @@
 : 2@  DUP CELL+ @ SWAP @ ;
 : 2!  SWAP OVER ! CELL+ ! ;
 : . U. ;
+: CHAR+ 1+ ;
+: CHARS ;
+: BL 32 ;
 
 : '
   STATE @
@@ -35,7 +38,6 @@
 : [POSTPONE]
   WORD FIND >CFA ,
 ; IMMEDIATE
-
 
 
 : CHAR WORD DROP C@ ;
@@ -82,8 +84,6 @@
 
 \ Redefine ; to be verbose
 : ; [POSTPONE] ; LATEST @ ID. ."  defined." CR ; IMMEDIATE
-
-: AWAIT ." Press a key to continue." ;
 
 PAGE
 ." Welcome to siraben's
@@ -148,22 +148,8 @@ PAGE
           REPEAT
 ; IMMEDIATE
 
-
-
-\ Debugging info.
-: REPORT
-         ." Report"
-         PAUSE
-         
-; IMMEDIATE
-
-
-\ : SEE WORD FIND U. ;
-
-
 PAGE
 
-AWAIT PAGE
 : STATUS
 DECIMAL USED . ." bytes have been
 used" CR
@@ -259,10 +245,7 @@ PAGE
   DEPTH START-DEPTH ! 0 XCURSOR !
 ;
 
-
 PAGE
-
-
 
 : ->		\ ( ... -- ) record depth and contents of stack.
    DEPTH DUP ACTUAL-DEPTH !		\ record depth
@@ -300,7 +283,7 @@ PAGE
 
 : { T{ ;
 : } }T ;
-AWAIT PAGE
+PAGE
 
 
 { -> }					\ START WITH CLEAN SLATE
@@ -324,10 +307,19 @@ AWAIT PAGE
 { 0S INVERT -> 1S }
 { 1S INVERT -> 0S }
 
-{ 0S 0S AND -> 0S }
-{ 0S 1S AND -> 0S }
-{ 1S 0S AND -> 0S }
-{ 1S 1S AND -> 1S }
+
+T{ 0 0 AND -> 0 }T
+T{ 0 1 AND -> 0 }T
+T{ 1 0 AND -> 0 }T
+T{ 1 1 AND -> 1 }T
+
+T{ 0 INVERT 1 AND -> 1 }T
+T{ 1 INVERT 1 AND -> 0 }T
+
+T{ 0S 0S AND -> 0S }T
+T{ 0S 1S AND -> 0S }T
+T{ 1S 0S AND -> 0S }T
+T{ 1S 1S AND -> 1S }T
 
 { 0S 0S OR -> 0S }
 { 0S 1S OR -> 1S }
@@ -341,6 +333,13 @@ AWAIT PAGE
 
 0S CONSTANT <FALSE>
 1S CONSTANT <TRUE>
+
+
+: GN2 \ ( -- 16 10 )
+   BASE @ >R HEX BASE @ DECIMAL BASE @ R> BASE ! ;
+T{ GN2 -> 16 10 }T
+
+
 
 
 ( WE TRUST 1S, INVERT, AND BITSSET?; WE WILL CONFIRM RSHIFT LATER )
@@ -394,20 +393,18 @@ T{ NOP2 -> }T
 T{ : GDX   123 ;    : GDX   GDX 234 ; -> }T
 T{ GDX -> 123 234 }T
 
-
 T{  0 ?DUP ->  0    }T
 T{  1 ?DUP ->  1  1 }T
 
-AWAIT PAGE
+PAGE
 T{ : GR1 >R R> ; -> }T
 T{ : GR2 >R R@ R> DROP ; -> }T
 T{ 123 GR1 -> 123 }T
 T{ 123 GR2 -> 123 }T
 T{  1S GR1 ->  1S }T      ( Return stack holds cells )
 
-\ This test fails!  Is the standard wrong?
+\ This test fails!  Maybe this is where being non-standard is better?
 \ T{ ( A comment)1234 -> }T
-
 T{ : pc1 ( A comment)1234 ; pc1 -> 1234 }T
 
 HERE @ 1 ,
@@ -428,12 +425,52 @@ T{       2 1 1ST 2! ->     }T
 T{           1ST 2@ -> 2 1 }T
 T{ 1S 1ST !  1ST @  -> 1S  }T    \ CAN STORE CELL-WIDE VALUE
 
+HERE @ 1 ALLOT
+HERE @
+CONSTANT 2NDA
+CONSTANT 1STA
+T{ 1STA 2NDA < ->  1 }T    \ HERE MUST GROW WITH ALLOT
+T{      1STA 1+ ->   2NDA }T    \ ... BY ONE ADDRESS UNIT 
+
+
+HERE @ 1 C,
+HERE @ 2 C,
+CONSTANT 2NDC
+CONSTANT 1STC
+
+T{    1STC 2NDC < ->   1 }T	\ HERE MUST GROW WITH ALLOT
+T{      1STC CHAR+ ->  2NDC  }T	\ ... BY ONE CHAR
+T{  1STC 1 CHARS + ->  2NDC  }T
+T{ 1STC C@ 2NDC C@ ->   1 2  }T
+T{       3 1STC C! ->        }T
+T{ 1STC C@ 2NDC C@ ->   3 2  }T
+T{       4 2NDC C! ->        }T
+T{ 1STC C@ 2NDC C@ ->   3 4  }T
+
+T{ : GI3 BEGIN DUP 5 < WHILE DUP 1+ REPEAT ; -> }T
+T{ 0 GI3 -> 0 1 2 3 4 5 }T
+T{ 4 GI3 -> 4 5 }T
+T{ 5 GI3 -> 5 }T
+T{ 6 GI3 -> 6 }T
+
+T{ : GI4 BEGIN DUP 1+ DUP 5 > UNTIL ; -> }T
+T{ 3 GI4 -> 3 4 5 6 }T
+T{ 5 GI4 -> 5 6 }T
+T{ 6 GI4 -> 6 7 }T
+
+
+T{ VARIABLE V1 ->     }T
+T{    123 V1 ! ->     }T
+T{        V1 @ -> 123 }T
+
+PAGE
+
+: GS3 WORD DROP COUNT SWAP C@ ;
+T{ GS3 HELLO -> 5 CHAR H }T
 
 ." End of tests." CR
-." End of phase 2."
+." End of phase 2." CR
 
+STATUS
 
 SHUTDOWN
-
-\ Check how many bytes are left by running the following Scheme program:
-\ (begin (load "smiley-os.scm") (make-rom "forth.rom"))

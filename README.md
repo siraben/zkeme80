@@ -22,10 +22,15 @@ search for `defword` in `forth.scm` to see those words).  It's
 extremely low level (just a little bit higher than assembly).  It's
 more fun to write an operating system based on Forth.
 
-A lot of words are not standard.  This is because I copied them from
-my other [Forth/Z80 project](https://github.com/siraben/ti84-forth),
-which itself is based on jonesforth.  However, I did consult the
-ANS standard to incorporate some of their good ideas.
+Some are not standard.  This is because I copied them from my other
+[Forth/Z80 project](https://github.com/siraben/ti84-forth), which
+itself is based on jonesforth.  However, I did consult the ANS
+standard to incorporate some of their good ideas.  For instance, the
+test suite currently found in `bootstrap-flash1.fs` is only a very
+slight (sans the floating point stuff) adaptation of the [offical test
+suite](www.forth200x.org/tests/ttester.fs).  The current version of
+the operating system runs a series of tests to check the correctness
+of the word environment.
 
 Practically all of the assembly code outside of `forth.scm` was taken
 from [SmileyOS](https://www.ticalc.org/archives/files/fileinfo/442/44227.html),
@@ -123,8 +128,15 @@ Z80 assembly program in my s-exp format and run it through a
 disassembler then compare the output.  If you're feeling particularly
 brave you may skip this step and try your program out on a Z80 chip.
 
+The operating system currently runs a suite of tests that checks the
+correctness of various Forth words.  Coverage is not 100% according to
+the standard, especially because we lack signed and floating point
+integers.
+
+![Running tests](running tests.gif)
+
 ## Limitations
-I don't currently have an instruction encoding as a data structure, so
-to add new instructions the current workflow is to look at relevant
-portions of the Z80 data sheet and write new cases in the pattern
-matcher.
+There is currently no instruction encoding (like the `z80data.tab`
+file) that the assembler accepts, so to add new instructions the
+current workflow is to look at relevant portions of the Z80 data sheet
+and write new cases in the pattern matcher.
