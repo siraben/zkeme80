@@ -1542,6 +1542,28 @@
     (pop bc)
 
     ,@next
+
+    ;; Set page number loaded at memory bank A.
+    ;; Addresses 16#4000 to 16#7fff
+    ;; ( n -- flag )
+    ,@(defcode "SET-RAM-MEMA" 0 'set-ram-mema)
+    (ld a c)
+    (cp 8)
+    (jp nc invalid-bank-selected)
+    ;; We can try loading a RAM page now.
+    (di)
+    (ld a 64)
+    (add a c)
+    (out (6) a)
+    (ei)
+    (ld b 0)
+    (ld c 1)
+    ,@next
+    
+    (label invalid-bank-selected)
+    (ld b 0)
+    (ld c 0)
+    ,@next
     ))
 
 (define forth-vars
@@ -1561,8 +1583,11 @@
     (dw (lit here-start exit))
     ,@(defword "OS-END" 0 'os-end-const)
     (dw (lit os-end exit))
-    ,@(defword "BOOTSTRAP-START" 0 'bootstrap-start)
-    (dw (lit bootstrap-fs exit))
+    
+    ,@(defword "WORD-BUF" 0 'word-buf)
+    (dw (lit word-buffer exit))
+    ,@(defword "INPUT-PTR" 0 'input-ptr-forth)
+    (dw (lit input-ptr exit))
     ))
 
 (define (make-char-lookup-table)
@@ -1634,7 +1659,7 @@
     ;; We set the stack pointer two lower because it's changed
     ;; slightly since when we did (ld sp 65532)
     (dw (lit 65530 s0 !))
-    (dw (lit #xc000 r0 !))
+    (dw (lit return-stack-start r0 !))
     (dw (lit string-input-device lit current-input-device !))
     
     (dw (quit))

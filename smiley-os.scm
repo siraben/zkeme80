@@ -39,17 +39,25 @@
     ,@text-asm
 
     (label bootstrap-fs)
-    ,@(include-file-as-bytes "bootstrap.fs")
+    ,@(include-file-as-bytes "boot.fs")
+
 
     
     (label os-end)
     ,(lambda ()
        (format #t "End of smiley-os: 0x")
        (PRINT-PC)
-       (format #t "There are 0x~2,'0x bytes left for page 1.\n" (- #x4000 *pc*))
+       (format #t "There are 0x~2,'0x bytes left for page 0.\n" (- #x4000 *pc*))
        '())
     ;; Must be less than 0x4000.
 
+    ,(lambda ()
+       (assemble-expr `(db ,(make-list
+                             (- #x4000 *pc*)
+                             #xff))))
+
+    (label bootstrap-flash1)
+    ,@(include-file-as-bytes "bootstrap-flash1.fs")
 
     ,(lambda ()
        (assemble-expr `(db ,(make-list
@@ -61,7 +69,7 @@
     ,(lambda ()
        (format #t "Start of Forth data: 0x")
        (PRINT-PC)
-       (format #t "There are 0x~2,'0x bytes left for page 2.\n" (- #xc000 *pc*))
+       (format #t "There are 0x~2,'0x bytes left for page 1.\n" (- #xc000 *pc*))
        '())
     
     ,@(apply append (map (lambda (x)
@@ -117,7 +125,10 @@
     (label bootstrap-load-bool)
     (dw (65535))
     
-
+    
+    (dw ,(make-list 128 0))
+    (label return-stack-start)
+    
     ;; 2K bytes of free space.
     (label here-start)
     (db ,(make-list 2048 0))
@@ -129,7 +140,7 @@
        '())
 
 
-    ,@(include-file-as-bytes "bootstrap.fs")
+    ,@(include-file-as-bytes "bootstrap-flash1.fs")
 
     ,(lambda ()
        (assemble-expr `(db ,(make-list

@@ -125,26 +125,30 @@ SAY-DEF
 
 SAY-DEF
 
+
 : SEE
 
-        WORD FIND
-        HERE @
-        LATEST @
+        WORD FIND       ( find the dictionary entry to decompile )
+
+        ( Now we search again, looking for the next word in the dictionary.  This gives us
+          the length of the word that we will be decompiling.  Well, mostly it does. )
+        HERE @          ( address of the end of the last compiled word )
+        LATEST @        ( word last curr )
         BEGIN
-                2 PICK
-                OVER
-                <>
-        WHILE     
-                NIP
-                DUP @
+                2 PICK          ( word last curr word )
+                OVER            ( word last curr word curr )
+                <>              ( word last curr word<>curr? )
+        WHILE                   ( word last curr )
+                NIP             ( word curr )
+                DUP @           ( word curr prev which becomes: word last curr )
         REPEAT
 
 
-        DROP         
-        SWAP         
+        DROP            ( at this point, the stack is: start-of-word end-of-word )
+        SWAP            ( end-of-word start-of-word )
 
-
-        58 EMIT SPACE DUP ID. SPACE
+        ( begin the definition with : NAME [IMMEDIATE] )
+         58 EMIT SPACE DUP ID. SPACE
         DUP ?IMMEDIATE IF ." IMMEDIATE " THEN
 
         >DFA            ( get the data address, ie. points after DOCOL | end-of-word start-of-data )
@@ -154,14 +158,14 @@ SAY-DEF
                 \ PAUSE
                 2DUP >
         WHILE
-                DUP @        
+                DUP @           ( end start codeword )
 
                 CASE
                 ' LIT OF                ( is it LIT ? )
                         2+ DUP @                ( get next word which is the integer constant )
                         .                       ( and print it )
                 ENDOF
-                ' LITSTRING OF            
+                ' LITSTRING OF             ( is it LITSTRING ? )
                          83 EMIT  34 EMIT SPACE ( print S"<space> )
                         2+ DUP @                ( get the length )
                         SWAP 2+ SWAP            ( end start+2 length )
@@ -225,22 +229,23 @@ SAY-DEF
         2DROP           ( restore stack )
 ;
 
+
 \ : SEE WORD FIND U. ;
 SAY-DEF
+: AWAIT ." Press a key to continue." PAUSE ;
 
 
 PAUSE PAGE
 
-." Decompiling ABORT
-"
 SEE ABORT
 
 AWAIT PAGE
 
 DEC USED . ." bytes have been
 used" CR
-HEX HERE @ ." HERE is at 0x" . CR
+HEX HERE @ ." HERE is at " . CR
 
+." End of stage 2." CR
 AWAIT SHUTDOWN
 
 \ Check how many bytes are left by running the following Scheme program:
