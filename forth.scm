@@ -296,6 +296,45 @@
     ,@hl-to-bc
     ,@next
 
+    ,@(defcode "AND" 0 'and)
+    (pop hl)
+    (ld a c)
+    (and l)
+    (ld c a)
+    (ld a b)
+    (and h)
+    (ld b a)
+    ,@next
+
+    ,@(defcode "OR" 0 'or)
+    (pop hl)
+    (ld a c)
+    (or l)
+    (ld c a)
+    (ld a b)
+    (or h)
+    (ld b a)
+    ,@next
+
+    ,@(defcode "XOR" 0 'xor)
+    (pop hl)
+    (ld a c)
+    (xor l)
+    (ld c a)
+    (ld a b)
+    (xor h)
+    (ld b a)
+    ,@next
+
+    ,@(defcode "INVERT" 0 'invert)
+    (ld a c)
+    (cpl)
+    (ld c a)
+    (ld a b)
+    (cpl)
+    (ld b a)
+    ,@next
+
     ,@(defcode "*" 0 '*)
     ,@push-de-rs
     (pop de)
@@ -591,8 +630,8 @@
     ,@(defcode "DRAW" 0 'draw)
     (push bc)
     (pop iy)
-    (pop bc)
     (call fast-copy)
+    (pop bc)    
     ,@next
 
     ;; Plot the default memory screen (starting at address #x8100)
@@ -1320,6 +1359,63 @@
     (dw (latest @ hidden))
     (dw (lbrac exit))
 
+    ,@(defcode "(DOES>)" 0 'does-brac)
+    (push bc)
+    (ld bc (var-latest))
+    (inc bc)
+    (inc bc)
+    (ld a (bc))
+    (and 31)
+    (ld h 0)
+    (ld l a)
+    (inc bc)
+    (add hl bc)
+    (inc hl)
+    (inc hl)
+    (ld (hl) e)
+    (inc hl)
+    (ld (hl) d)
+    (pop bc)
+    ,@pop-de-rs
+    ,@next
+
+    ,@(defcode "DOES>" immediate 'does>)
+    (push de)
+    (ld de (var-here))
+    (ld hl does-brac)
+    (ld a l)
+    (ld (de) a)
+    (inc de)
+    (ld a h)
+    (ld (de) a)
+    (inc de)
+    (ld a #xcd)
+    (ld (de) a)
+    (inc de)
+
+    (ld hl dodoes)
+    (ld a l)
+    (ld (de) a)
+    (inc de)
+    (ld a h)
+    (ld (de) a)
+    (inc de)
+
+    (ld hl var-here)
+    (ld (hl) e)
+    (inc hl)
+    (ld (hl) d)
+    (pop de)
+    ,@next
+
+    (label dodoes)
+    ,@push-de-rs
+    (pop de)
+    ,@bc-to-hl
+    (pop bc)
+    (push hl)
+    ,@next
+
     ,@(defword "QUIT" 0 'quit)
     (label try-more)
     (dw (lit ok-msg plot-string cr))    
@@ -1445,6 +1541,12 @@
     (dw (tick r> comma tick r> comma tick 1+ comma tick 2dup comma))
     (dw (tick = comma tick 0branch comma here @ - comma tick 2drop comma exit))
 
+    ,@(defcode "I" 0 'curr-loop-index)
+    (push bc)
+    (ld c (+ ix 2))
+    (ld b (+ ix 3))
+    ,@next
+
     ))
 
 (define forth-shared-header
@@ -1508,7 +1610,7 @@
     ,@(defword "HEX" 0 'hex)
     (dw (lit 16 base ! exit))
     
-    ,@(defword "DEC" 0 'dec)
+    ,@(defword "DECIMAL" 0 'dec)
     (dw (lit 10 base ! exit))
 
     
@@ -1588,6 +1690,8 @@
     (dw (lit word-buffer exit))
     ,@(defword "INPUT-PTR" 0 'input-ptr-forth)
     (dw (lit input-ptr exit))
+    ,@(defword "SCREEN-BUF" 0 'screen-buffer-forth)
+    (dw (lit screen-buffer exit))
     ))
 
 (define (make-char-lookup-table)

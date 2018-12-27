@@ -3,7 +3,19 @@
 : PAGE CLEAR-SCREEN ORIGIN ;
 : USED HERE @ H0 - ;
 
+
 : . U. ;
+
+: '
+  STATE @
+  IF 
+    ' ' ,
+  ELSE
+    WORD FIND >CFA
+  THEN
+  
+    
+; IMMEDIATE
 
 : (
   BEGIN
@@ -22,14 +34,33 @@
   WORD FIND >CFA ,
 ; IMMEDIATE
 
+
+
 : CHAR WORD DROP C@ ;
 
 : '"' [ CHAR " ] LITERAL ;
 
-: S" IMMEDIATE STATE @ IF ' LITSTRING , HERE @ 0 , BEGIN GETC DUP 34 <>
-WHILE C, REPEAT DROP 0 C, DUP HERE @ SWAP - 3 - SWAP ! ELSE HERE @
-BEGIN GETC DUP 34 <> WHILE OVER C! 1+ REPEAT DROP HERE @ - HERE @
-SWAP THEN ;
+: S"
+  STATE @
+  IF
+    ' LITSTRING , HERE @ 0 ,
+    BEGIN
+      GETC DUP 34 <>
+    WHILE
+      C,
+    REPEAT
+    DROP 0 C, DUP HERE @ SWAP - 3 - SWAP !
+  ELSE
+    HERE @
+    BEGIN
+      GETC DUP 34 <>
+    WHILE
+      OVER C! 1+
+    REPEAT
+    DROP HERE @ - HERE @
+    SWAP
+  THEN
+; IMMEDIATE
 
 : ."		( -- )
   STATE @ IF
@@ -47,7 +78,9 @@ SWAP THEN ;
   THEN
 ;  IMMEDIATE
 
-: AWAIT ." Press a key to continue." PAUSE ;
+: ; [POSTPONE] ; LATEST @ ID. ."  defined." CR ; IMMEDIATE
+
+: AWAIT ." Press a key to continue." ;
 
 PAGE
 ." Welcome to siraben's
@@ -60,11 +93,9 @@ page 00.
 
 "
 
-AWAIT PAGE
+PAGE
 
 : CELLS 2 * ;
-: SAY-DEF LATEST @ ID. ."  defined" CR ;
-SAY-DEF
 
 : NIP ( x y -- y ) SWAP DROP ;
 : TUCK ( x y -- y x y ) SWAP OVER ;
@@ -86,12 +117,12 @@ SAY-DEF
   0		( sorry, nothing found )
 ;
 
-SAY-DEF
+
 : CASE IMMEDIATE
        0
        ;
 
-SAY-DEF
+
 : OF IMMEDIATE
      ' OVER ,
      ' = ,
@@ -99,12 +130,12 @@ SAY-DEF
        ' DROP ,
 ;
 
-SAY-DEF
+
 : ENDOF IMMEDIATE
         [POSTPONE] ELSE
 ;
 
-SAY-DEF
+
 : ENDCASE IMMEDIATE
           ' DROP ,
           BEGIN
@@ -114,7 +145,7 @@ SAY-DEF
           REPEAT
 ;
 
-SAY-DEF
+
 
 \ Debugging info.
 : REPORT IMMEDIATE
@@ -123,130 +154,186 @@ SAY-DEF
          
 ;
 
-SAY-DEF
+
+\ : SEE WORD FIND U. ;
 
 
-: SEE
+PAGE
 
-        WORD FIND       ( find the dictionary entry to decompile )
+AWAIT PAGE
+: STATUS
+DECIMAL USED . ." bytes have been
+used" CR
+HEX HERE @ ." HERE is at " . CR DECIMAL ;
+STATUS
 
-        ( Now we search again, looking for the next word in the dictionary.  This gives us
-          the length of the word that we will be decompiling.  Well, mostly it does. )
-        HERE @          ( address of the end of the last compiled word )
-        LATEST @        ( word last curr )
-        BEGIN
-                2 PICK          ( word last curr word )
-                OVER            ( word last curr word curr )
-                <>              ( word last curr word<>curr? )
-        WHILE                   ( word last curr )
-                NIP             ( word curr )
-                DUP @           ( word curr prev which becomes: word last curr )
-        REPEAT
+: CONSTANT WORD CREATE DOCOL-H ' LIT , , ' EXIT , ;
 
 
-        DROP            ( at this point, the stack is: start-of-word end-of-word )
-        SWAP            ( end-of-word start-of-word )
 
-        ( begin the definition with : NAME [IMMEDIATE] )
-         58 EMIT SPACE DUP ID. SPACE
-        DUP ?IMMEDIATE IF ." IMMEDIATE " THEN
+HERE @ 32 CELLS ALLOT NIP CONSTANT ACTUAL-RESULTS
+\ : ARRAY WORD CREATE DOCOL-H ' LIT , CELLS ALLOT , ;
 
-        >DFA            ( get the data address, ie. points after DOCOL | end-of-word start-of-data )
+VARIABLE ACTUAL-DEPTH			\ stack record
 
-        ( now we start decompiling until we hit the end of the word )
-        BEGIN           ( end start )
-                \ PAUSE
-                2DUP >
-        WHILE
-                DUP @           ( end start codeword )
+\ 32 ARRAY ACTUAL-RESULTS
+\ 
+VARIABLE START-DEPTH
 
-                CASE
-                ' LIT OF                ( is it LIT ? )
-                        2+ DUP @                ( get next word which is the integer constant )
-                        .                       ( and print it )
-                ENDOF
-                ' LITSTRING OF             ( is it LITSTRING ? )
-                         83 EMIT  34 EMIT SPACE ( print S"<space> )
-                        2+ DUP @                ( get the length )
-                        SWAP 2+ SWAP            ( end start+2 length )
-                        2DUP TELL               ( print the string )
-                         34 EMIT SPACE               ( finish the string with a final quote )
-                        +                       ( end start+4+len, aligned )
-                        1+                        ( because we're about to add 4 below )
-                ENDOF
-                ' 0BRANCH OF            ( is it 0BRANCH ? )
-                        ." 0BRANCH ( "
-                        2+ DUP @                ( print the offset )
-                        .
-                        ." ) "
-                ENDOF
-                ' BRANCH OF             ( is it BRANCH ? )
-                        ." BRANCH ( "
-                        2+ DUP @                ( print the offset )
-                        .
-                        ." ) "
-                ENDOF
-                ' JUMP OF             ( is it BRANCH ? )
-                        ." JUMP ( "
-                        2+ DUP @                ( print the offset )
-                        .
-                        ." ) "
-                ENDOF
+VARIABLE XCURSOR      \ for ...}T
 
-                ' 0JUMP OF             ( is it BRANCH ? )
-                        ." 0JUMP ( "
-                        2+ DUP @                ( print the offset )
-                        .
-                        ." ) "
-                ENDOF                
-                ' ' OF                  ( is it ' TICK ? )
-                         39 EMIT SPACE
-                        2+ DUP @                ( get the next codeword )
-                        CFA>                    ( and force it to be printed as a dictionary entry )
-                        ID. SPACE
-                ENDOF
-                ' EXIT OF               ( is it EXIT? )
-                        ( We expect the last word to be EXIT, and if it is then we don't print it
-                          because EXIT is normally implied by ;.  EXIT can also appear in the middle
-                          of words, and then it needs to be printed. )
-                        2DUP                    ( end start end start )
-                        2+                      ( end start end start+4 )
-                        <> IF                   ( end start | we're not at the end )
-                                ." EXIT "
-                        THEN
-                ENDOF
-                                        ( default case: )
-                        DUP                     ( in the default case we always need to DUP before using )
-                        CFA>                    ( look up the codeword to get the dictionary entry )
-                        ID. SPACE               ( and print it )
-                ENDCASE
+VARIABLE ERROR-XT
 
-                2+              ( end start+2 )
-        REPEAT
 
-         59 EMIT CR
+PAGE 
 
-        2DROP           ( restore stack )
+
+: ERROR ERROR-XT @ EXECUTE ;   \ for vectoring of error reporting
+
+
+: EMPTY-STACK	\ ( ... -- ) empty stack; handles underflowed stack too.
+    DEPTH START-DEPTH @ < IF
+        DEPTH START-DEPTH @ SWAP DO 0 LOOP
+    THEN
+    DEPTH START-DEPTH @ > IF
+        DEPTH START-DEPTH @ DO DROP LOOP
+    THEN
 ;
 
 
-\ : SEE WORD FIND U. ;
-SAY-DEF
-: AWAIT ." Press a key to continue." PAUSE ;
+
+: TYPE 0 DO DUP C@ EMIT 1+ LOOP DROP ;
 
 
-PAUSE PAGE
 
-SEE ABORT
+: (UNLOOP)    ( -- , R: I LIMIT -- : REMOVE LIMIT AND I FROM  )
+	R>           ( SAVE OUR RETURN ADDRESS )
+	RDROP        ( POP OFF I )
+	RDROP        ( POP OFF LIMIT )
+        >R
+;
 
-AWAIT PAGE
+: LEAVE ( -- , R: I LIMIT RETURN -- : BREAK OUT OF A DO-LOOP CONSTRUCT )
+	(UNLOOP)
+RDROP ; ( RETURN TO THE CALLER'S CALLER ROUTINE )
 
-DEC USED . ." bytes have been
-used" CR
-HEX HERE @ ." HERE is at " . CR
 
-." End of stage 2." CR
-AWAIT SHUTDOWN
+: SEEK-NEWLINE-BACK
+  \ Need this, why?
+  2-
+  BEGIN
+    DUP C@ 10 =
+    IF
+      1+ EXIT
+    ELSE
+      1-
+    THEN
+  AGAIN
+;
+
+: EMIT-UNTIL-NEWLINE
+  BEGIN
+    DUP C@ 10 =
+    IF
+      DROP EXIT
+    ELSE
+      DUP C@ EMIT 1+
+    THEN
+  AGAIN
+;
+
+
+: ERROR1	\ ( C-ADDR U -- ) display an error message 
+		\ followed by the line that had the error.
+  TYPE CR INPUT-PTR @ SEEK-NEWLINE-BACK EMIT-UNTIL-NEWLINE CR
+  \ display line corresponding to error
+   EMPTY-STACK				\ throw away everything else
+;
+
+
+' ERROR1 ERROR-XT !
+
+: T{		\ ( -- ) syntactic sugar.
+  DEPTH START-DEPTH ! 0 XCURSOR !
+;
+
+
+PAGE
+
+
+
+: ->		\ ( ... -- ) record depth and contents of stack.
+   DEPTH DUP ACTUAL-DEPTH !		\ record depth
+   START-DEPTH @ > IF		\ if there is something on the stack
+       DEPTH START-DEPTH @ - 0 DO ACTUAL-RESULTS I CELLS + ! LOOP \ save them
+   THEN
+; 
+
+: }T		\ ( ... -- ) COMPARE STACK (EXPECTED) CONTENTS WITH SAVED
+		\ (ACTUAL) CONTENTS.
+   DEPTH ACTUAL-DEPTH @ = IF		\ if depths match
+      DEPTH START-DEPTH @ > IF		\ if there is something on the stack
+         DEPTH START-DEPTH @ - 0 DO	\ for each stack item
+	    ACTUAL-RESULTS I CELLS + @	\ compare actual with expected
+	    <> IF S" INCORRECT RESULT: " ERROR LEAVE THEN
+	 LOOP
+      THEN
+   ELSE					\ depth mismatch
+      S" WRONG NUMBER OF RESULTS: " ERROR
+   THEN
+;
+
+
+: ...}T ( -- )
+    XCURSOR @ START-DEPTH @ + ACTUAL-DEPTH @ <> IF
+        S" NUMBER OF CELL RESULTS BEFORE '->' DOES NOT MATCH ...}T SPECIFICATION: " ERROR
+    ELSE DEPTH START-DEPTH @ = 0= IF
+        S" NUMBER OF CELL RESULTS BEFORE AND AFTER '->' DOES NOT MATCH: " ERROR
+    THEN THEN
+;
+
+
+: { T{ ;
+: } }T ;
+
+.S CR
+
+\ Do all the tests!
+{ 0 0 AND -> 0 }
+{ 0 1 AND -> 0 }
+{ 1 0 AND -> 0 }
+{ 1 1 AND -> 1 }
+
+{ 0 INVERT 1 AND -> 1 }
+{ 1 INVERT 1 AND -> 0 }
+
+0	 CONSTANT 0S
+0 INVERT CONSTANT 1S
+
+{ 0S INVERT -> 1S }
+{ 1S INVERT -> 0S }
+
+{ 0S 0S AND -> 0S }
+{ 0S 1S AND -> 0S }
+{ 1S 0S AND -> 0S }
+{ 1S 1S AND -> 1S }
+
+{ 0S 0S OR -> 0S }
+{ 0S 1S OR -> 1S }
+{ 1S 0S OR -> 1S }
+{ 1S 1S OR -> 1S }
+
+{ 0S 0S XOR -> 0S }
+{ 0S 1S XOR -> 1S }
+{ 1S 0S XOR -> 1S }
+{ 1S 1S XOR -> 0S }
+
+
+." End of tests." CR
+." End of phase 2."
+PAUSE
+
+SHUTDOWN
 
 \ Check how many bytes are left by running the following Scheme program:
 \ (begin (load "smiley-os.scm") (make-rom "forth.rom"))
