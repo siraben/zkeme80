@@ -3,7 +3,10 @@
 : PAGE CLEAR-SCREEN ORIGIN ;
 : USED HERE @ H0 - ;
 
+: CELL+ 2+ ;
 
+: 2@  DUP CELL+ @ SWAP @ ;
+: 2!  SWAP OVER ! CELL+ ! ;
 : . U. ;
 
 : '
@@ -13,7 +16,6 @@
   ELSE
     WORD FIND >CFA
   THEN
-  
     
 ; IMMEDIATE
 
@@ -78,6 +80,7 @@
   THEN
 ;  IMMEDIATE
 
+\ Redefine ; to be verbose
 : ; [POSTPONE] ; LATEST @ ID. ."  defined." CR ; IMMEDIATE
 
 : AWAIT ." Press a key to continue." ;
@@ -118,41 +121,41 @@ PAGE
 ;
 
 
-: CASE IMMEDIATE
+: CASE 
        0
-       ;
+; IMMEDIATE
 
 
-: OF IMMEDIATE
+: OF 
      ' OVER ,
      ' = ,
      [POSTPONE] IF
        ' DROP ,
-;
+; IMMEDIATE
 
 
-: ENDOF IMMEDIATE
+: ENDOF 
         [POSTPONE] ELSE
-;
+; IMMEDIATE
 
 
-: ENDCASE IMMEDIATE
+: ENDCASE 
           ' DROP ,
           BEGIN
             ?DUP
           WHILE
             [POSTPONE] THEN
           REPEAT
-;
+; IMMEDIATE
 
 
 
 \ Debugging info.
-: REPORT IMMEDIATE
+: REPORT
          ." Report"
          PAUSE
          
-;
+; IMMEDIATE
 
 
 \ : SEE WORD FIND U. ;
@@ -168,8 +171,6 @@ HEX HERE @ ." HERE is at " . CR DECIMAL ;
 STATUS
 
 : CONSTANT WORD CREATE DOCOL-H ' LIT , , ' EXIT , ;
-
-
 
 HERE @ 32 CELLS ALLOT NIP CONSTANT ACTUAL-RESULTS
 \ : ARRAY WORD CREATE DOCOL-H ' LIT , CELLS ALLOT , ;
@@ -206,7 +207,7 @@ PAGE
 
 
 
-: (UNLOOP)    ( -- , R: I LIMIT -- : REMOVE LIMIT AND I FROM  )
+: UNLOOP    ( -- , R: I LIMIT -- : REMOVE LIMIT AND I FROM  )
 	R>           ( SAVE OUR RETURN ADDRESS )
 	RDROP        ( POP OFF I )
 	RDROP        ( POP OFF LIMIT )
@@ -214,8 +215,9 @@ PAGE
 ;
 
 : LEAVE ( -- , R: I LIMIT RETURN -- : BREAK OUT OF A DO-LOOP CONSTRUCT )
-	(UNLOOP)
-RDROP ; ( RETURN TO THE CALLER'S CALLER ROUTINE )
+  UNLOOP
+  RDROP
+; ( RETURN TO THE CALLER'S CALLER ROUTINE )
 
 
 : SEEK-NEWLINE-BACK
@@ -292,13 +294,22 @@ PAGE
     THEN THEN
 ;
 
+\ Bit shifts are not fast!
+: RSHIFT ?DUP IF 0 DO 2/ LOOP THEN ;
+: LSHIFT ?DUP IF 0 DO 2* LOOP THEN ;
 
 : { T{ ;
 : } }T ;
+AWAIT PAGE
 
-.S CR
 
-\ Do all the tests!
+{ -> }					\ START WITH CLEAN SLATE
+( TEST IF ANY BITS ARE SET; ANSWER IN BASE 1 )
+{ : BITSSET? IF 0 0 ELSE 0 THEN ; -> }
+{  0 BITSSET? -> 0 }		( ZERO IS ALL BITS CLEAR )
+{  1 BITSSET? -> 0 0 }		( OTHER NUMBER HAVE AT LEAST ONE BIT )
+
+
 { 0 0 AND -> 0 }
 { 0 1 AND -> 0 }
 { 1 0 AND -> 0 }
@@ -328,10 +339,99 @@ PAGE
 { 1S 0S XOR -> 1S }
 { 1S 1S XOR -> 0S }
 
+0S CONSTANT <FALSE>
+1S CONSTANT <TRUE>
+
+
+( WE TRUST 1S, INVERT, AND BITSSET?; WE WILL CONFIRM RSHIFT LATER )
+1S 1 RSHIFT INVERT CONSTANT MSB
+{ MSB BITSSET? -> 0 0 }
+
+{ 0S 2* -> 0S }
+{ 1 2* -> 2 }
+
+T{  0  0 * ->  0 }T          \ TEST IDENTITIES
+T{  0  1 * ->  0 }T
+T{  1  0 * ->  0 }T
+T{  1  2 * ->  2 }T
+T{  2  1 * ->  2 }T
+T{  3  3 * ->  9 }T
+
+{ 4000 2* -> 8000 }
+{ 1S 2* 1 XOR -> 1S }
+{ MSB 2* -> 0S }
+
+{ 0S 2/ -> 0S }
+{ 1 2/ -> 0 }
+{ 4000 2/ -> 2000 }
+
+{ 1 0 LSHIFT -> 1 }
+{ 1 1 LSHIFT -> 2 }
+{ 1 2 LSHIFT -> 4 }
+{ 1S 1 LSHIFT 1 XOR -> 1S }
+{ MSB 1 LSHIFT -> 0 }
+
+{ 1 0 RSHIFT -> 1 }
+{ 1 1 RSHIFT -> 0 }
+{ 2 1 RSHIFT -> 1 }
+{ 4 2 RSHIFT -> 1 }
+{ MSB 1 RSHIFT 2* -> MSB }
+
+
+T{ 1 2 2DROP -> }T
+
+T{ 1 2 2DUP -> 1 2 1 2 }T
+
+T{ 1 2 3 4 2OVER -> 1 2 3 4 1 2 }T
+
+T{ 1 2 3 4 2SWAP -> 3 4 1 2 }T
+
+T{ : NOP : [POSTPONE] ; ; -> }T
+T{ NOP NOP1 NOP NOP2 -> }T
+T{ NOP1 -> }T
+T{ NOP2 -> }T
+
+T{ : GDX   123 ;    : GDX   GDX 234 ; -> }T
+T{ GDX -> 123 234 }T
+
+
+T{  0 ?DUP ->  0    }T
+T{  1 ?DUP ->  1  1 }T
+
+AWAIT PAGE
+T{ : GR1 >R R> ; -> }T
+T{ : GR2 >R R@ R> DROP ; -> }T
+T{ 123 GR1 -> 123 }T
+T{ 123 GR2 -> 123 }T
+T{  1S GR1 ->  1S }T      ( Return stack holds cells )
+
+\ This test fails!  Is the standard wrong?
+\ T{ ( A comment)1234 -> }T
+
+T{ : pc1 ( A comment)1234 ; pc1 -> 1234 }T
+
+HERE @ 1 ,
+HERE @ 2 ,
+CONSTANT 2ND
+CONSTANT 1ST
+
+T{       1ST 2ND < -> 1 }T \ HERE MUST GROW WITH ALLOT
+T{       1ST CELL+  -> 2ND }T \ ... BY ONE CELL
+T{   1ST 1 CELLS +  -> 2ND }T
+T{     1ST @ 2ND @  -> 1 2 }T
+T{         5 1ST !  ->     }T
+T{     1ST @ 2ND @  -> 5 2 }T
+T{         6 2ND !  ->     }T
+T{     1ST @ 2ND @  -> 5 6 }T
+T{           1ST 2@ -> 6 5 }T
+T{       2 1 1ST 2! ->     }T
+T{           1ST 2@ -> 2 1 }T
+T{ 1S 1ST !  1ST @  -> 1S  }T    \ CAN STORE CELL-WIDE VALUE
+
 
 ." End of tests." CR
 ." End of phase 2."
-PAUSE
+
 
 SHUTDOWN
 

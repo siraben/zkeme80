@@ -175,11 +175,8 @@
 
     ,@(defcode "R@" 0 'r@)
     (push bc)
-    ,@pop-hl-rs
-    ,@push-hl-rs
-    (ld c (hl))
-    (inc hl)
-    (ld b (hl))
+    ,@pop-bc-rs
+    ,@push-bc-rs
     ,@next
 
     ,@(defcode "2>R" 0 '2>r)
@@ -267,23 +264,31 @@
     ,@pop-bc-rs
     ,@pop-de-rs
     ,@next
+
+    ;; T{ 1 2 3 4 2OVER -> 1 2 3 4 1 2 }T
+    ,@(defcode "2OVER" 0 '2over)
+    ,@push-de-rs;;  ( DE: ? HL : ? BC: 4 ) ( de )
+    (pop hl) ;;     ( DE: ? HL : 3 BC: 4 ) ( de )
+    (pop de) ;;     ( DE: 2 HL : 3 BC: 4 ) ( de )
+    ,@push-bc-rs ;; ( DE: 2 HL : 3 BC: 4 ) ( de 4 )
+    (pop bc) ;;     ( DE: 2 HL : 3 BC: 1 ) ( de 4 )
+    (push bc)
+    (push de)
+    (push hl)
+    ,@pop-hl-rs;;   ( DE: 2 HL : 4 BC: 1 ) ( de )
+    (push hl)
+    (push bc)
+    (ld b d)
+    (ld c e)  ;;    ( DE: 2 HL : 4 BC: 2 ) ( de )
+    ,@pop-de-rs;;   ( DE: ? HL : 4 BC: 2 ) (    )
+    
+    ,@next
     
 
     ))
 
 (define forth-math-words
-  `(,@(defcode ">>" 0 '>>)
-    (push de)
-    (ld d b)
-    (ld e c)
-    (srl d)
-    (rr e)
-    (ld b d)
-    (ld c e)
-    (pop de)
-    ,@next
-
-    ,@(defcode "+" 0 '+)
+  `(,@(defcode "+" 0 '+)
     (pop hl)
     (add hl bc)
     ,@hl-to-bc
@@ -324,6 +329,17 @@
     (ld a b)
     (xor h)
     (ld b a)
+    ,@next
+
+    ,@(defcode "2*" 0 '2*)
+    (xor a)
+    (rl c)
+    (rl b)
+    ,@next
+    
+    ,@(defcode "2/" 0 '>>)    
+    (srl b)
+    (rr c)
     ,@next
 
     ,@(defcode "INVERT" 0 'invert)
@@ -776,14 +792,14 @@
     ,@next
 
     ,@(defcode "BRANCH" 0 'branch)
-    (ld a (de))
-    (ld l a)
-    (inc de)
-    (ld a (de))
-    (ld h a)
-    (dec de)
+    ((ex de hl))
+    (ld e (hl))
+    (inc hl)
+    (ld d (hl))
+    (dec hl)
+
     (add hl de)
-    ,@hl-to-de
+    ((ex de hl))
     ,@next
 
     ,@(defcode "0BRANCH" 0 '0branch)
@@ -1220,7 +1236,7 @@
 
     ;; Yes, the standard says IMMEDIATE shouldn't be IMMEDIATE, but so
     ;; what?
-    ,@(defcode "IMMEDIATE" immediate 'immed)
+    ,@(defcode "IMMEDIATE" 0 'immed)
     (ld hl (var-latest))
     (inc hl)
     (inc hl)
