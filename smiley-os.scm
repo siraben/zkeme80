@@ -36,15 +36,22 @@
     ,@math-asm
     ,@font-asm
     ,@text-asm
-    
+
+    (label bootstrap-fs)
+    ,@(include-file-as-bytes "bootstrap.fs")
+
     (label os-end)
     ,(lambda ()
        (format #t "End of smiley-os: 0x")
-       (PRINT-PC))
-    
+       (PRINT-PC)
+       (format #t "There are ~a bytes left.\n" (- #x4000 *pc*))
+       '())
+    ;; Must be less than 0x4000.
+
+
     ,(lambda ()
        (assemble-expr `(db ,(make-list
-                             (- #x8602 *pc*)
+                             (- #x8402 *pc*)
                              #xff))))
 
     
@@ -104,11 +111,13 @@
     ;; detect that this "device" no longer has input, and thus will stop.
     (label bootstrap-load-bool)
     (dw (65535))
-
+    
 
     ;; 2K bytes of free space.
     (label here-start)
     (db ,(make-list 2048 0))
+
+
     
     ,(lambda ()
        (assemble-expr `(db ,(make-list

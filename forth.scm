@@ -95,7 +95,7 @@
 (define *var-count* 0)
 (define (next-var-addr!)
   (set! *var-count* (1+ *var-count*))
-  (+ #x8600 (* 2 *var-count*)))
+  (+ #x8400 (* 2 *var-count*)))
 
 (define reset-var
   (lambda ()
@@ -784,6 +784,21 @@
     (jp c tru)
     (jp fal)
 
+    ,@(defcode ">" 0 '>)
+    (pop hl)
+    (push hl)
+    (push bc)
+    (call cp-hl-bc)
+    (pop bc)
+    (pop hl)
+    (jp nc gt-check-neq)
+    (jp fal)
+    (label gt-check-neq)
+    (call cp-hl-bc)
+    (jp z fal)
+    (jp tru)
+    
+
     ,@(defcode "<=" 0 '<=)
     ,@bc-to-hl
     (pop bc)
@@ -1138,7 +1153,25 @@
     (pop de)
     (ret)
 
-    ,@(defcode "?IMMED" 0 '?immed)
+    ,@(defcode "C," 0 'c-comma)
+    (call _c-comma)
+    (pop bc)
+    ,@next
+
+    (label _c-comma)
+    (push de)
+    (ld hl (var-here))
+    (ld (hl) c)
+    (inc hl)
+    (ld de var-here)
+    ((ex de hl))
+    (ld (hl) e)
+    (inc hl)
+    (ld (hl) d)
+    (pop de)
+    (ret)
+
+    ,@(defcode "?IMMEDIATE" 0 '?immediate)
     (inc bc)
     (inc bc)
     (ld a (bc))
@@ -1146,7 +1179,9 @@
     (jp z fal)
     (jp tru)
 
-    ,@(defcode "IMMEDIATE" 0 'immed)
+    ;; Yes, the standard says IMMEDIATE shouldn't be IMMEDIATE, but so
+    ;; what?
+    ,@(defcode "IMMEDIATE" immediate 'immed)
     (ld hl (var-latest))
     (inc hl)
     (inc hl)
@@ -1168,6 +1203,12 @@
     (inc hl)
     ,@hl-to-bc
     ,@next
+    
+    ,@(defword ">DFA" 0 '>dfa)
+    (dw (>cfa lit 3 + exit))
+
+    ,@(defword "PICK" 0 'pick)
+    (dw (1+ lit 2 * sp@ + @ exit))
 
     ;; ( name length -- )
     ;; Parse a name and create a definition header for it.
@@ -1212,7 +1253,7 @@
     (pop bc)
     ,@next
 
-    ,@(defcode "DOCOL_H" 0 'docol-header)
+    ,@(defcode "DOCOL-H" 0 'docol-header)
     (push de)
     (ld de (var-here))
     (ld a #xcd)
@@ -1286,12 +1327,14 @@
     (dw (interpret))
     (dw (?dup 0= 0jump not-ok))
     (dw (lit ok-msg plot-string cr jump try-more))
+
     
     (label quit-eof)
     (dw (clear-screen origin lit quit-eof-msg plot-string pause poweroff))
     
     (label not-ok)
     (dw (lit not-ok-msg plot-string abort))
+    (dw (exit))
     
     (label ok-msg)
     (db ,(string " ok"))
@@ -1328,7 +1371,7 @@
     (dw (state @ 0jump interpret-word))
     
     (label compiling-word)
-    (dw (dup ?immed 0jump compile-word))
+    (dw (dup ?immediate 0jump compile-word))
     
     (label interpret-word)
     (dw (>cfa execute jump interpret-loop))
@@ -1383,6 +1426,13 @@
 
     ,@(defword "WHILE" immediate 'while)
     (dw (tick 0branch comma here @ lit 0 comma exit))
+
+    ,@(defword "ALLOT" 0 'allot)
+    (dw (here @ swap here +! exit))
+    
+    ,@(defword "VARIABLE" 0 'variable)
+    (dw (lit 2 allot word create docol-header tick lit comma comma))
+    (dw (tick exit comma exit))
 
     ,@(defword "REPEAT" immediate 'repeat)
     (dw (tick branch comma swap here @ - comma))
@@ -1478,7 +1528,13 @@
     ;; Check if reading a number has failed, since we can't return -1.
     ,@(defvar "NUM-STATUS" 'num-status 0)
     ,@(defvar "S0" 's0 0)
-    ,@(defvar "R0" 'r0 0)))
+    ,@(defvar "R0" 'r0 0)
+
+    ,@(defword "H0" 0 'h0)
+    (dw (lit here-start exit))
+    ,@(defword "OS-END" 0 'os-end-const)
+    (dw (lit os-end exit))
+    ))
 
 (define (make-char-lookup-table)
   (define res (make-list 128 0))
@@ -1556,8 +1612,7 @@
 
     (dw (poweroff))
     
-    (label bootstrap-fs)
-    ,@(include-file-as-bytes "bootstrap.fs")
+
     ))
 
 
