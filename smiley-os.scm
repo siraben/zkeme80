@@ -44,7 +44,7 @@
     
     ,(lambda ()
        (assemble-expr `(db ,(make-list
-                             (- #x8402 *pc*)
+                             (- #x8602 *pc*)
                              #xff))))
 
     
@@ -100,8 +100,11 @@
     (label prompt-space)
     (db ,(make-list 128 0))
 
-    (label spare)
+    ;; This value, when incremented, becomes 0.  This causes REFILL to
+    ;; detect that this "device" no longer has input, and thus will stop.
+    (label bootstrap-load-bool)
     (dw (65535))
+
 
     ;; 2K bytes of free space.
     (label here-start)

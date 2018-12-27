@@ -120,6 +120,7 @@
     ,@(push* '(af bc hl))
     (cp ,(char->integer #\newline))
     (jr nz local-label24)
+    (ld a e)
     (add a 6)
     (ld e a)
     (db (#xdd))

@@ -95,7 +95,7 @@
 (define *var-count* 0)
 (define (next-var-addr!)
   (set! *var-count* (1+ *var-count*))
-  (+ #x8400 (* 2 *var-count*)))
+  (+ #x8600 (* 2 *var-count*)))
 
 (define reset-var
   (lambda ()
@@ -604,22 +604,44 @@
     ;; Plot a character to the screen.
     ;; ( char -- )
     ,@(defcode "EMIT" 0 'emit)
-    ,@push-de-rs
+    (push de)
+    (push ix)
+
+    ;; Margin of 0.
+    ;; (ld ixh 0)
+    (db (#xdd))
+    (ld h 0)
+
+    ;; Draw with OR
+    (db (#xdd))
+    (ld l 0)
+
+
+
+    ;; Drawing coordinates.
     (ld a (var-cur-col))
     (ld d a)
     (ld a (var-cur-row))
     (ld e a)
-    ;; Character to print
-    (ld a c)
+
     (ld iy screen-buffer)
-    (call draw-char)
+    ;; Character to print.
+    (ld a c)
+    ;; Bounding box limits.
+    (ld b 98)
+    (ld c 64)
+
+    (call wrap-char-shared)
     (call fast-copy)
     (ld a d)
     (ld (var-cur-col) a)
     (ld a e)
-    (ld (var-cur-row) a)    
-    ,@pop-de-rs
+    (ld (var-cur-row) a)
+
+    (pop ix)
+    (pop de)
     (pop bc)
+    
     ,@next
 
     ;; Carriage return
@@ -647,7 +669,7 @@
     
     ;; Draw a string to the screen
     ;; ( str_addr -- )
-    ,@(defcode "PLOT-STR" 0 'plot-str)
+    ,@(defcode "PLOT-STRING" 0 'plot-string)
     ,@push-de-rs
     (ld a (var-cur-col))
     (ld d a)
@@ -850,7 +872,7 @@
     (dw (lit expect-count @ not 0jump expect-more))
     (dw (exit))
     (label expect-more)
-    (dw (origin lit expect-ptr-initial @ plot-str))
+    (dw (origin lit expect-ptr-initial @ plot-string))
 
     ;; Draw a cursor
     ;; (dw (lit cursor lit 5 cur-col @ cur-row @ put-sprite-xor-forth plot))
@@ -871,7 +893,7 @@
     (dw (lit expect-ptr-initial @ lit expect-ptr @))
     (dw (<> 0jump expect-got-blank))
     (label expect-end)
-    (dw (origin lit expect-ptr-initial @ plot-str))
+    (dw (origin lit expect-ptr-initial @ plot-string))
     (dw (drop lit 0 lit expect-ptr @ c! exit))
     
     (label expect-got-backspace)
@@ -969,6 +991,22 @@
     (inc de)
     (push bc)
     ,@hl-to-bc
+    ,@next
+
+    ,@(defcode "LITSTRING" 0 'litstring)
+    (ld a (de))
+    (ld l a)
+    (inc de)
+    (ld a (de))
+    (ld h a)
+    (inc de)
+    (push bc)
+    (push de)
+    ,@hl-to-bc
+    (add hl de)
+
+    (inc hl)
+    ((ex de hl))
     ,@next
     
     ,@(defcode "EXIT" 0 'exit)
@@ -1241,10 +1279,90 @@
     (dw (latest @ hidden))
     (dw (lbrac exit))
 
-    ,@(defword "ID." 0 'id.)
-    (dw (lit 3 + plot-str exit))
+    ,@(defword "QUIT" 0 'quit)
+    (label try-more)
+    (dw (lit ok-msg plot-string cr))    
+    (dw (lbrac refill 0jump quit-eof))
+    (dw (interpret))
+    (dw (?dup 0= 0jump not-ok))
+    (dw (lit ok-msg plot-string cr jump try-more))
+    
+    (label quit-eof)
+    (dw (clear-screen origin lit quit-eof-msg plot-string pause poweroff))
+    
+    (label not-ok)
+    (dw (lit not-ok-msg plot-string abort))
+    
+    (label ok-msg)
+    (db ,(string " ok"))
+    (label not-ok-msg)
+    (db ,(string "?"))
+    (label quit-eof-msg)
+    (db ,(string "Received EOF from input device."))
+    
+    (label abort-msg1)
+    (db ,(string "Error "))
+    (label abort-msg2)
+    (db ,(string "occured at "))
+    (label abort-msg3)
+    (db ,(string ">>>"))
+    (label abort-msg4)
+    (db ,(string "<<<"))
+    (label abort-msg5)
+    (db ,(string "Unconsumed input:"))
+    
+    ,@(defword "ABORT" 0 'abort)
+    (dw (clear-screen origin lit abort-msg1 plot-string))
+    ;; Print error number and rest of error message.
+    (dw (u. lit abort-msg2 plot-string cr lit abort-msg3 plot-string))
+    (dw (lit word-buffer plot-string lit abort-msg4 plot-string cr))
+    (dw (lit abort-msg5 plot-string cr))
+    (dw (lit input-ptr @ lit 24 type))
+    (dw (pause poweroff))
 
-    ,@(defword "IF" immediate 'if)
+    ,@(defword "INTERPRET" 0 'interpret)
+
+    (label interpret-loop)
+    (dw (word ?dup 0jump try-more))
+    (dw (find ?dup 0jump maybe-number))
+    (dw (state @ 0jump interpret-word))
+    
+    (label compiling-word)
+    (dw (dup ?immed 0jump compile-word))
+    
+    (label interpret-word)
+    (dw (>cfa execute jump interpret-loop))
+
+    (label compile-word)
+    (dw (>cfa comma jump interpret-loop))
+    
+
+    (label maybe-number)
+    (dw (lit word-buffer parse-number))
+    (dw (num-status @ 0jump num-fail))
+    ;; Read a number.
+    ;; If we're interpreting, just keep the number on the satck.
+    (dw (state @ 0jump interpret-loop))
+    ;; Otherwise we compile LIT and the number.
+    (label compile-num)
+    (dw (lit lit comma comma jump interpret-loop))
+
+    ;; Failed to read a number.
+    (label num-fail)
+    (dw (jump undefined-word))    
+    
+    (label undefined-word)
+    (dw (lit 1 exit))
+    
+    ,@(defword "ID." 0 'id.)
+    (dw (lit 3 + plot-string exit))
+
+
+    
+    ))
+
+(define forth-control-words
+  `(,@(defword "IF" immediate 'if)
     (dw (tick 0branch comma here @ lit 0 comma exit))
 
     ,@(defword "THEN" immediate 'then)
@@ -1257,7 +1375,7 @@
     ,@(defword "BEGIN" immediate 'begin)
     (dw (here @ exit)) 
 
-    ,@(defword "UNTIl" immediate 'until)
+    ,@(defword "UNTIL" immediate 'until)
     (dw (tick 0branch comma here @ - comma exit))
 
     ,@(defword "AGAIN" immediate 'again)
@@ -1266,8 +1384,17 @@
     ,@(defword "WHILE" immediate 'while)
     (dw (tick 0branch comma here @ lit 0 comma exit))
 
-    ;; ,@(defword "LOOP" immediate 'loop)
-    
+    ,@(defword "REPEAT" immediate 'repeat)
+    (dw (tick branch comma swap here @ - comma))
+    (dw (dup here @ swap - swap ! exit))
+
+    ,@(defword "DO" immediate 'do)
+    (dw (here @ tick >r comma tick >r comma exit))
+
+    ,@(defword "LOOP" immediate 'loop)
+    (dw (tick r> comma tick r> comma tick 1+ comma tick 2dup comma))
+    (dw (tick = comma tick 0branch comma here @ - comma tick 2drop comma exit))
+
     ))
 
 (define forth-shared-header
@@ -1397,91 +1524,23 @@
   `((label char-lookup-table)
     (db ,(make-char-lookup-table))))
 
-(define forth-main
-  `(
-    ;; Example of an input device.
+(define forth-input-devices
+  `(;; Example of an input device.
     (label string-input-device)
     (call docol)
-    (dw (lit default-expr lit input-ptr !))
-    (dw (lit 1 lit spare +! lit spare @))
+    (dw (lit bootstrap-fs lit input-ptr !))
+    (dw (lit 1 lit bootstrap-load-bool +! lit bootstrap-load-bool @))
     (dw (exit))
 
 
-    ;; The default input device.
+    ;; The default input device, which loads the bootstrap.
     ,@(defword "PROMPT" 0 'prompt)
     (dw (lit prompt-space lit 128 expect))
     (dw (lit prompt-space lit input-buffer lit 128 cmove))
     (dw (true))
-    (dw (exit))
-
-    ;; (label not-ok-msg)
-    ;; (db ,(string "ERROR"))
-    
-    ,@(defword "QUIT" 0 'quit)
-    (label try-more)
-    (dw (lit ok-msg plot-str cr))    
-    (dw (lbrac refill 0jump quit-eof))
-    (dw (interpret))
-    (dw (?dup 0= 0jump not-ok))
-    (dw (lit ok-msg plot-str cr jump try-more))
-    
-    (label quit-eof)
-    (dw (lit quit-eof-msg plot-str pause poweroff))
-    (label not-ok)
-    ;; Handle exception number?  Drop for now.
-    (dw (u. lit not-ok-msg plot-str abort))
-
-    (label quit-eof-msg)
-    (db ,(string "EOF from input device."))
-    (label abort-msg)
-    (db ,(string "Error occurred, aborting. Unconsumed input:"))
-    ,@(defword "ABORT" 0 'abort)
-    (dw (clear-screen origin lit abort-msg plot-str))
-    ;; Print context
-    (dw (cr lit word-buffer plot-str space lit input-ptr @ lit 24 type))
-    (dw (pause poweroff))
-
-    ,@(defword "INTERPRET" 0 'interpret)
-
-    (label interpret-loop)
-    (dw (word ?dup 0jump try-more))
-    (dw (find ?dup 0jump maybe-number))
-    (dw (state @ 0jump interpret-word))
-    
-    (label compiling-word)
-    (dw (dup ?immed 0jump compile-word))
-    
-    (label interpret-word)
-    (dw (>cfa execute jump interpret-loop))
-
-    (label compile-word)
-    (dw (>cfa comma jump interpret-loop))
-    
-
-    (label maybe-number)
-    (dw (lit word-buffer parse-number))
-    (dw (num-status @ 0jump num-fail))
-    ;; Read a number.
-    ;; If we're interpreting, just keep the number on the satck.
-    (dw (state @ 0jump interpret-loop))
-    ;; Otherwise we compile LIT and the number.
-    (label compile-num)
-    (dw (lit lit comma comma jump interpret-loop))
-
-
-    ;; Failed to read a number.
-    (label num-fail)
-    (dw (jump undefined-word))    
-    
-    (label undefined-word)
-    (dw (lit 666 exit))
-
-    (label interpret-eof)
-    (dw (lit 0 exit))
-
-    (label post-exec)
-    (db ,(string "Stack after word is run:"))
-    (label main)
+    (dw (exit))))
+(define forth-main
+  `((label main)
     (dw (origin))
     (dw (lit last-forth-word latest !))
     (dw (lit here-start here !))
@@ -1492,35 +1551,20 @@
     (dw (lit 65530 s0 !))
     (dw (lit #xc000 r0 !))
     (dw (lit string-input-device lit current-input-device !))
+    
     (dw (quit))
 
-    ;; (dw (pause poweroff))
-    (label default-expr)
-    ,@(include-file-as-bytes "bootstrap.fs")
-    (label ok-msg)
-    (db ,(string " ok"))
-    (label not-ok-msg)
-    (db ,(string "?"))
-    ;; (db (0 0 0))
-    ;; (dw (lit title7 plot-str cr))
-    ;; (dw (lit input-buffer lit 24 expect cr))
-    ;; (dw (lit title8 plot-str))
-    ;; (dw (lit input-buffer plot-str pause))
-    ;; (label demo-loop)
-    ;; (dw (key clear-screen dup dup))
-    ;; (dw (origin .s cr))    
-    ;; (dw (lit title4 plot-str u. cr))
-    ;; (dw (lit title5 plot-str to-ascii u. cr))
-    ;; (dw (lit title6 plot-str to-ascii emit cr))
-    ;; (dw (.s ))
-    ;; (dw (jump demo-loop))
-    
     (dw (poweroff))
+    
+    (label bootstrap-fs)
+    ,@(include-file-as-bytes "bootstrap.fs")
     ))
+
 
 (define forth-asm
   `(,@forth-shared-header
     ,@forth-semantics-words
+    ,@forth-control-words
     ,@forth-text-words    
     ,@forth-logic-words
     ,@forth-stack-words
@@ -1531,7 +1575,7 @@
     ,@forth-misc-words
     ,@forth-vars
     ,@forth-meta-words
-
+    ,@forth-input-devices
 
     ,@forth-main
 
