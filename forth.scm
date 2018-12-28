@@ -198,6 +198,12 @@
     (pop ix)
     ,@next
 
+    ,@(defcode "RP@" 0 'rp@)
+    (push bc)
+    (push ix)
+    (pop bc)
+    ,@next
+
     ,@(defcode "RDROP" 0 'rdrop)
     ,@pop-hl-rs
     ,@next
@@ -212,6 +218,12 @@
     (ld (var-sp0) sp)
     (ld hl (var-sp0))
     ,@hl-to-bc
+    ,@next
+
+    ,@(defcode "SP!" 0 'sp!)
+    ,@bc-to-hl
+    (ld sp hl)
+    (pop bc)
     ,@next
 
     ,@(defcode "OVER" 0 'over)
@@ -1556,6 +1568,13 @@
     ,@(defword "LOOP" immediate 'loop)
     (dw (tick r> comma tick r> comma tick 1+ comma tick 2dup comma))
     (dw (tick = comma tick 0branch comma here @ - comma tick 2drop comma exit))
+    ,@(defword "+LOOP" immediate '+loop)
+    (dw (tick r> comma tick r> comma tick rot comma tick + comma))
+    (dw (tick 2dup comma tick = comma tick 0branch comma here @))
+    (dw (- comma tick 2drop comma exit))
+
+    ,@(defword "FORGET" 0 'forget)
+    (dw (word find dup @ latest ! here ! exit))
 
     ,@(defcode "I" 0 'curr-loop-index)
     (push bc)
@@ -1567,9 +1586,7 @@
     (push bc)
     (ld c (+ ix 6))
     (ld b (+ ix 7))
-    ,@next
-
-    ))
+    ,@next))
 
 (define forth-shared-header
   `(
@@ -1727,13 +1744,16 @@
     (dw (lit here-start exit))
     ,@(defword "OS-END" 0 'os-end-const)
     (dw (lit os-end exit))
-    
+
+    ;; TODO: Write defconst.
     ,@(defword "WORD-BUF" 0 'word-buf)
     (dw (lit word-buffer exit))
     ,@(defword "INPUT-PTR" 0 'input-ptr-forth)
     (dw (lit input-ptr exit))
     ,@(defword "SCREEN-BUF" 0 'screen-buffer-forth)
     (dw (lit screen-buffer exit))
+    ,@(defword "MEMA" 0 'mema)
+    (dw (lit #x4000 exit))
     ))
 
 (define (make-char-lookup-table)

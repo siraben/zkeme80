@@ -61,9 +61,19 @@
 
     ,(lambda ()
        (assemble-expr `(db ,(make-list
+                             (- #x8000 *pc*)
+                             #xff))))
+
+    (label bootstrap-flash2)
+    ,@(include-file-as-bytes "bootstrap-flash2.fs")
+
+    
+    ,(lambda ()
+       (assemble-expr `(db ,(make-list
                              (- #x8402 *pc*)
                              #xff))))
 
+    
     
 
     ,(lambda ()

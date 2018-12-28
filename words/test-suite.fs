@@ -1,159 +1,33 @@
-\ This file should run a bunch of tests before loading the next stage.
-: TELL DROP PLOT-STRING ;
-: SHUTDOWN PAUSE POWEROFF ;
-: PAGE CLEAR-SCREEN ORIGIN ;
-: USED HERE @ H0 - ;
-
-: CELL+ 2+ ;
-
-: 2@  DUP CELL+ @ SWAP @ ;
-: 2!  SWAP OVER ! CELL+ ! ;
-: . U. ;
-: CHAR+ 1+ ;
-: CHARS ;
-: BL 32 ;
-
-: RECURSE LATEST @ >CFA , ; IMMEDIATE
-
-: ['] ' LIT , ;
-
-: '
-  STATE @
-  IF 
-    ' ' ,
-  ELSE
-    WORD FIND >CFA
-  THEN
-    
-; IMMEDIATE
-
-: (
-  BEGIN
-    GETC 41 = IF
-      EXIT
-    THEN
-  AGAIN
-; IMMEDIATE
-
-: LITERAL
-  ' LIT ,
-  ,
-; IMMEDIATE
-
-: POSTPONE
-  WORD FIND >CFA ,
-; IMMEDIATE
-
-
-: CHAR WORD DROP C@ ;
-
-: [CHAR] CHAR POSTPONE LITERAL ; IMMEDIATE
-
-: '"' [ CHAR " ] LITERAL ;
-
-: S"
-  STATE @
-  IF
-    ' LITSTRING , HERE @ 0 ,
-    BEGIN
-      GETC DUP 34 <>
-    WHILE
-      C,
-    REPEAT
-    DROP 0 C, DUP HERE @ SWAP - 3 - SWAP !
-  ELSE
-    HERE @
-    BEGIN
-      GETC DUP 34 <>
-    WHILE
-      OVER C! 1+
-    REPEAT
-    DROP HERE @ - HERE @
-    SWAP
-  THEN
-; IMMEDIATE
-
-: ."		( -- )
-  STATE @ IF
-    POSTPONE S"
-    ' TELL ,
-  ELSE
-    BEGIN
-      GETC
-      DUP '"' = IF
-        DROP
-        EXIT
-      THEN
-      EMIT
-    AGAIN
-  THEN
-;  IMMEDIATE
-
-\ Redefine ; to be verbose
-\ : ; POSTPONE ; LATEST @ ID. ."  defined." CR ; IMMEDIATE
-
-." Welcome to siraben's
-Forth-based operating
-system.
-
-"
-16384 OS-END - .
-     ." bytes remaining on
-page 00.
-
-The test suite is
-running, please wait...
-"
-
-
-: CELLS 2 * ;
-
-: NIP ( x y -- y ) SWAP DROP ;
-: TUCK ( x y -- y x y ) SWAP OVER ;
-
-
-: CASE 
-       0
-; IMMEDIATE
-
-
-: OF 
-     ' OVER ,
-     ' = ,
-     POSTPONE IF
-       ' DROP ,
-; IMMEDIATE
-
-
-: ENDOF 
-        POSTPONE ELSE
-; IMMEDIATE
-
-
-: ENDCASE 
-          ' DROP ,
-          BEGIN
-            ?DUP
-          WHILE
-            POSTPONE THEN
-          REPEAT
-; IMMEDIATE
-
-
-: STATUS
-DECIMAL USED . ." bytes have been
-used" CR
-HEX HERE @ ." HERE is at " . CR DECIMAL
-." Stack has contents" CR
-.S
-;
-
 : CONSTANT WORD CREATE DOCOL-H ' LIT , , ' EXIT , ;
 
-\ Bit shifts are not fast!
-: RSHIFT ?DUP IF 0 DO 2/ LOOP THEN ;
-: LSHIFT ?DUP IF 0 DO 2* LOOP THEN ;
+HERE @ 32 CELLS ALLOT NIP CONSTANT ACTUAL-RESULTS
+\ : ARRAY WORD CREATE DOCOL-H ' LIT , CELLS ALLOT , ;
 
+VARIABLE ACTUAL-DEPTH			\ stack record
+
+\ 32 ARRAY ACTUAL-RESULTS
+\ 
+VARIABLE START-DEPTH
+
+VARIABLE XCURSOR      \ for ...}T
+
+VARIABLE ERROR-XT
+
+
+PAGE 
+
+
+: ERROR ERROR-XT @ EXECUTE ;   \ for vectoring of error reporting
+
+
+: EMPTY-STACK	\ ( ... -- ) empty stack; handles underflowed stack too.
+    DEPTH START-DEPTH @ < IF
+        DEPTH START-DEPTH @ SWAP DO 0 LOOP
+    THEN
+    DEPTH START-DEPTH @ > IF
+        DEPTH START-DEPTH @ DO DROP LOOP
+    THEN
+;
 
 
 
@@ -172,31 +46,6 @@ HEX HERE @ ." HERE is at " . CR DECIMAL
   UNLOOP
   RDROP
 ; ( RETURN TO THE CALLER'S CALLER ROUTINE )
-
-
-HERE @ 32 CELLS ALLOT NIP CONSTANT ACTUAL-RESULTS
-
-VARIABLE ACTUAL-DEPTH			\ stack record
-
-VARIABLE START-DEPTH
-
-VARIABLE XCURSOR      \ for ...}T
-
-VARIABLE ERROR-XT
-
-
-: ERROR ERROR-XT @ EXECUTE ;   \ for vectoring of error reporting
-
-
-: EMPTY-STACK	\ ( ... -- ) empty stack; handles underflowed stack too.
-    DEPTH START-DEPTH @ < IF
-        DEPTH START-DEPTH @ SWAP DO 0 LOOP
-    THEN
-    DEPTH START-DEPTH @ > IF
-        DEPTH START-DEPTH @ DO DROP LOOP
-    THEN
-;
-
 
 
 : SEEK-NEWLINE-BACK
@@ -238,6 +87,8 @@ VARIABLE ERROR-XT
   DEPTH START-DEPTH ! 0 XCURSOR !
 ;
 
+PAGE
+
 : ->		\ ( ... -- ) record depth and contents of stack.
    DEPTH DUP ACTUAL-DEPTH !		\ record depth
    START-DEPTH @ > IF		\ if there is something on the stack
@@ -268,9 +119,14 @@ VARIABLE ERROR-XT
     THEN THEN
 ;
 
+\ Bit shifts are not fast!
+: RSHIFT ?DUP IF 0 DO 2/ LOOP THEN ;
+: LSHIFT ?DUP IF 0 DO 2* LOOP THEN ;
 
 : { T{ ;
 : } }T ;
+PAGE
+
 
 { -> }					\ START WITH CLEAN SLATE
 ( TEST IF ANY BITS ARE SET; ANSWER IN BASE 1 )
@@ -357,7 +213,7 @@ T{ 1 2 3 4 2OVER -> 1 2 3 4 1 2 }T
 
 T{ 1 2 3 4 2SWAP -> 3 4 1 2 }T
 
-T{ : NOP : POSTPONE ; ; -> }T
+T{ : NOP : [POSTPONE] ; ; -> }T
 T{ NOP NOP1 NOP NOP2 -> }T
 T{ NOP1 -> }T
 T{ NOP2 -> }T
@@ -368,6 +224,7 @@ T{ GDX -> 123 234 }T
 T{  0 ?DUP ->  0    }T
 T{  1 ?DUP ->  1  1 }T
 
+PAGE
 T{ : GR1 >R R> ; -> }T
 T{ : GR2 >R R@ R> DROP ; -> }T
 T{ 123 GR1 -> 123 }T
@@ -437,66 +294,29 @@ T{        V1 @ -> 123 }T
 : GS3 WORD DROP COUNT SWAP C@ ;
 T{ GS3 HELLO -> 5 CHAR H }T
 
+PAGE
+
 : OUTPUT-TEST
-   PAGE
    ." YOU SHOULD SEE THE STANDARD GRAPHIC CHARACTERS:" CR
    65 BL DO I EMIT LOOP CR
    97 65 DO I EMIT LOOP CR
-   127 97 DO I EMIT LOOP CR
-   PAGE
+   127 97 DO I EMIT LOOP CRbr
+   PAUSE PAGE
    ." YOU SHOULD SEE 0-9 SEPARATED BY A SPACE:" CR
    9 1+ 0 DO I . LOOP CR
-   PAGE     
+   PAUSE PAGE     
    ." YOU SHOULD SEE 0-9 (WITH NO SPACES):" CR
    [ CHAR 9 ] LITERAL 1+ [ CHAR 0 ] LITERAL DO I EMIT LOOP CR
-   PAGE     
+   PAUSE PAGE     
    ." YOU SHOULD SEE A-G SEPARATED BY A SPACE:" CR
    [ CHAR G ] LITERAL 1+ [ CHAR A ] LITERAL DO I EMIT SPACE LOOP CR
-   PAGE     
+   PAUSE PAGE     
    ." YOU SHOULD SEE 0-5 SEPARATED BY TWO SPACES:" CR
    5 1+ 0 DO I [ CHAR 0 ] LITERAL + EMIT 2 SPACES LOOP CR
-   PAGE     
+   PAUSE PAGE     
    ." YOU SHOULD SEE TWO SEPARATE LINES:" CR
    S" LINE 1" TYPE CR S" LINE 2" TYPE CR
-   PAGE     
+   PAUSE PAGE     
 ;
 
-\ Optional output test, may dizzy the user.
-\ T{ OUTPUT-TEST -> }T
-
-T{ 1 2 3 SWAP -> 1 3 2 }T
-
-PAGE
-." End of tests." CR
-." End of phase 2." CR
-
-
-." Forgetting all words
-defined after T{ to
-save on space." CR
-USED
-
-FORGET T{
-
-USED - . ." bytes freed." CR
-
-." Press any key to
-continue..." CR PAUSE
-
-: STAGE2
-
-  \ Try to set RAM Memory region A to be the first RAM flash page.
-  2 SET-RAM-MEMA
-  IF
-    \ We set the input pointer to point to memory bank A.
-    MEMA INPUT-PTR ! PAGE
-  ELSE
-    \ Something went wrong.  Shutdown.
-    ." Couldn't load stage 3.  Shutting down." CR
-    PAUSE POWEROFF           
-  THEN
-;
-
-STAGE2
-
-\ Load the next bootstrap
+T{ OUTPUT-TEST -> }T
