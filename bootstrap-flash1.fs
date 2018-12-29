@@ -174,7 +174,7 @@ HEX HERE @ ." HERE is at " . CR DECIMAL
 ; ( RETURN TO THE CALLER'S CALLER ROUTINE )
 
 
-HERE @ 32 CELLS ALLOT NIP CONSTANT ACTUAL-RESULTS
+HERE @ 32 CELLS ALLOT CONSTANT ACTUAL-RESULTS
 
 VARIABLE ACTUAL-DEPTH			\ stack record
 
@@ -234,8 +234,17 @@ VARIABLE ERROR-XT
 
 ' ERROR1 ERROR-XT !
 
+VARIABLE TEST-COUNT
+0 TEST-COUNT !
+VARIABLE SUCCESS-TEST-COUNT
+0 SUCCESS-TEST-COUNT !
+: ADD-TEST TEST-COUNT @ 1+ TEST-COUNT ! ;
+: ADD-SUCCESS-TEST SUCCESS-TEST-COUNT @ 1+ SUCCESS-TEST-COUNT ! ;
+
+: REPORT-TESTS SUCCESS-TEST-COUNT @ . ." / " TEST-COUNT @ . ." tests passed" ;
+
 : T{		\ ( -- ) syntactic sugar.
-  DEPTH START-DEPTH ! 0 XCURSOR !
+   ADD-TEST DEPTH START-DEPTH ! 0 XCURSOR !
 ;
 
 : ->		\ ( ... -- ) record depth and contents of stack.
@@ -257,6 +266,7 @@ VARIABLE ERROR-XT
    ELSE					\ depth mismatch
       S" WRONG NUMBER OF RESULTS: " ERROR
    THEN
+   ADD-SUCCESS-TEST
 ;
 
 
@@ -368,6 +378,7 @@ T{ GDX -> 123 234 }T
 T{  0 ?DUP ->  0    }T
 T{  1 ?DUP ->  1  1 }T
 
+
 T{ : GR1 >R R> ; -> }T
 T{ : GR2 >R R@ R> DROP ; -> }T
 T{ 123 GR1 -> 123 }T
@@ -378,10 +389,12 @@ T{  1S GR1 ->  1S }T      ( Return stack holds cells )
 \ T{ ( A comment)1234 -> }T
 T{ : pc1 ( A comment)1234 ; pc1 -> 1234 }T
 
+
 HERE @ 1 ,
 HERE @ 2 ,
 CONSTANT 2ND
 CONSTANT 1ST
+
 
 T{       1ST 2ND < -> 1 }T \ HERE MUST GROW WITH ALLOT
 T{       1ST CELL+  -> 2ND }T \ ... BY ONE CELL
@@ -434,6 +447,7 @@ T{ VARIABLE V1 ->     }T
 T{    123 V1 ! ->     }T
 T{        V1 @ -> 123 }T
 
+
 : GS3 WORD DROP COUNT SWAP C@ ;
 T{ GS3 HELLO -> 5 CHAR H }T
 
@@ -466,17 +480,20 @@ T{ GS3 HELLO -> 5 CHAR H }T
 
 T{ 1 2 3 SWAP -> 1 3 2 }T
 
+
 PAGE
 ." End of tests." CR
 ." End of phase 2." CR
 
+REPORT-TESTS CR CR
+
 
 ." Forgetting all words
-defined after T{ to
-save on space." CR
+after ACTUAL-RESULTS
+to save on space." CR
 USED
 
-FORGET T{
+FORGET ACTUAL-RESULTS
 
 USED - . ." bytes freed." CR
 

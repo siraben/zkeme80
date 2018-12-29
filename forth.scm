@@ -1552,10 +1552,10 @@
     (dw (tick 0branch comma here @ lit 0 comma exit))
 
     ,@(defword "ALLOT" 0 'allot)
-    (dw (here @ swap here +! exit))
+    (dw (here +! exit))
     
     ,@(defword "VARIABLE" 0 'variable)
-    (dw (lit 2 allot word create docol-header tick lit comma comma))
+    (dw (here @ lit 2 allot word create docol-header tick lit comma comma))
     (dw (tick exit comma exit))
 
     ,@(defword "REPEAT" immediate 'repeat)

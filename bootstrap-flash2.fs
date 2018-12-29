@@ -1,26 +1,29 @@
-." Bootstrap stage 3 loaded"
-: WORDS
-  LATEST @
-  BEGIN
-    ?DUP
-  WHILE
-    DUP ?HIDDEN NOT IF
-      DUP ID.
-      SPACE
-      KEY PAGE 9 = IF EXIT THEN
+." Bootstrap stage 3 loaded" CR
+
+\ Non-standard for now.
+\ Display n defined words.
+
+: WORDS ( n -- )
+  LATEST @ SWAP 0 DO
+    ?DUP IF
+      DUP ?HIDDEN NOT IF
+        DUP ID. SPACE
+      THEN
+      @
+    ELSE
+      LEAVE
     THEN
-    @
-  REPEAT
-  CR
+  LOOP
+  DROP
 ;
-CR
-." Press any key to see
-the list of defined
-words and press to
-advance"
+
+." Here's last 10 defined
+words" CR
+
+10 WORDS
 
 PAUSE PAGE
-WORDS
+
 STATUS
 
 PAUSE 
