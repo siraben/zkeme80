@@ -47,7 +47,7 @@
     ,(lambda ()
        (format #t "End of smiley-os: 0x")
        (PRINT-PC)
-       (format #t "There are 0x~2,'0x bytes left for page 0.\n" (- #x4000 *pc*))
+       (format #t "There are ~a bytes left for page 0.\n" (- #x4000 *pc*))
        '())
     ;; Must be less than 0x4000.
 
@@ -71,7 +71,7 @@
     ,(lambda ()
        (format #t "Start of Forth data: 0x")
        (PRINT-PC)
-       (format #t "There are 0x~2,'0x bytes left for page 2.\n" (- #x8400 *pc*))
+       (format #t "There are ~a bytes left for page 2.\n" (- #x8400 *pc*))
        '())
 
 
@@ -138,10 +138,10 @@
     
     (dw ,(make-list 128 0))
     (label return-stack-start)
-    
-    ;; 2K bytes of free space.
+
+    ;; Free space until #xc000
     (label here-start)
-    (db ,(make-list 4096 0))
+
 
 
     ,(lambda ()
@@ -154,7 +154,7 @@
     ,(lambda ()
        (format #t "End of Forth data: 0x")
        (PRINT-PC)
-       (format #t "There are 0x~2,'0x bytes left for page 2.\n" (- #xc000 *pc*))
+       (format #t "There are ~a bytes left for page 3.\n" (- #x10000 *pc*))
        '())
     
 

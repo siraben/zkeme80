@@ -23,6 +23,7 @@ words" CR
 
 10 WORDS
 
+PAUSE PAGE
 STATUS
 
 ." End of stage 3."

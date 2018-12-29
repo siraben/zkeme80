@@ -3,6 +3,7 @@
 : SHUTDOWN PAUSE POWEROFF ;
 : PAGE CLEAR-SCREEN ORIGIN ;
 : USED HERE @ H0 - ;
+: UNUSED 49152 HERE @ - ;
 
 : (
   BEGIN
@@ -150,8 +151,8 @@ running, please wait...
 
 
 : STATUS
-DECIMAL USED . ." bytes have been
-used" CR
+DECIMAL UNUSED .
+." bytes available" CR
 HEX HERE @ ." HERE is at " . CR DECIMAL
 ." Stack has contents" CR
 .S
