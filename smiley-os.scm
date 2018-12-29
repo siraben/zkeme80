@@ -67,20 +67,20 @@
     (label bootstrap-flash2)
     ,@(include-file-as-bytes "bootstrap-flash2.fs")
 
-    
+
+    ,(lambda ()
+       (format #t "Start of Forth data: 0x")
+       (PRINT-PC)
+       (format #t "There are 0x~2,'0x bytes left for page 2.\n" (- #x8400 *pc*))
+       '())
+
+
+    ;; We start the Forth data here.
     ,(lambda ()
        (assemble-expr `(db ,(make-list
                              (- #x8402 *pc*)
                              #xff))))
 
-    
-    
-
-    ,(lambda ()
-       (format #t "Start of Forth data: 0x")
-       (PRINT-PC)
-       (format #t "There are 0x~2,'0x bytes left for page 1.\n" (- #xc000 *pc*))
-       '())
     
     ,@(apply append (map (lambda (x)
                            `((label ,(car x))
@@ -143,14 +143,21 @@
     (label here-start)
     (db ,(make-list 4096 0))
 
+
+    ,(lambda ()
+       (assemble-expr `(db ,(make-list
+                             (- #xc000 *pc*)
+                             #xff))))
+    
+    ,@(include-file-as-bytes "bootstrap-flash3.fs")
+
     ,(lambda ()
        (format #t "End of Forth data: 0x")
        (PRINT-PC)
        (format #t "There are 0x~2,'0x bytes left for page 2.\n" (- #xc000 *pc*))
        '())
+    
 
-
-    ,@(include-file-as-bytes "bootstrap-flash1.fs")
 
     ,(lambda ()
        (assemble-expr `(db ,(make-list

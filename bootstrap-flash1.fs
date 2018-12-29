@@ -4,6 +4,26 @@
 : PAGE CLEAR-SCREEN ORIGIN ;
 : USED HERE @ H0 - ;
 
+: (
+  BEGIN
+    GETC 41 = IF
+      EXIT
+    THEN
+  AGAIN
+; IMMEDIATE
+
+
+: NIP ( x y -- y ) SWAP DROP ;
+: TUCK ( x y -- y x y ) SWAP OVER ;
+
+: MOD /MOD DROP ;
+
+: MIN ( N N -- N : RETURN THE MINIMUM OF TWO INTEGERS )
+	2DUP < IF DROP ELSE NIP THEN  ;
+
+: MAX ( N N -- N : RETURN THE MAXIMUM OF TWO INTEGERS )
+2DUP > IF DROP ELSE NIP THEN ;
+
 : CELL+ 2+ ;
 
 : 2@  DUP CELL+ @ SWAP @ ;
@@ -25,14 +45,6 @@
     WORD FIND >CFA
   THEN
     
-; IMMEDIATE
-
-: (
-  BEGIN
-    GETC 41 = IF
-      EXIT
-    THEN
-  AGAIN
 ; IMMEDIATE
 
 : LITERAL
@@ -108,9 +120,6 @@ running, please wait...
 
 : CELLS 2 * ;
 
-: NIP ( x y -- y ) SWAP DROP ;
-: TUCK ( x y -- y x y ) SWAP OVER ;
-
 
 : CASE 
        0
@@ -154,12 +163,7 @@ HEX HERE @ ." HERE is at " . CR DECIMAL
 : RSHIFT ?DUP IF 0 DO 2/ LOOP THEN ;
 : LSHIFT ?DUP IF 0 DO 2* LOOP THEN ;
 
-
-
-
 : TYPE 0 DO DUP C@ EMIT 1+ LOOP DROP ;
-
-
 
 : UNLOOP    ( -- , R: I LIMIT -- : REMOVE LIMIT AND I FROM  )
 	R>           ( SAVE OUR RETURN ADDRESS )
@@ -488,6 +492,79 @@ PAGE
 REPORT-TESTS CR CR
 
 
+." Press any key to
+continue..." CR PAUSE
+
+PAGE
+
+." Performing RC4 test
+(code taken from
+Wikipedia)." CR
+
+." Expect this sequence:
+F1 38 29 C9 DE" CR
+
+: VALUE    WORD CREATE DOCOL-H ' LIT , , ' EXIT , ;
+
+: TO WORD FIND >DFA 2 + STATE @
+     IF
+       ' LIT ,
+       ,
+       ' ! ,
+     ELSE
+       !
+     THEN
+; IMMEDIATE
+
+0 VALUE II        0 VALUE JJ
+0 VALUE KEYADDR   0 VALUE KEYLEN
+
+HERE @ 256 CELLS ALLOT CONSTANT SARRAY
+: KEYARRAY      KEYLEN MOD  KEYADDR ;
+
+: GET-BYTE      + C@ ;
+: SET-BYTE      + C! ;
+: AS-BYTE       255 AND ;
+: RESET-IJ      0 TO II   0 TO JJ ;
+: I-UPDATE      1 +   AS-BYTE TO II ;
+: J-UPDATE      II SARRAY GET-BYTE + AS-BYTE TO JJ ;
+: SWAP-S-IJ
+    JJ SARRAY GET-BYTE
+       II SARRAY GET-BYTE  JJ SARRAY SET-BYTE
+    II SARRAY SET-BYTE
+;
+
+: RC4-INIT ( KEYADDR KEYLEN -- )
+    256 MIN TO KEYLEN   TO KEYADDR
+    256 0 DO   I I SARRAY SET-BYTE   LOOP
+    RESET-IJ
+    BEGIN
+        II KEYARRAY GET-BYTE   JJ +  J-UPDATE
+        SWAP-S-IJ
+        II 255 < WHILE
+        II I-UPDATE
+    REPEAT
+    RESET-IJ
+;
+: RC4-BYTE
+    II I-UPDATE   JJ J-UPDATE
+    SWAP-S-IJ
+    II SARRAY GET-BYTE   JJ SARRAY GET-BYTE +   AS-BYTE SARRAY GET-BYTE  XOR
+;
+
+
+HEX
+HERE @    97 C, 138 C, 99 C, 210 C, 251 C, CONSTANT MKEY
+: TEST   CR   0 DO  RC4-BYTE . LOOP  CR ;
+MKEY 5 RC4-INIT
+44 249 76 238 220 5 TEST
+
+DECIMAL
+PAUSE
+
+PAGE
+
+
 ." Forgetting all words
 after ACTUAL-RESULTS
 to save on space." CR
@@ -497,9 +574,7 @@ FORGET ACTUAL-RESULTS
 
 USED - . ." bytes freed." CR
 
-." Press any key to
-continue..." CR PAUSE
-
+PAUSE 
 : STAGE2
 
   \ Try to set RAM Memory region A to be the first RAM flash page.
@@ -513,6 +588,7 @@ continue..." CR PAUSE
     PAUSE POWEROFF           
   THEN
 ;
+
 
 STAGE2
 
