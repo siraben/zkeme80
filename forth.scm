@@ -681,8 +681,6 @@
     (db (#xdd))
     (ld l 0)
 
-
-
     ;; Drawing coordinates.
     (ld a (var-cur-col))
     (ld d a)
@@ -942,6 +940,7 @@
     ;; Expect u characters (or a newline, whichever comes first) and
     ;; store them at address addr.
     ;; Written in Forth because it's easier.
+    ;; Still somewhat buggy.
     ,@(defword "EXPECT" 0 'expect)
     ;; Store the address and count so we can do various checks.
     (dw (lit expect-count ! dup lit expect-ptr !))
