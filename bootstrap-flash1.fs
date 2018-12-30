@@ -53,12 +53,12 @@
   ,
 ; IMMEDIATE
 
-: POSTPONE
-  WORD FIND >CFA ,
-; IMMEDIATE
+: POSTPONE  WORD FIND >CFA , ; IMMEDIATE
 
 
 : CHAR WORD DROP C@ ;
+
+\ Doesn't work, why?
 
 : [CHAR] CHAR POSTPONE LITERAL ; IMMEDIATE
 
@@ -372,6 +372,15 @@ T{ 1 2 3 4 2OVER -> 1 2 3 4 1 2 }T
 
 T{ 1 2 3 4 2SWAP -> 3 4 1 2 }T
 
+T{ 1 2 3 ROT -> 2 3 1 }T
+
+T{ 2 3 1 -ROT -> 1 2 3 }T
+
+T{ 1 2 SWAP -> 2 1 }T
+
+T{ 1 2 OVER -> 1 2 1 }T
+
+
 T{ : NOP : POSTPONE ; ; -> }T
 T{ NOP NOP1 NOP NOP2 -> }T
 T{ NOP1 -> }T
@@ -482,8 +491,6 @@ T{ GS3 HELLO -> 5 CHAR H }T
 
 \ Optional output test, may dizzy the user.
 \ T{ OUTPUT-TEST -> }T
-
-T{ 1 2 3 SWAP -> 1 3 2 }T
 
 
 PAGE

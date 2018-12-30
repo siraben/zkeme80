@@ -205,12 +205,15 @@
     ,@next
 
     ,@(defcode "RDROP" 0 'rdrop)
-    ,@pop-hl-rs
+    (inc ix)
+    (inc ix)
     ,@next
 
     ,@(defcode "2RDROP" 0 '2rdrop)
-    ,@pop-hl-rs
-    ,@pop-hl-rs
+    (inc ix)
+    (inc ix)
+    (inc ix)
+    (inc ix)
     ,@next
 
     ,@(defcode "SP@" 0 'sp@)
@@ -234,24 +237,18 @@
     ,@next
 
     ,@(defcode "ROT" 0 'rot)
-    ,@push-de-rs
     (pop hl)
-    (pop de)
-    (push hl)
+    ((ex (sp) hl))
     (push bc)
-    ((ex de hl))
     ,@hl-to-bc
-    ,@pop-de-rs
     ,@next
 
     ,@(defcode "-ROT" 0 '-rot)
-    ,@push-de-rs
-    (pop hl)
-    (pop de)
-    (push bc)
-    (push de)
-    ,@hl-to-bc
-    ,@pop-de-rs
+    (ld h b)
+    (ld l c)
+    (pop bc)
+    ((ex (sp) hl))
+    (push hl)
     ,@next
 
     ,@(defcode "2DROP" 0 '2drop)
@@ -268,12 +265,13 @@
 
     ,@(defcode "2SWAP" 0 '2swap)
     ,@push-de-rs
-    (pop de)
     (pop hl)
-    ,@push-hl-rs
-    (pop hl)
-    ,@(push* '(de bc hl))
-    ,@pop-bc-rs
+    (ld d b)
+    (ld e c)
+    (pop bc)
+    ((ex (sp) hl))
+    (push de)
+    (push hl)
     ,@pop-de-rs
     ,@next
 
