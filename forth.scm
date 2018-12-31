@@ -264,7 +264,7 @@
     ,@next
 
     ,@(defcode "2SWAP" 0 '2swap)
-    ,@push-de-rs
+    (ld (var-temp-cell) de)
     (pop hl)
     (ld d b)
     (ld e c)
@@ -272,7 +272,7 @@
     ((ex (sp) hl))
     (push de)
     (push hl)
-    ,@pop-de-rs
+    (ld de (var-temp-cell))
     ,@next
 
     ;; T{ 1 2 3 4 2OVER -> 1 2 3 4 1 2 }T
@@ -495,28 +495,19 @@
     ,@hl-to-bc
     ,@next
     
-    ,@(defcode "+!" 2 '+!)
+    ,@(defcode "+!" 0 '+!)
     (pop hl)
-    (push de)
     (ld a (bc))
-    (ld e a)
-    (inc bc)
-    (ld a (bc))
-    (ld d a)
-    (dec bc)
-    (add hl de)
-    (ld a l)
+    (add a l)
     (ld (bc) a)
     (inc bc)
-    (ld a h)
+    (ld a (bc))
+    (adc a h)
     (ld (bc) a)
-    (inc bc)
-
-    (pop de)
     (pop bc)
     ,@next
 
-    ,@(defcode "-!" 2 '-!)
+    ,@(defcode "-!" 0 '-!)
     (pop hl)
     (push de)
     (ld a (bc))
@@ -1062,16 +1053,14 @@
 
 (define forth-semantics-words
   `(,@(defcode "LIT" 0 'lit)
-    (ld a (de))
-    (ld l a)
-    (inc de)
-    (ld a (de))
-    (ld h a)
-    (inc de)
     (push bc)
-    ,@hl-to-bc
+    (ld a (de))
+    (ld c a)
+    (inc de)
+    (ld a (de))
+    (ld b a)
+    (inc de)
     ,@next
-
     ,@(defcode "LITSTRING" 0 'litstring)
     (ld a (de))
     (ld l a)
@@ -1083,7 +1072,6 @@
     (push de)
     ,@hl-to-bc
     (add hl de)
-
     (inc hl)
     ((ex de hl))
     ,@next
@@ -1443,7 +1431,7 @@
 
     ,@(defword "QUIT" 0 'quit)
     (label try-more)
-    (dw (lit ok-msg plot-string cr))    
+    (dw (lit ok-msg plot-string cr))
     (dw (lbrac refill 0jump quit-eof))
     (dw (interpret))
     (dw (?dup 0= 0jump not-ok))
@@ -1732,11 +1720,11 @@
     ,@(defvar "CUR-COL" 'cur-col 0)
     ,@(defvar "CUR-ROW" 'cur-row 0)
     ,@(defvar "BASE" 'base 10)
+    ,@(defvar "TEMP-CELL" 'temp-cell 0)
     ;; Check if reading a number has failed, since we can't return -1.
     ,@(defvar "NUM-STATUS" 'num-status 0)
     ,@(defvar "S0" 's0 0)
     ,@(defvar "R0" 'r0 0)
-
     ,@(defword "H0" 0 'h0)
     (dw (lit here-start exit))
     ,@(defword "OS-END" 0 'os-end-const)

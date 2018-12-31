@@ -160,7 +160,7 @@
   '((bc . #b0) (de . #b1)))
 
 (define (assemble-ld-a-ireg16 reg)
-  (make-inst 14
+  (make-inst 7
              1
              `(,(make-opcode (lookup reg ld-iregs) 4 #b00001010))))
 

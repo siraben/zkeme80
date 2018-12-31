@@ -118,14 +118,11 @@ The test suite is
 running, please wait...
 "
 
-
 : CELLS 2 * ;
-
 
 : CASE 
        0
 ; IMMEDIATE
-
 
 : OF 
      ' OVER ,
@@ -133,7 +130,6 @@ running, please wait...
      POSTPONE IF
        ' DROP ,
 ; IMMEDIATE
-
 
 : ENDOF 
         POSTPONE ELSE
@@ -243,8 +239,8 @@ VARIABLE TEST-COUNT
 0 TEST-COUNT !
 VARIABLE SUCCESS-TEST-COUNT
 0 SUCCESS-TEST-COUNT !
-: ADD-TEST TEST-COUNT @ 1+ TEST-COUNT ! ;
-: ADD-SUCCESS-TEST SUCCESS-TEST-COUNT @ 1+ SUCCESS-TEST-COUNT ! ;
+: ADD-TEST 1 TEST-COUNT +! ;
+: ADD-SUCCESS-TEST 1 SUCCESS-TEST-COUNT +! ;
 
 : REPORT-TESTS SUCCESS-TEST-COUNT @ . ." / " TEST-COUNT @ . ." tests passed" ;
 
@@ -460,7 +456,8 @@ T{ 6 GI4 -> 6 7 }T
 T{ VARIABLE V1 ->     }T
 T{    123 V1 ! ->     }T
 T{        V1 @ -> 123 }T
-
+T{   111 V1 +! ->     }T
+T{        V1 @ -> 234 }T
 
 : GS3 WORD DROP COUNT SWAP C@ ;
 T{ GS3 HELLO -> 5 CHAR H }T
@@ -493,15 +490,20 @@ T{ GS3 HELLO -> 5 CHAR H }T
 \ T{ OUTPUT-TEST -> }T
 
 
-PAGE
 ." End of tests." CR
 ." End of phase 2." CR
 
+PAGE
+HEX
+SUCCESS-TEST-COUNT . CR
+DECIMAL
 REPORT-TESTS CR CR
 
-
+SUCCESS-TEST-COUNT @
 ." Press any key to
-continue..." CR PAUSE
+continue..." CR
+
+PAUSE DROP
 
 PAGE
 
