@@ -11,6 +11,7 @@
 
 ;; Immediate flag
 (define immediate 128)
+(define hidden 64)
 
 (define next
   `((jp next-sub)))
@@ -942,7 +943,9 @@
     (dw (lit expect-count @ not 0jump expect-more))
     (dw (exit))
     (label expect-more)
-    (dw (origin lit expect-ptr-initial @ plot-string))
+    (dw (clear-screen origin lit expect-ptr-initial @ plot-string))
+    (dw (lit 8 cur-row +! lit ,(char->integer #\^) emit))
+    (dw (lit 8 cur-row -!))
 
     ;; Draw a cursor
     ;; (dw (lit cursor lit 5 cur-col @ cur-row @ put-sprite-xor-forth plot))
@@ -1192,12 +1195,12 @@
 
     (label _comma)
     (push de)
-    (ld hl (var-here))
+    (ld hl (var-dp))
     (ld (hl) c)
     (inc hl)
     (ld (hl) b)
     (inc hl)
-    (ld de var-here)
+    (ld de var-dp)
     ((ex de hl))
     (ld (hl) e)
     (inc hl)
@@ -1212,10 +1215,10 @@
 
     (label _c-comma)
     (push de)
-    (ld hl (var-here))
+    (ld hl (var-dp))
     (ld (hl) c)
     (inc hl)
-    (ld de var-here)
+    (ld de var-dp)
     ((ex de hl))
     (ld (hl) e)
     (inc hl)
@@ -1264,10 +1267,9 @@
 
     ;; ( name length -- )
     ;; Parse a name and create a definition header for it.
-    ;; When name executes, 
     
-    ,@(defcode "CREATE" 0 'create)
-    (ld hl (var-here))
+    ,@(defcode "CREATE_" hidden 'create_)
+    (ld hl (var-dp))
     ,@push-de-rs
     (ld de (var-latest))
     (ld (hl) e)
@@ -1297,17 +1299,15 @@
     (ld (de) a)
     (inc de)
 
-    (ld hl var-here)
+    (ld hl var-dp)
     (ld (hl) e)
     (inc hl)
     (ld (hl) d)
     ,@pop-de-rs
     (pop bc)
-    ,@next
-
-    ,@(defcode "DOCOL-H" 0 'docol-header)
     (push de)
-    (ld de (var-here))
+    ;; Write the CALL DOCOL instruction.
+    (ld de (var-dp))
     (ld a #xcd)
     (ld (de) a)
     (inc de)
@@ -1319,12 +1319,15 @@
     (ld a h)
     (ld (de) a)
     (inc de)
-    (ld hl var-here)
+    (ld hl var-dp)
     (ld (hl) e)
     (inc hl)
     (ld (hl) d)
     (pop de)
     ,@next
+
+    ,@(defword "CREATE" 0 'create)
+    (dw (word create_ exit))
 
     ,@(defcode "HIDDEN" 0 'hidden)
     ,@bc-to-hl
@@ -1363,9 +1366,8 @@
     ,@next
 
     ,@(defword ":" 0 'colon)
-    (dw (word create docol-header))
-    (dw (latest @ hidden))
-    (dw (rbrac exit))
+    (dw (create latest @))
+    (dw (hidden rbrac exit))
 
     ,@(defword ";" immediate 'semicolon)
     (dw (lit exit comma))
@@ -1394,7 +1396,7 @@
 
     ,@(defcode "DOES>" immediate 'does>)
     (push de)
-    (ld de (var-here))
+    (ld de (var-dp))
     (ld hl does-brac)
     (ld a l)
     (ld (de) a)
@@ -1414,7 +1416,7 @@
     (ld (de) a)
     (inc de)
 
-    (ld hl var-here)
+    (ld hl var-dp)
     (ld (hl) e)
     (inc hl)
     (ld (hl) d)
@@ -1515,51 +1517,51 @@
 
 (define forth-control-words
   `(,@(defword "IF" immediate 'if)
-    (dw (tick 0branch comma here @ lit 0 comma exit))
+    (dw (tick 0branch comma here lit 0 comma exit))
 
     ,@(defword "THEN" immediate 'then)
-    (dw (dup here @ swap - swap ! exit))
+    (dw (dup here swap - swap ! exit))
 
     ,@(defword "ELSE" immediate 'else)
-    (dw (tick branch comma here @ lit 0 comma swap dup here))
-    (dw (@ swap - swap ! exit))
+    (dw (tick branch comma here lit 0 comma swap dup))
+    (dw (here swap - swap ! exit))
 
     ,@(defword "BEGIN" immediate 'begin)
-    (dw (here @ exit)) 
+    (dw (here exit))
 
     ,@(defword "UNTIL" immediate 'until)
-    (dw (tick 0branch comma here @ - comma exit))
+    (dw (tick 0branch comma here - comma exit))
 
     ,@(defword "AGAIN" immediate 'again)
-    (dw (tick branch comma here @ - comma exit)) 
+    (dw (tick branch comma here - comma exit)) 
 
     ,@(defword "WHILE" immediate 'while)
-    (dw (tick 0branch comma here @ lit 0 comma exit))
+    (dw (tick 0branch comma here lit 0 comma exit))
 
     ,@(defword "ALLOT" 0 'allot)
-    (dw (here +! exit))
+    (dw (dp +! exit))
     
     ,@(defword "VARIABLE" 0 'variable)
-    (dw (here @ lit 2 allot word create docol-header tick lit comma comma))
+    (dw (here lit 2 allot create tick lit comma comma))
     (dw (tick exit comma exit))
 
     ,@(defword "REPEAT" immediate 'repeat)
-    (dw (tick branch comma swap here @ - comma))
-    (dw (dup here @ swap - swap ! exit))
+    (dw (tick branch comma swap here - comma))
+    (dw (dup here swap - swap ! exit))
 
     ,@(defword "DO" immediate 'do)
-    (dw (here @ tick >r comma tick >r comma exit))
+    (dw (here tick >r comma tick >r comma exit))
 
     ,@(defword "LOOP" immediate 'loop)
     (dw (tick r> comma tick r> comma tick 1+ comma tick 2dup comma))
-    (dw (tick = comma tick 0branch comma here @ - comma tick 2drop comma exit))
+    (dw (tick = comma tick 0branch comma here - comma tick 2drop comma exit))
     ,@(defword "+LOOP" immediate '+loop)
     (dw (tick r> comma tick r> comma tick rot comma tick + comma))
-    (dw (tick 2dup comma tick = comma tick 0branch comma here @))
+    (dw (tick 2dup comma tick = comma tick 0branch comma here))
     (dw (- comma tick 2drop comma exit))
 
     ,@(defword "FORGET" 0 'forget)
-    (dw (word find dup @ latest ! here ! exit))
+    (dw (word find dup @ latest ! dp ! exit))
 
     ,@(defcode "I" 0 'curr-loop-index)
     (push bc)
@@ -1606,6 +1608,9 @@
     (dw (- lit 65 + emit exit))
 
     ,@(defword "U." 0 'u.)
+    (dw (u._ space exit))
+    
+    ,@(defword "." 0 '.)
     (dw (u._ space exit))
 
     ,@(defword "UWIDTH" 0 'uwidth)
@@ -1716,7 +1721,7 @@
   `(,@(defvar "STATE" 'state 0)
     ,@(defvar "LATEST" 'latest 0)
     ,@(defvar "SP0" 'sp0 0)
-    ,@(defvar "HERE" 'here 'here-start)
+    ,@(defvar "DP" 'dp 'dp-start)
     ,@(defvar "CUR-COL" 'cur-col 0)
     ,@(defvar "CUR-ROW" 'cur-row 0)
     ,@(defvar "BASE" 'base 10)
@@ -1726,7 +1731,7 @@
     ,@(defvar "S0" 's0 0)
     ,@(defvar "R0" 'r0 0)
     ,@(defword "H0" 0 'h0)
-    (dw (lit here-start exit))
+    (dw (lit dp-start exit))
     ,@(defword "OS-END" 0 'os-end-const)
     (dw (lit os-end exit))
 
@@ -1739,6 +1744,9 @@
     (dw (lit screen-buffer exit))
     ,@(defword "MEMA" 0 'mema)
     (dw (lit #x4000 exit))
+
+    ,@(defword "HERE" 0 'here)
+    (dw (dp @ exit))
     ))
 
 (define (make-char-lookup-table)
@@ -1775,9 +1783,14 @@
   (put-char! 26 #\Z)
   (put-char! 9 #\newline)
   (put-char! 2 #\backspace)
+  (put-char! 56 #\backspace)
   (put-char! 3 #\space)
   (put-char! 33 #\space)
-  (put-char! 40 #\@)
+  (put-char! 18 #\@)
+  (put-char! 25 #\.)
+  (put-char! 53 #\:)
+  (put-char! 52 #\;)
+
   ;; Add more characters as you need them.
   )
 
@@ -1804,7 +1817,7 @@
   `((label main)
     (dw (origin))
     (dw (lit last-forth-word latest !))
-    (dw (lit here-start here !))
+    (dw (lit dp-start dp !))
     (dw (lit 10 base !))
     (dw (lit 0 state !))
     ;; We set the stack pointer two lower because it's changed

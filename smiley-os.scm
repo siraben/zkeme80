@@ -139,7 +139,7 @@
     (dw ,(make-list 128 0))
     (label return-stack-start)
     ;; Free space until #xc000
-    (label here-start)
+    (label dp-start)
 
 
 
