@@ -1,8 +1,8 @@
 all:
-	rm -f forth.rom
-	echo '(begin (load "smiley-os.scm") (make-rom "forth.rom"))' | guile
-	tilem2 -r forth.rom
+	rm -f zkeme80.rom
+	echo '(begin (load "zkeme80.scm") (make-rom "zkeme80.rom"))' | guile
+	tilem2 -r zkeme80.rom
 
 build:
-	rm -f forth.rom
-	echo '(begin (load "smiley-os.scm") (make-rom "forth.rom"))' | guile
+	rm -f zkeme80.rom
+	echo '(begin (load "zkeme80.scm") (make-rom "zkeme80.rom"))' | guile

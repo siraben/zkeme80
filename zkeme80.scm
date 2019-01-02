@@ -21,7 +21,7 @@
     (db (#xaf #x00 #x00 #xed #x56 #xf3 #xd3 #x14 #xf1 #xe0 #xfb #xc9 #x00 #xff #xff #xff))))
 
 
-(define smiley-os
+(define zkeme80
   `(,(equ 'flash-executable-ram #x8000)
     ,(equ 'flash-executable-ram-size 100)
     ,(equ 'screen-buffer #x8100)
@@ -45,7 +45,7 @@
     
     (label os-end)
     ,(lambda ()
-       (format #t "End of smiley-os: 0x")
+       (format #t "End of zkeme80: 0x")
        (PRINT-PC)
        (format #t "There are ~a bytes left for page 0.\n" (- #x4000 *pc*))
        '())
@@ -175,8 +175,8 @@
     ))
 
 (define (make-rom filename)
-  (assemble-to-file smiley-os filename))
+  (assemble-to-file zkeme80 filename))
 
 (define (remake filename)
-  (load "smiley-os.scm")
+  (load "zkeme80.scm")
   (make-rom filename))
