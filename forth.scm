@@ -1176,7 +1176,7 @@
     (pop hl)
     (ret)
     
-    ;; Not standard compilant.
+    ;; Not standard compilant.  Doesn't conform to run-time behavior.
     ,@(defcode "'" 0 'tick)
     (ld a (de))
     (ld l a)
@@ -1234,8 +1234,6 @@
     (jp z fal)
     (jp tru)
 
-    ;; Yes, the standard says IMMEDIATE shouldn't be IMMEDIATE, but so
-    ;; what?
     ,@(defcode "IMMEDIATE" 0 'immed)
     (ld hl (var-latest))
     (inc hl)
@@ -1263,7 +1261,7 @@
     (dw (>cfa lit 3 + exit))
 
     ,@(defword "PICK" 0 'pick)
-    (dw (1+ lit 2 * sp@ + @ exit))
+    (dw (1+ 2* @ + @ exit))
 
     ;; ( name length -- )
     ;; Parse a name and create a definition header for it.

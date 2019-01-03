@@ -36,8 +36,7 @@
 
 : RECURSE LATEST @ >CFA , ; IMMEDIATE
 
-: ['] ' LIT , ;
-
+\ Let's make ' standard compliant.
 : '
   STATE @
   IF 
@@ -47,6 +46,10 @@
   THEN
     
 ; IMMEDIATE
+
+
+: ['] ' LIT , ;
+
 
 : LITERAL
   ' LIT ,
@@ -375,6 +378,16 @@ T{ 2 3 1 -ROT -> 1 2 3 }T
 T{ 1 2 SWAP -> 2 1 }T
 
 T{ 1 2 OVER -> 1 2 1 }T
+
+T{ : GD1 DO I LOOP ; -> }T
+T{          4        1 GD1 ->  1 2 3   }T
+
+T{ : GD5 123 SWAP 0 DO 
+     I 4 > IF DROP 234 LEAVE THEN 
+   LOOP ; -> }T
+T{ 1 GD5 -> 123 }T
+T{ 5 GD5 -> 123 }T
+T{ 6 GD5 -> 234 }T
 
 
 T{ : NOP : POSTPONE ; ; -> }T
