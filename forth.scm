@@ -558,7 +558,17 @@
     (ldir)
     ,@pop-de-rs
     (pop bc)
-    ,@next))
+    ,@next
+
+    ,@(defcode "CMOVE>" 0 'cmove>)
+    ,@push-de-rs
+    (pop de)
+    (pop hl)
+    (lddr)
+    ,@pop-de-rs
+    (pop bc)
+    ,@next
+    ))
 
 (define forth-graphics-words
   `(;; Draw a rectangle using OR

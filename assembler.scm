@@ -970,10 +970,13 @@
   )
 
 (define *pc* 0)
+
 (define *labels* 0)
+
 (define (reset-pc!)
   (set! *pc* 0))
 (define (reset-labels!)
+  
   (set! *labels* '()))
 
 (define (write-bytevector-to-file bv fn)
@@ -990,15 +993,6 @@
   (cond ((null? l) #t)
         ((p (car l)) (all-sat? p (cdr l)))
         (else #f)))
-
-(define (assemble-to-binary prog)
-  (map num->binary (flatten (assemble-prog prog))))
-
-(define (assemble-to-hex prog)
-  (map num->hex (flatten (assemble-prog prog))))
-
-(define (assemble-to-file prog filename)
-  (write-bytevector-to-file (u8-list->bytevector (flatten (assemble-prog prog))) filename))
 
 (define (pass1 exprs)
   ;; Check each instruction for correct syntax and produce code
@@ -1028,13 +1022,20 @@
                                macro-val
                                *pc*))
                 (begin (if (inst? macro-val)
+                           ;; This macro generated an instruction
+                           ;; record, so advance the program counter.
                            (advance-pc! (inst-length macro-val)))
+                       ;; Return a "tagged" result, where the original
+                       ;; expression is preserved.
                        (cons macro-val expr))))
 
           ;; Assemble a normal instruction.
           (let ((res (assemble-expr expr)))
             (if (inst? res)
-                (advance-pc! (inst-length res)))
+                (advance-pc! (inst-length res))
+                (error (format #f "Could not assemble expression: ~a\n" expr)))
+            ;; Return a "tagged" result, where the original expression
+            ;; is preserved, for debugging purposes.
             (cons res expr))))
     exprs)))
 
@@ -1050,13 +1051,16 @@
      (let ((res (gen-inst (car x))))
        (if verbose?
            (format #t "PC: ~a ~a\n" (num->hex *pc*) (cdr x)))
-       ;; Verbose
-       (cond 
+       (cond
+        ;; Check consistency of declared instruction length and actual
+        ;; length.
         ((not (= (inst-length (car x)) (length res)))
          (error (format #f "Instruction length declared does not match actual: Expected length ~a, got length ~a of expression ~a\n PC: ~a" (inst-length (car x)) (length res) res *pc*)))
+        ;; Check that everything is an 8-bit unsigned number.
         ((not (all-sat? 8-bit-imm? res))
          (error (format #f "Invalid byte at ~4'0x: ~a" *pc* res)))
         (else
+         ;; We're ok.
          res))))
    insts)
   )
@@ -1064,7 +1068,19 @@
 (define (assemble-prog prog)
   (pass2 (pass1 prog)))
 
-;; Take n elements from a list
+(define (assemble-to-binary prog)
+  (map num->binary (flatten (assemble-prog prog))))
+
+(define (assemble-to-hex prog)
+  (map num->hex (flatten (assemble-prog prog))))
+
+(define (assemble-to-file prog filename)
+  (write-bytevector-to-file
+   (u8-list->bytevector (flatten (assemble-prog prog)))
+   filename))
+
+
+;; Take n elements from a list.
 (define (take n list)
   (if (or (zero? n) (null? list))
       '()
