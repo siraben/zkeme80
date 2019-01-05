@@ -1032,8 +1032,7 @@
           ;; Assemble a normal instruction.
           (let ((res (assemble-expr expr)))
             (if (inst? res)
-                (advance-pc! (inst-length res))
-                (error (format #f "Could not assemble expression: ~a\n" expr)))
+                (advance-pc! (inst-length res)))
             ;; Return a "tagged" result, where the original expression
             ;; is preserved, for debugging purposes.
             (cons res expr))))
