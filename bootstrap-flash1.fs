@@ -48,9 +48,6 @@
 ; IMMEDIATE
 
 
-: ['] ' LIT , ;
-
-
 : LITERAL
   ' LIT ,
   ,
@@ -177,6 +174,32 @@ HEX HERE ." HERE is at " . CR DECIMAL
   RDROP
 ; ( RETURN TO THE CALLER'S CALLER ROUTINE )
 
+
+VARIABLE HANDLER
+
+0 HANDLER !
+
+: CATCH ( xt -- exception# | 0      \ return addr on stack )
+   SP@ >R	            ( xt )  \ save data stack pointer
+   HANDLER @ >R	      ( xt )        \ and previous handler
+   RP@ HANDLER !	     ( xt ) \ set current handler
+   EXECUTE	           ( )      \ execute returns if no THROW
+   R> HANDLER !	      ( )           \ restore previous handler
+   R> DROP	           ( )      \ discard saved stack ptr
+   0                 ( 0 )          \ normal completion
+;
+
+: THROW ( ??? exception# -- ??? exception# )
+    ?DUP IF	         ( exc# )         \ 0 THROW is no-op
+      HANDLER @ RP!   ( exc# )            \ restore prev return stack
+      R> HANDLER !	   ( exc# )       \ restore prev handler
+      R> SWAP >R	     ( saved-sp ) \ exc# on return stack
+      SP! DROP R>	    ( exc# )      \ restore stack
+                                          \ Return to the caller of CATCH because return
+                                          \ stack is restored to the state that existed
+                                          \ when CATCH began execution
+    THEN
+; 
 
 HERE 32 CELLS ALLOT CONSTANT ACTUAL-RESULTS
 
@@ -502,6 +525,23 @@ T{ GS3 HELLO -> 5 CHAR H }T
 \ Optional output test, may dizzy the user.
 \ T{ OUTPUT-TEST -> }T
 
+\ Test exceptions.
+: T1 9 ;
+: C1 1 2 3 ' T1 CATCH ;
+T{ C1 -> 1 2 3 9 0 }T    \ NO THROW EXECUTED
+
+: T2 8 0 THROW ;
+: C2 1 2 ' T2 CATCH ;
+T{ C2 -> 1 2 8 0 }T    \ 0 THROW DOES NOTHING
+
+: T3 7 8 9 99 THROW ;
+: C3 1 2 ' T3 CATCH ;
+T{ C3 -> 1 2 99 }T    \ RESTORES STACK TO CATCH DEPTH
+
+: T5 2DROP 2DROP 9999 THROW ;
+: C5 1 2 3 4 ' T5 CATCH           \ TEST DEPTH RESTORED CORRECTLY
+   DEPTH >R DROP 2DROP 2DROP R> ;    \ AFTER STACK HAS BEEN EMPTIED
+T{ C5 -> 5 }T
 
 ." End of tests." CR
 ." End of phase 2." CR
@@ -603,7 +643,10 @@ FORGET ACTUAL-RESULTS
 
 USED - . ." bytes freed." CR
 
-PAUSE 
+PAUSE
+
+
+    
 : STAGE2
 
   \ Try to set RAM Memory region A to be the first RAM flash page.

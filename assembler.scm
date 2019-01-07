@@ -1,5 +1,5 @@
 (use-modules (ice-9 match)
-             (ice-9 binary-ports)
+             (rnrs io ports)
              (rnrs bytevectors)
              (srfi srfi-9))
 

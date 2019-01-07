@@ -197,6 +197,7 @@
     ,@(defcode "RP!" 0 'rp!)
     (push bc)
     (pop ix)
+    (pop bc)
     ,@next
 
     ,@(defcode "RP@" 0 'rp@)
@@ -219,8 +220,8 @@
 
     ,@(defcode "SP@" 0 'sp@)
     (push bc)
-    (ld (var-sp0) sp)
-    (ld hl (var-sp0))
+    (ld hl 0)
+    (add hl sp)
     ,@hl-to-bc
     ,@next
 
