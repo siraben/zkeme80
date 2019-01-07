@@ -1,7 +1,5 @@
 ;; Forth portion of the operating system.
 
-(use-modules (ice-9 textual-ports))
-
 (define (include-file-as-bytes filename)
   (let* ((port (open-file filename "r"))
          (res (get-string-all port))
@@ -164,6 +162,16 @@
     ,@hl-to-bc
     ,@next
 
+    ,@(defcode "NIP" 0 'nip)
+    (pop hl)
+    ,@next
+
+    ,@(defcode "TUCK" 0 'tuck)
+    (pop hl)
+    (push bc)
+    (push hl)
+    ,@next
+
     ,@(defcode ">R" 0 '>r)
     ,@push-bc-rs
     (pop bc)
@@ -279,20 +287,20 @@
 
     ;; T{ 1 2 3 4 2OVER -> 1 2 3 4 1 2 }T
     ,@(defcode "2OVER" 0 '2over)
-    ,@push-de-rs;;  ( DE: ? HL : ? BC: 4 ) ( de )
-    (pop hl) ;;     ( DE: ? HL : 3 BC: 4 ) ( de )
-    (pop de) ;;     ( DE: 2 HL : 3 BC: 4 ) ( de )
+    ,@push-de-rs ;; ( DE: ? HL : ? BC: 4 ) ( de )
+    (pop hl)     ;; ( DE: ? HL : 3 BC: 4 ) ( de )
+    (pop de)     ;; ( DE: 2 HL : 3 BC: 4 ) ( de )
     ,@push-bc-rs ;; ( DE: 2 HL : 3 BC: 4 ) ( de 4 )
-    (pop bc) ;;     ( DE: 2 HL : 3 BC: 1 ) ( de 4 )
+    (pop bc)     ;; ( DE: 2 HL : 3 BC: 1 ) ( de 4 )
     (push bc)
     (push de)
     (push hl)
-    ,@pop-hl-rs;;   ( DE: 2 HL : 4 BC: 1 ) ( de )
+    ,@pop-hl-rs  ;; ( DE: 2 HL : 4 BC: 1 ) ( de )
     (push hl)
     (push bc)
     (ld b d)
-    (ld c e)  ;;    ( DE: 2 HL : 4 BC: 2 ) ( de )
-    ,@pop-de-rs;;   ( DE: ? HL : 4 BC: 2 ) (    )
+    (ld c e)     ;; ( DE: 2 HL : 4 BC: 2 ) ( de )
+    ,@pop-de-rs  ;; ( DE: ? HL : 4 BC: 2 ) (    )
     
     ,@next
     
@@ -348,6 +356,14 @@
     (rl c)
     (rl b)
     ,@next
+
+    ;; Aliased for speed.
+    ,@(defcode "CELLS" 0 'cells)
+    (xor a)
+    (rl c)
+    (rl b)
+    ,@next
+
     
     ,@(defcode "2/" 0 '>>)    
     (srl b)
@@ -397,9 +413,12 @@
     (push hl)
     ,@pop-de-rs
     ,@next
+
+    ,@(defword "MOD" 0 'mod)
+    (dw (/mod drop exit))
     
     ,@(defword "/" 0 '/)
-    (dw (/mod swap drop exit))
+    (dw (/mod nip exit))
     
     ,@(defcode "1+" 0 '1+)
     (inc bc)
@@ -496,6 +515,9 @@
     (ld h a)
     ,@hl-to-bc
     ,@next
+
+    ,@(defword "?" 0 '?)
+    (dw (@ u. exit))
     
     ,@(defcode "+!" 0 '+!)
     (pop hl)
@@ -993,19 +1015,19 @@
     ,@(defword "REFILL" 0 'refill)
     (dw (lit current-input-device @ execute))
     (dw (0jump refill-fail))
-    ;; (dw (lit input-buffer lit input-ptr ! ))
+    ;; (dw (lit input-buffer lit var-input-ptr ! ))
     (dw (true exit))
     (label refill-fail)
     (dw (false exit))
 
     ;; Get the next character from the input source.
     ,@(defword "GETC" 0 'getc)
-    (dw (lit input-ptr @ c@))
-    (dw (lit 1 lit input-ptr +!))
+    (dw (lit var-input-ptr @ c@))
+    (dw (lit 1 lit var-input-ptr +!))
     (dw (exit))
 
     ,@(defword "UNGETC" 0 'ungetc)
-    (dw (lit 1 lit input-ptr -!))
+    (dw (lit 1 lit var-input-ptr -!))
     (dw (exit))    
     
     ;; Parse the next word.
@@ -1075,6 +1097,7 @@
     (ld b a)
     (inc de)
     ,@next
+    
     ,@(defcode "LITSTRING" 0 'litstring)
     (ld a (de))
     (ld l a)
@@ -1089,6 +1112,18 @@
     (inc hl)
     ((ex de hl))
     ,@next
+
+    ;; ,@(defword "S\"" immediate 's-quote)
+    ;; (dw (state @ 0branch 66 tick litstring comma here lit 0 comma))
+    ;; (dw (getc dup lit 34 <> 0branch 8 c-comma branch 65518 drop))
+    ;; (dw (lit 0 c-comma dup here swap - lit 3 - swap ! branch 38))
+    ;; (dw (here getc dup 34 <> 0branch 12 over c! 1+ branch 65514))
+    ;; (dw (drop here - here swap exit))
+    
+    ;; ,@(defword ".\"" immediate dot-quote)
+    ;; (dw (state @ 0branch 30 getc dup lit 34 =))
+    ;; (dw (0branch 6 drop exit emit branch ,(- 65536 22)))
+    ;; (dw (branch 10 s-quote tick tell comma exit))
     
     ,@(defcode "EXIT" 0 'exit)
     ,@pop-de-rs
@@ -1100,6 +1135,14 @@
     (jp (hl))
     ,@next
 
+    ,@(defword "CATCH" 0 'catch)
+    (dw (sp@ >r handler @ >r rp@ handler ! execute r> handler ! r> drop))
+    (dw (lit 0 exit))
+
+    ,@(defword "THROW" 0 'throw)
+    (dw (?dup 0branch 26 handler @ rp! r> handler ! r> swap >r sp! drop))
+    (dw (r> exit))
+    
     ;; Find a word.
     ;; ( addr -- xt | 0 )
     ;; Going off standard.  We're returning 0 for a word that is not
@@ -1271,8 +1314,13 @@
     ,@(defword ">DFA" 0 '>dfa)
     (dw (>cfa lit 3 + exit))
 
+    ,@(defword "CFA>" 0 'cfa>)
+    (dw (latest @ ?dup 0branch 22 2dup swap))
+    (dw (< 0branch 6 nip exit @ branch ,(- 65536 24) drop))
+    (dw (lit 0 exit))
+
     ,@(defword "PICK" 0 'pick)
-    (dw (1+ 2* @ + @ exit))
+    (dw (1+ 2* sp@ + @ exit))
 
     ;; ( name length -- )
     ;; Parse a name and create a definition header for it.
@@ -1480,7 +1528,7 @@
     (dw (u. lit abort-msg2 plot-string cr lit abort-msg3 plot-string))
     (dw (lit word-buffer plot-string lit abort-msg4 plot-string cr))
     (dw (lit abort-msg5 plot-string cr))
-    (dw (lit input-ptr @ lit 24 type))
+    (dw (lit var-input-ptr @ lit 24 type))
     (dw (pause poweroff))
 
     ,@(defword "INTERPRET" 0 'interpret)
@@ -1564,10 +1612,23 @@
     ,@(defword "LOOP" immediate 'loop)
     (dw (tick r> comma tick r> comma tick 1+ comma tick 2dup comma))
     (dw (tick = comma tick 0branch comma here - comma tick 2drop comma exit))
+    
     ,@(defword "+LOOP" immediate '+loop)
     (dw (tick r> comma tick r> comma tick rot comma tick + comma))
     (dw (tick 2dup comma tick = comma tick 0branch comma here))
     (dw (- comma tick 2drop comma exit))
+
+    ,@(defword "CASE" immediate 'case)
+    (dw (lit 0 exit))
+
+    ,@(defword "OF" immediate 'of)
+    (dw (tick over comma tick = comma if tick drop comma exit))
+
+    ,@(defword "ENDOF" immediate 'endof)
+    (dw (else exit))
+
+    ,@(defword "ENDCASE" immediate 'endcase)
+    (dw (tick drop comma ?dup 0branch 8 then branch ,(- 65536 10) exit))
 
     ,@(defword "FORGET" 0 'forget)
     (dw (word find dup @ latest ! dp ! exit))
@@ -1637,12 +1698,12 @@
     (dw (swap dup uwidth rot swap - spaces u._ exit))
 
     ,@(defword "DEPTH" 0 'depth)
-    (dw (s0 @ sp@ - 2- >> exit))
+    (dw (sp0 @ sp@ - 2- >> exit))
 
     ,@(defword ".S" 0 '.s)
     (dw (lit ,(char->integer #\<) emit depth u._))
     (dw (lit ,(char->integer #\>) emit space))
-    (dw (sp@ dup s0 @ < 0branch 18 dup @))
+    (dw (sp@ dup sp0 @ < 0branch 18 dup @))
     (dw (u. lit 2 + branch 65510 drop exit))
 
     ,@(defword "HEX" 0 'hex)
@@ -1724,12 +1785,22 @@
     (pop hl)
     (pop af)
     ,@next
+
+    ,@(defword "SHUTDOWN" 0 'shutdown-forth)
+    (dw (pause poweroff exit))
+    
     ))
+
+(define (defconst name label val)
+  `(,@(defcode name 0 label)
+    (push bc)
+    (ld bc ,val)
+    ,@next)
+  )
 
 (define forth-vars
   `(,@(defvar "STATE" 'state 0)
     ,@(defvar "LATEST" 'latest 0)
-    ,@(defvar "SP0" 'sp0 0)
     ,@(defvar "DP" 'dp 'dp-start)
     ,@(defvar "CUR-COL" 'cur-col 0)
     ,@(defvar "CUR-ROW" 'cur-row 0)
@@ -1737,25 +1808,17 @@
     ,@(defvar "TEMP-CELL" 'temp-cell 0)
     ;; Check if reading a number has failed, since we can't return -1.
     ,@(defvar "NUM-STATUS" 'num-status 0)
-    ,@(defvar "S0" 's0 0)
+    ,@(defvar "SP0" 'sp0 0)
     ,@(defvar "R0" 'r0 0)
-    ,@(defword "H0" 0 'h0)
-    (dw (lit dp-start exit))
-    ,@(defword "OS-END" 0 'os-end-const)
-    (dw (lit os-end exit))
+    ,@(defvar "INPUT-PTR" 'input-ptr 0)
+    ,@(defvar "HANDLER" 'handler 0)
 
-    ;; TODO: Write defconst.
-    ,@(defword "WORD-BUF" 0 'word-buf)
-    (dw (lit word-buffer exit))
-    ,@(defword "INPUT-PTR" 0 'input-ptr-forth)
-    (dw (lit input-ptr exit))
-    ,@(defword "SCREEN-BUF" 0 'screen-buffer-forth)
-    (dw (lit screen-buffer exit))
-    ,@(defword "MEMA" 0 'mema)
-    (dw (lit #x4000 exit))
-
-    ,@(defword "HERE" 0 'here)
-    (dw (dp @ exit))
+    ,@(defconst "H0" 'h0 'dp-start)
+    ,@(defconst "OS-END" 'os-end-forth 'os-end)
+    ,@(defconst "SCREEN-BUF" 'screen-buf 'screen-buffer)
+    ,@(defconst "WORD-BUF" 'word-buf 'word-buffer)
+    ,@(defconst "MEMA" 'mema #x4000)
+    ,@(defconst "HERE" 'here '(var-dp))
     ))
 
 (define (make-char-lookup-table)
@@ -1811,7 +1874,7 @@
   `(;; Example of an input device.
     (label string-input-device)
     (call docol)
-    (dw (lit bootstrap-fs lit input-ptr !))
+    (dw (lit bootstrap-fs lit var-input-ptr !))
     (dw (lit 1 lit bootstrap-load-bool +! lit bootstrap-load-bool @))
     (dw (exit))
 
@@ -1831,14 +1894,13 @@
     (dw (lit 0 state !))
     ;; We set the stack pointer two lower because it's changed
     ;; slightly since when we did (ld sp 65532)
-    (dw (lit 65530 s0 !))
+    ;; TODO: Fix pre-assigned variable values.
+    (dw (lit 65530 sp0 !))
     (dw (lit return-stack-start r0 !))
     (dw (lit string-input-device lit current-input-device !))
-    
     (dw (quit))
 
     (dw (poweroff))
-    
 
     ))
 

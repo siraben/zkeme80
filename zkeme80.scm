@@ -105,8 +105,6 @@
     ;; Transient input buffer.
     (label input-buffer)
     (db ,(make-list 128 0))
-    (label input-ptr)
-    (dw (0))
 
     ;; Transient word buffer.
     (label word-buffer)

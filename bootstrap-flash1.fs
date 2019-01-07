@@ -1,29 +1,23 @@
 \ This file should run a bunch of tests before loading the next stage.
+
 : TELL DROP PLOT-STRING ;
-: SHUTDOWN PAUSE POWEROFF ;
 : PAGE CLEAR-SCREEN ORIGIN ;
 : USED HERE H0 - ;
 : UNUSED 49152 HERE - ;
 
 : (
   BEGIN
-    GETC 41 = IF
+    GETC 41 = IF \ test for )
       EXIT
     THEN
   AGAIN
 ; IMMEDIATE
 
-
-: NIP ( x y -- y ) SWAP DROP ;
-: TUCK ( x y -- y x y ) SWAP OVER ;
-
-: MOD /MOD DROP ;
-
 : MIN ( N N -- N : RETURN THE MINIMUM OF TWO INTEGERS )
-	2DUP < IF DROP ELSE NIP THEN  ;
+  2DUP < IF DROP ELSE NIP THEN  ;
 
 : MAX ( N N -- N : RETURN THE MAXIMUM OF TWO INTEGERS )
-2DUP > IF DROP ELSE NIP THEN ;
+  2DUP > IF DROP ELSE NIP THEN ;
 
 : CELL+ 2+ ;
 
@@ -44,7 +38,7 @@
   ELSE
     WORD FIND >CFA
   THEN
-    
+  
 ; IMMEDIATE
 
 
@@ -53,8 +47,7 @@
   ,
 ; IMMEDIATE
 
-: POSTPONE  WORD FIND >CFA , ; IMMEDIATE
-
+: POSTPONE WORD FIND >CFA , ; IMMEDIATE
 
 : CHAR WORD DROP C@ ;
 
@@ -111,40 +104,12 @@ system.
 
 "
 16384 OS-END - .
-     ." bytes remaining on
+." bytes remaining on
 page 00.
 
 The test suite is
 running, please wait...
 "
-
-: CELLS 2 * ;
-
-: CASE 
-       0
-; IMMEDIATE
-
-: OF 
-     ' OVER ,
-     ' = ,
-     POSTPONE IF
-       ' DROP ,
-; IMMEDIATE
-
-: ENDOF 
-        POSTPONE ELSE
-; IMMEDIATE
-
-
-: ENDCASE 
-          ' DROP ,
-          BEGIN
-            ?DUP
-          WHILE
-            POSTPONE THEN
-          REPEAT
-; IMMEDIATE
-
 
 : STATUS
 DECIMAL UNUSED .
@@ -162,44 +127,55 @@ HEX HERE ." HERE is at " . CR DECIMAL
 
 : TYPE 0 DO DUP C@ EMIT 1+ LOOP DROP ;
 
-: UNLOOP    ( -- , R: I LIMIT -- : REMOVE LIMIT AND I FROM  )
-	R>           ( SAVE OUR RETURN ADDRESS )
-	RDROP        ( POP OFF I )
-	RDROP        ( POP OFF LIMIT )
+: UNLOOP    ( -- , r: i limit -- : remove limit and i from  )
+	R>           ( save our return address )
+	RDROP        ( pop off i )
+	RDROP        ( pop off limit )
         >R
 ;
 
-: LEAVE ( -- , R: I LIMIT RETURN -- : BREAK OUT OF A DO-LOOP CONSTRUCT )
+\ This is not correct.  It should break out to the words following the
+\ DO ... LOOP construct, rather than existing the currently running
+\ word entirely.
+
+: LEAVE ( -- , r: i limit return -- : break out of a do-loop construct )
   UNLOOP
   RDROP
-; ( RETURN TO THE CALLER'S CALLER ROUTINE )
+; ( return to the caller's caller routine )
 
 
-VARIABLE HANDLER
-
-0 HANDLER !
-
-: CATCH ( xt -- exception# | 0      \ return addr on stack )
-   SP@ >R	            ( xt )  \ save data stack pointer
-   HANDLER @ >R	      ( xt )        \ and previous handler
-   RP@ HANDLER !	     ( xt ) \ set current handler
-   EXECUTE	           ( )      \ execute returns if no THROW
-   R> HANDLER !	      ( )           \ restore previous handler
-   R> DROP	           ( )      \ discard saved stack ptr
-   0                 ( 0 )          \ normal completion
+: BEGIN-STRUCTURE  \ -- addr 0 ; -- size
+   CREATE
+     HERE 0 0 ,      \ mark stack, lay dummy
+   DOES> @             \ -- rec-len
 ;
 
-: THROW ( ??? exception# -- ??? exception# )
-    ?DUP IF	         ( exc# )         \ 0 THROW is no-op
-      HANDLER @ RP!   ( exc# )            \ restore prev return stack
-      R> HANDLER !	   ( exc# )       \ restore prev handler
-      R> SWAP >R	     ( saved-sp ) \ exc# on return stack
-      SP! DROP R>	    ( exc# )      \ restore stack
-                                          \ Return to the caller of CATCH because return
-                                          \ stack is restored to the state that existed
-                                          \ when CATCH began execution
-    THEN
-; 
+: +FIELD  \ n <"name"> -- ; Exec: addr -- 'addr
+   CREATE OVER , +
+   DOES> @ +
+;
+ 
+: FIELD:    ( n1 "name" -- n2 ; addr1 -- addr2 )
+  1 CELLS +FIELD
+;
+
+: END-STRUCTURE  \ addr n --
+  SWAP !
+;          \ set len
+
+: VALUE  CREATE  ' LIT , , ' EXIT , ;
+
+: TO WORD FIND >DFA 2 + STATE @
+     IF
+       ' LIT ,
+       ,
+       ' ! ,
+     ELSE
+       !
+     THEN
+; IMMEDIATE
+
+\ END OF BOOTSTRAP DEFINITIONS
 
 HERE 32 CELLS ALLOT CONSTANT ACTUAL-RESULTS
 
@@ -402,6 +378,9 @@ T{ 1 2 SWAP -> 2 1 }T
 
 T{ 1 2 OVER -> 1 2 1 }T
 
+T{ 1 2 0 PICK -> 1 2 DUP }T
+T{ 1 2 1 PICK -> 1 2 OVER }T
+
 T{ : GD1 DO I LOOP ; -> }T
 T{          4        1 GD1 ->  1 2 3   }T
 
@@ -454,6 +433,20 @@ T{           1ST 2@ -> 6 5 }T
 T{       2 1 1ST 2! ->     }T
 T{           1ST 2@ -> 2 1 }T
 T{ 1S 1ST !  1ST @  -> 1S  }T    \ CAN STORE CELL-WIDE VALUE
+
+
+BEGIN-STRUCTURE POINT \ -- a-addr 0 ; -- lenp
+   FIELD: P.X             \ -- a-addr cell
+   FIELD: P.Y             \ -- a-addr cell*2
+END-STRUCTURE
+
+HERE POINT ALLOT CONSTANT MY-POINT
+
+T{ 3 MY-POINT P.X ! -> }T
+T{ 5 MY-POINT P.Y ! -> }T
+
+T{ MY-POINT P.X @ -> 3 }T
+T{ MY-POINT P.Y @ -> 5 }T
 
 HERE 1 ALLOT
 HERE
@@ -552,14 +545,11 @@ SUCCESS-TEST-COUNT . CR
 DECIMAL
 REPORT-TESTS CR CR
 
-SUCCESS-TEST-COUNT @
-
 : PRESS-TO-CONTINUE
 ." Press any key to
 continue..." PAUSE CR ;
 
 PRESS-TO-CONTINUE
-DROP
 
 PAGE
 
@@ -570,17 +560,6 @@ Wikipedia)." CR
 ." Expect this sequence:
 F1 38 29 C9 DE" CR
 
-: VALUE  CREATE  ' LIT , , ' EXIT , ;
-
-: TO WORD FIND >DFA 2 + STATE @
-     IF
-       ' LIT ,
-       ,
-       ' ! ,
-     ELSE
-       !
-     THEN
-; IMMEDIATE
 
 0 VALUE II        0 VALUE JJ
 0 VALUE KEYADDR   0 VALUE KEYLEN
