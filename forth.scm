@@ -287,13 +287,18 @@
 
     ;; T{ 1 2 3 4 2OVER -> 1 2 3 4 1 2 }T
     ,@(defcode "2OVER" 0 '2over)
+    (push bc)
+    (pop bc)
     (pop hl)
     (pop bc)
     (pop hl)
+      
     (push hl)
     (push bc)
     (dec sp)
     (dec sp)
+    (dec sp)
+    (dec sp)  
     (push hl)
     ,@next
     
@@ -373,15 +378,15 @@
     ,@next
 
     ,@(defcode "*" 0 '*)
-    ,@push-de-rs
+    (ld (var-temp-cell) de)
     (pop de)
     (call mul-16-by-16)
     ,@hl-to-bc
-    ,@pop-de-rs
+    (ld de (var-temp-cell))
     ,@next
     
     ,@(defcode "/MOD" 0 '/mod)
-    ,@push-de-rs
+    (ld (var-temp-cell) de)
     (ld d b)
     (ld e c)
     (pop bc)
@@ -404,7 +409,7 @@
     (djnz div-ac-de-loop)
     (ld b a)
     (push hl)
-    ,@pop-de-rs
+    (ld de (var-temp-cell))
     ,@next
 
     ,@(defword "MOD" 0 'mod)
@@ -568,20 +573,20 @@
     ,@next
 
     ,@(defcode "CMOVE" 0 'cmove)
-    ,@push-de-rs
+    (ld (var-temp-cell) de)
     (pop de)
     (pop hl)
     (ldir)
-    ,@pop-de-rs
+    (ld de (var-temp-cell))
     (pop bc)
     ,@next
 
     ,@(defcode "CMOVE>" 0 'cmove>)
-    ,@push-de-rs
+    (ld (var-temp-cell) de)
     (pop de)
     (pop hl)
     (lddr)
-    ,@pop-de-rs
+    (ld de (var-temp-cell))
     (pop bc)
     ,@next
     ))
@@ -594,11 +599,11 @@
     (pop hl)
     (ld c l)
     (pop hl)
-    ,@push-de-rs
+    (ld (var-temp-cell) de)
     (pop de)
     (ld iy screen-buffer)
     (call rect-or)
-    ,@pop-de-rs
+    (ld de (var-temp-cell))
     (pop bc)
     ,@next
 
@@ -609,12 +614,12 @@
     (pop hl)
     (ld c l)
     (pop hl)
-    ,@push-de-rs
+    (ld (var-temp-cell) de)
     (pop de)
     (ld iy screen-buffer)
     (call rect-xor)
     (call fast-copy)
-    ,@pop-de-rs
+    (ld de (var-temp-cell))
     (pop bc)
     ,@next
 
@@ -628,7 +633,7 @@
     ;; ( sprite_addr height x y -- )
     ,@(defcode "PUT-SPRITE-OR" 0 'put-sprite-or-forth)
     (ld iy screen-buffer)
-    ,@push-de-rs
+    (ld (var-temp-cell) de)
     (ld e c)
     (pop bc)
     (ld d c)
@@ -637,12 +642,12 @@
     (pop hl)
     (call put-sprite-or)
     (pop bc)
-    ,@pop-de-rs
+    (ld de (var-temp-cell))
     ,@next
 
     ,@(defcode "PUT-SPRITE-AND" 0 'put-sprite-and-forth)
     (ld iy screen-buffer)
-    ,@push-de-rs
+    (ld (var-temp-cell) de)
     (ld e c)
     (pop bc)
     (ld d c)
@@ -651,13 +656,13 @@
     (pop hl)
     (call put-sprite-and)
     (pop bc)
-    ,@pop-de-rs
+    (ld de (var-temp-cell))
     ,@next
 
 
     ,@(defcode "PUT-SPRITE-XOR" 0 'put-sprite-xor-forth)
     (ld iy screen-buffer)
-    ,@push-de-rs
+    (ld (var-temp-cell) de)
     (ld e c)
     (pop bc)
     (ld d c)
@@ -666,7 +671,7 @@
     (pop hl)
     (call put-sprite-and)
     (pop bc)
-    ,@pop-de-rs
+    (ld de (var-temp-cell))
     ,@next
 
     ;; Draw a region of memory to the screen.
@@ -709,9 +714,8 @@
     ;; Character to print.
     (ld a c)
     ;; Bounding box limits.
-    (ld b 98)
-    (ld c 64)
-
+    (ld bc 25152)
+    
     (call wrap-char-shared)
     (call fast-copy)
     (ld a d)
@@ -751,23 +755,22 @@
     ;; Draw a string to the screen
     ;; ( str_addr -- )
     ,@(defcode "PLOT-STRING" 0 'plot-string)
-    ,@push-de-rs
+    (ld (var-temp-cell) de)
     (ld a (var-cur-col))
     (ld d a)
     (ld a (var-cur-row))
     (ld e a)
     ,@bc-to-hl
     (ld iy screen-buffer)
-    (ld b 98)
-    (ld c 64)
-    (ld a 0)
+    (ld bc 25152)
+    (xor a)
     (call wrap-str)
     (call fast-copy)
     (ld a d)
     (ld (var-cur-col) a)
     (ld a e)
     (ld (var-cur-row) a)
-    ,@pop-de-rs
+    (ld de (var-temp-cell))
     (pop bc)
     ,@next
 
@@ -799,14 +802,14 @@
     ,@next
 
     ,@(defcode "0JUMP" 0 '0jump)
-    (ld a c)
-    (cp 0)
+    (xor a)
+    (cp c)
     (jp z zjump-maybe)
     (jp nz zjump-fail)
     
     (label zjump-maybe)
-    (ld a b)
-    (cp 0)
+    (xor a)
+    (cp b)
     (jp nz zjump-fail)
     (pop bc)
     (jp jump)
@@ -829,14 +832,14 @@
     ,@next
 
     ,@(defcode "0BRANCH" 0 '0branch)
-    (ld a c)
-    (cp 0)
+    (xor a)
+    (cp c)
     (jp z zbranch-maybe)
     (jp nz zbranch-fail)
     
     (label zbranch-maybe)
-    (ld a b)
-    (cp 0)
+    (xor a)
+    (cp b)
     (jp nz zbranch-fail)
     (pop bc)
     (jp branch)
@@ -914,29 +917,27 @@
 
     ;; Read a key as an ASCII character.
     ,@(defcode "AKEY" 0 'akey)
-    ,@push-de-rs
+    (ld (var-temp-cell) de)
     (call flush-keys)
     (call wait-key)
     (ld h 0)
     (ld l a)
     (ld de char-lookup-table)
-    (add hl de)
-    (ld a (hl))
     (push bc)
-    (ld b 0)
-    (ld c a)
-    ,@pop-de-rs
+    (ld b h)
+    (add hl de)
+    (ld c (hl))
+    (ld de (var-temp-cell))
     ,@next
 
     ,@(defcode "TO-ASCII" 0 'to-ascii)
     (push de)
     (ld h 0)
     (ld l c)
+    (ld b h) 
     (ld de char-lookup-table)
     (add hl de)
-    (ld a (hl))
-    (ld c a)
-    (ld b 0)
+    (ld c (hl))
     (pop de)
     ,@next
 
@@ -1320,7 +1321,7 @@
     
     ,@(defcode "CREATE_" hidden 'create_)
     (ld hl (var-dp))
-    ,@push-de-rs
+    (ld (var-temp-cell) de)
     (ld de (var-latest))
     (ld (hl) e)
     (inc hl)
@@ -1353,7 +1354,7 @@
     (ld (hl) e)
     (inc hl)
     (ld (hl) d)
-    ,@pop-de-rs
+    (ld de (var-temp-cell))
     (pop bc)
     (push de)
     ;; Write the CALL DOCOL instruction.
@@ -1723,7 +1724,7 @@
 
     ;; ( src dest amount -- )
     ,@(defcode "CMOVE-FLASH" 0 'cmove-flash)
-    ,@push-de-rs    
+    (ld (var-temp-cell) de) 
 
     (pop de)
     (pop hl)
@@ -1732,7 +1733,7 @@
     (call write-flash-buffer)
     (call lock-flash)
     (ei)
-    ,@pop-de-rs
+    (ld de (var-temp-cell))
     (pop bc)
 
     ,@next
@@ -1750,13 +1751,11 @@
     (add a c)
     (out (6) a)
     (ei)
-    (ld b 0)
-    (ld c 1)
+    (ld bc 1)
     ,@next
     
     (label invalid-bank-selected)
-    (ld b 0)
-    (ld c 0)
+    (ld bc 0)
     ,@next
 
     ;; Find the length of a string.
