@@ -184,8 +184,8 @@
 
     ,@(defcode "R@" 0 'r@)
     (push bc)
-    ,@pop-bc-rs
-    ,@push-bc-rs
+    (ld c (+ ix 0))
+    (ld b (+ ix 1))
     ,@next
 
     ,@(defcode "2>R" 0 '2>r)
@@ -287,21 +287,14 @@
 
     ;; T{ 1 2 3 4 2OVER -> 1 2 3 4 1 2 }T
     ,@(defcode "2OVER" 0 '2over)
-    ,@push-de-rs ;; ( DE: ? HL : ? BC: 4 ) ( de )
-    (pop hl)     ;; ( DE: ? HL : 3 BC: 4 ) ( de )
-    (pop de)     ;; ( DE: 2 HL : 3 BC: 4 ) ( de )
-    ,@push-bc-rs ;; ( DE: 2 HL : 3 BC: 4 ) ( de 4 )
-    (pop bc)     ;; ( DE: 2 HL : 3 BC: 1 ) ( de 4 )
-    (push bc)
-    (push de)
-    (push hl)
-    ,@pop-hl-rs  ;; ( DE: 2 HL : 4 BC: 1 ) ( de )
+    (pop hl)
+    (pop bc)
+    (pop hl)
     (push hl)
     (push bc)
-    (ld b d)
-    (ld c e)     ;; ( DE: 2 HL : 4 BC: 2 ) ( de )
-    ,@pop-de-rs  ;; ( DE: ? HL : 4 BC: 2 ) (    )
-    
+    (dec sp)
+    (dec sp)
+    (push hl)
     ,@next
     
 
