@@ -349,6 +349,28 @@ T{ 3 1- -> 2 }T
 T{ 3 2+ -> 5 }T
 T{ 3 2- -> 1 }T
 
+: TMOD /MOD DROP ;
+: T/   /MOD SWAP DROP ;
+
+\ only unsigned test cases
+T{       0       1 / ->       0       1 T/ }T
+T{       1       1 / ->       1       1 T/ }T
+T{       2       1 / ->       2       1 T/ }T
+T{       2       2 / ->       2       2 T/ }T 
+T{       7       3 / ->       7       3 T/ }T
+
+T{       0       1 MOD ->       0       1 TMOD }T
+T{       1       1 MOD ->       1       1 TMOD }T
+T{       2       1 MOD ->       2       1 TMOD }T
+
+T{        0 0= -> 1  }T
+T{        1 0= -> 0  }T
+T{        2 0= -> 0  }T
+
+T{ 0 1 DEPTH -> 0 1 2 }T
+T{   0 DEPTH -> 0 1   }T
+T{     DEPTH -> 0     }T
+
 { 0S 2/ -> 0S }
 { 1 2/ -> 0 }
 { 4000 2/ -> 2000 }
@@ -389,6 +411,13 @@ T{ 1 2 NIP -> 2 }T
 
 T{ : GD1 DO I LOOP ; -> }T
 T{          4        1 GD1 ->  1 2 3   }T
+
+T{ : GD3 DO 1 0 DO J LOOP LOOP ; -> }T
+T{          4        1 GD3 ->  1 2 3   }T
+
+\ Should not have an environmental dependency!
+T{ : GD4 DO 1 0 DO J LOOP 65535 +LOOP ; -> }T
+T{        1          4 GD4 -> 4 3 2 1             }T
 
 T{ : GD5 123 SWAP 0 DO 
      I 4 > IF DROP 234 LEAVE THEN 

@@ -1,4 +1,4 @@
-* Test Coverage [88/155]
+* Test Coverage [95/151]
 Excludes words with special semantics and used in the ~forth.scm~
 stage only (~0BRANCH~ ~BRANCH~, ~0JUMP~, ~JUMP~).  If a WORD word
 (e.g. ~CATCH~, ~THROW~) works correctly according to the standard
@@ -19,7 +19,7 @@ constants are omitted.
 ** DONE ~;~
 ** DONE ~:~
 ** DONE ~!~
-** TODO ~/~
+** DONE ~/~
 ** DONE ~'~
 ** TODO ~[~
 ** TODO ~]~
@@ -30,7 +30,7 @@ constants are omitted.
 ** DONE ~\~
 ** DONE ~+~
 ** DONE ~+!~
-** TODO ~0=~
+** DONE ~0=~
 ** DONE ~1-~
 ** DONE ~1+~
 ** DONE ~2-~
@@ -51,7 +51,6 @@ constants are omitted.
 ** DONE ~ALLOT~
 ** DONE ~AND~
 ** DONE ~AT~
-** TODO ~AT-XY~
 ** DONE ~BASE~
 ** DONE ~BEGIN~
 ** DONE ~BEGIN-STRUCTURE~
@@ -76,12 +75,11 @@ constants are omitted.
 ** TODO ~COUNT~
 ** TODO ~CREATE~
 ** DONE ~DECIMAL~
-** TODO ~DEPTH~
+** DONE ~DEPTH~
 ** TODO ~>DFA~
 ** DONE ~DO~
 ** TODO ~(DOES>)~
 ** TODO ~DOES>~
-** TODO ~DP~
 ** DONE ~DROP~
 ** DONE ~?DUP~
 ** DONE ~DUP~
@@ -92,7 +90,6 @@ constants are omitted.
 ** TODO ~ERASE-SECTOR~
 ** TODO ~EXECUTE~
 ** TODO ~EXIT~
-** TODO ~EXPECT~
 ** TODO ~FALSE~
 ** DONE ~FIELD:~
 ** TODO ~FIND~
@@ -108,15 +105,15 @@ constants are omitted.
 ** TODO ~IMMEDIATE~
 ** TODO ~INTERPRET~
 ** DONE ~INVERT~
-** TODO ~J~
+** DONE ~J~
 ** DONE ~LEAVE~
 ** TODO ~LITSTRING~
 ** TODO ~+LOOP~
 ** DONE ~LOOP~
 ** DONE ~LSHIFT~
 ** TODO ~MEMA~
-** TODO ~/MOD~
-** TODO ~MOD~
+** DONE ~/MOD~
+** DONE ~MOD~
 ** DONE ~NIP~
 ** TODO ~NOT~
 ** TODO ~NUM?~
@@ -140,7 +137,6 @@ constants are omitted.
 ** DONE ~RP!~
 ** DONE ~RP@~
 ** DONE ~RSHIFT~
-** TODO ~.S~
 ** TODO ~SET-RAM-MEMA~
 ** TODO ~SHUTDOWN~
 ** DONE ~SP!~
@@ -150,7 +146,7 @@ constants are omitted.
 ** DONE ~}T~
 ** DONE ~T{~
 ** DONE ~THEN~
-** TODO ~THROW~
+** DONE ~THROW~
 ** TODO ~TO-ASCII~
 ** TODO ~TRUE~
 ** TODO ~TUCK~
