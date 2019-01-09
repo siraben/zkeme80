@@ -843,9 +843,11 @@
     (jr z zjump)
     (inc de)
     (inc de)
-    (label zjump)
     (pop bc)
     ,@next
+    (label zjump)
+    (pop bc)
+    (jp jump)
 
     ,@(defcode "BRANCH" 0 'branch)
     ((ex de hl))
