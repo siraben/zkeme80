@@ -48,7 +48,7 @@ lib.fix (self: {
     nativeBuildInputs = [ autoreconfHook pkgconfig ];
     buildInputs = [ glib self.libticonv libarchive lzma bzip2 ];
   };
-  forth = runCommand "zkeme80.rom" { buildInputs = [ guile ]; } ''
+  zkeme80 = runCommand "zkeme80.rom" { buildInputs = [ guile ]; } ''
     cp -r ${./.}/* .
     chmod -R +w .
     echo '(begin (load "zkeme80.scm") (make-rom "zkeme80.rom"))' | guile
@@ -57,6 +57,6 @@ lib.fix (self: {
   '';
   runit = writeScript "runit" ''
     #!/bin/sh
-    ${self.tilem}/bin/tilem2 -r ${self.forth}/zkeme80.rom
+    ${self.tilem}/bin/tilem2 -r ${self.zkeme80}/zkeme80.rom
   '';
 })

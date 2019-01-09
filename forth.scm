@@ -1045,7 +1045,7 @@
     (dw (drop jump expect-loop))
 
     ,@(defword "REFILL" 0 'refill)
-    (dw (lit current-input-device @ execute))
+    (dw (lit var-current-input-device @ execute))
     (dw (0jump refill-fail))
     ;; (dw (lit input-buffer lit var-input-ptr ! ))
     (dw (true exit))
@@ -1858,21 +1858,34 @@
     ,@next)
   )
 
+
+
 (define forth-vars
-  `(,@(defvar "STATE" 'state 0)
+  `(;; The current state (compiling (1) or interpreting (0)).
+    ,@(defvar "STATE" 'state 0)
+    ;; A pointer to the latest word defined.
     ,@(defvar "LATEST" 'latest 0)
+    ;; The data pointer.
     ,@(defvar "DP" 'dp 'dp-start)
+    ;; The current column (in pixels) for the cursor.
     ,@(defvar "CUR-COL" 'cur-col 0)
+    ;; The current column (in pixels) for the cursor.
     ,@(defvar "CUR-ROW" 'cur-row 0)
+    ;; The current numerical base
     ,@(defvar "BASE" 'base 10)
+    ;; A temporary cell for making things faster.
     ,@(defvar "TEMP-CELL" 'temp-cell 0)
     ;; Check if reading a number has failed, since we can't return -1.
     ,@(defvar "NUM-STATUS" 'num-status 0)
+    ;; Start of the data stack.
     ,@(defvar "SP0" 'sp0 0)
+    ;; Start of the return stack.
     ,@(defvar "R0" 'r0 0)
+    ;; Input pointer (used by GETC and UNGETC).
     ,@(defvar "INPUT-PTR" 'input-ptr 0)
+    ;; Exception handler.
     ,@(defvar "HANDLER" 'handler 0)
-
+    ,@(defvar "CURRENT-INPUT-DEVICE" 'current-input-device 0)
     ,@(defconst "H0" 'h0 'dp-start)
     ,@(defconst "OS-END" 'os-end-forth 'os-end)
     ,@(defconst "SCREEN-BUF" 'screen-buf 'screen-buffer)
@@ -1959,7 +1972,7 @@
     ;; TODO: Fix pre-assigned variable values.
     (dw (lit 65530 sp0 !))
     (dw (lit return-stack-start r0 !))
-    (dw (lit string-input-device lit current-input-device !))
+    (dw (lit string-input-device lit var-current-input-device !))
     (dw (quit))
 
     (dw (poweroff))

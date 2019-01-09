@@ -90,17 +90,8 @@
     ;; Forth system variables.  Put here because it's writable when
     ;; loaded into RAM.
 
-    ;; The current input "device", it's really a pointer to a
-    ;; arbitrary assembly code.  That code must conform to the
-    ;; following:
-    ;; Inputs: number of characters to read in BC
-    ;; Output: BC is either 0 or 1 representing failure or success
-    ;;         the input is written starting at input-buffer
-    ;; Returning: must use the ,@next macro instead of (ret).
-    ;; i.e. or make it a Forth word!
+
     
-    (label current-input-device)
-    (dw (0))
 
     ;; Transient input buffer.
     (label input-buffer)

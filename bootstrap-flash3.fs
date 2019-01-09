@@ -116,21 +116,20 @@ PAUSE PAGE
 ;
 PAGE
 
-  
-\ PAUSE PAGE
-
-\ PAD-CLEAR
-\ PAD 48 EXPECT
-\ : KEY-LOOP BEGIN KEY PAGE U. AGAIN ;
-
-\ PAD INPUT-PTR !
-
 SEE ."
 
-PAUSE PAGE
+
+: PAD-DEVICE PAD-CLEAR PAD 48 EXPECT PAD INPUT-PTR ! ;
 
 \ KEY-LOOP
 
-SHUTDOWN
+\ Not usable yet until we can implement screen scrolling and carriage
+\ return "\r".  Almost there!
+: REPL ['] PAD-DEVICE CURRENT-INPUT-DEVICE ! QUIT ;
 
+\ REPL
 
+CR
+." The system is going
+to shutdown!"
+SHUTDOWN 
