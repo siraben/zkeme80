@@ -840,12 +840,15 @@
     ,@(defcode "0JUMP" 0 '0jump)
     (ld a b)
     (or c)
+    (jr z zjump)
+    (inc de)
+    (inc de)
     (pop bc)
-    (jp z jump)
-    (inc de)
-    (inc de)
     ,@next
-
+    (label zjump)
+    (pop bc)
+    (jp jump)
+    
     ,@(defcode "BRANCH" 0 'branch)
     ((ex de hl))
     (ld e (hl))
