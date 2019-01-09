@@ -1,99 +1,9 @@
 \ This file should run a bunch of tests before loading the next stage.
 
-: TELL DROP PLOT-STRING ;
-: PAGE CLEAR-SCREEN ORIGIN ;
-: USED HERE H0 - ;
-: UNUSED 49152 HERE - ;
+: PRESS-TO-CONTINUE
+." Press any key to
+continue..." PAUSE CR ;
 
-: (
-  BEGIN
-    GETC 41 = IF \ test for )
-      EXIT
-    THEN
-  AGAIN
-; IMMEDIATE
-
-: MIN ( N N -- N : RETURN THE MINIMUM OF TWO INTEGERS )
-  2DUP < IF DROP ELSE NIP THEN  ;
-
-: MAX ( N N -- N : RETURN THE MAXIMUM OF TWO INTEGERS )
-  2DUP > IF DROP ELSE NIP THEN ;
-
-: CELL+ 2+ ;
-
-: 2@  DUP CELL+ @ SWAP @ ;
-: 2!  SWAP OVER ! CELL+ ! ;
-: . U. ;
-: CHAR+ 1+ ;
-: CHARS ;
-: BL 32 ;
-
-: RECURSE LATEST @ >CFA , ; IMMEDIATE
-
-\ Let's make ' standard compliant.
-: '
-  STATE @
-  IF 
-    ' ' ,
-  ELSE
-    WORD FIND >CFA
-  THEN
-  
-; IMMEDIATE
-
-
-: LITERAL
-  ' LIT ,
-  ,
-; IMMEDIATE
-
-: POSTPONE WORD FIND >CFA , ; IMMEDIATE
-
-: CHAR WORD DROP C@ ;
-
-\ Doesn't work, why?
-
-: [CHAR] CHAR POSTPONE LITERAL ; IMMEDIATE
-
-: '"' [ CHAR " ] LITERAL ;
-
-: S"
-  STATE @
-  IF
-    ' LITSTRING , HERE 0 ,
-    BEGIN
-      GETC DUP 34 <>
-    WHILE
-      C,
-    REPEAT
-    DROP 0 C, DUP HERE SWAP - 3 - SWAP !
-  ELSE
-    HERE
-    BEGIN
-      GETC DUP 34 <>
-    WHILE
-      OVER C! 1+
-    REPEAT
-    DROP HERE - HERE
-    SWAP
-  THEN
-; IMMEDIATE
-
-: ."		( -- )
-  STATE @ IF
-    POSTPONE S"
-    ' TELL ,
-  ELSE
-    BEGIN
-      GETC
-      DUP '"' = IF
-        DROP
-        EXIT
-      THEN
-      EMIT
-    AGAIN
-  THEN
-;  IMMEDIATE
 
 \ Redefine ; to be verbose
 \ : ; POSTPONE ; LATEST @ ID. ."  defined." CR ; IMMEDIATE
@@ -119,7 +29,6 @@ HEX HERE ." HERE is at " . CR DECIMAL
 .S
 ;
 
-: CONSTANT CREATE ' LIT , , ' EXIT , ;
 
 \ Bit shifts are not fast!
 : RSHIFT ?DUP IF 0 DO 2/ LOOP THEN ;
@@ -163,13 +72,13 @@ HEX HERE ." HERE is at " . CR DECIMAL
   SWAP !
 ;          \ set len
 
-: VALUE  CREATE  ' LIT , , ' EXIT , ;
+: VALUE  CREATE  ['] LIT , , ['] EXIT , ;
 
 : TO WORD FIND >DFA 2 + STATE @
      IF
-       ' LIT ,
+       ['] LIT ,
        ,
-       ' ! ,
+       ['] ! ,
      ELSE
        !
      THEN
@@ -199,7 +108,6 @@ VARIABLE ERROR-XT
         DEPTH START-DEPTH @ DO DROP LOOP
     THEN
 ;
-
 
 
 : SEEK-NEWLINE-BACK
@@ -282,23 +190,21 @@ VARIABLE SUCCESS-TEST-COUNT
 ;
 
 
-: { T{ ;
-: } }T ;
 
-{ -> }					\ START WITH CLEAN SLATE
+T{ -> }T					\ START WITH CLEAN SLATE
 ( TEST IF ANY BITS ARE SET; ANSWER IN BASE 1 )
-{ : BITSSET? IF 0 0 ELSE 0 THEN ; -> }
-{  0 BITSSET? -> 0 }		( ZERO IS ALL BITS CLEAR )
-{  1 BITSSET? -> 0 0 }		( OTHER NUMBER HAVE AT LEAST ONE BIT )
+T{ : BITSSET? IF 0 0 ELSE 0 THEN ; -> }T
+T{  0 BITSSET? -> 0 }T    ( ZERO IS ALL BITS CLEAR )
+T{  1 BITSSET? -> 0 0 }T  ( OTHER NUMBER HAVE AT LEAST ONE BIT )
 
-{ 0 INVERT 1 AND -> 1 }
-{ 1 INVERT 1 AND -> 0 }
+T{ 0 INVERT 1 AND -> 1 }T
+T{ 1 INVERT 1 AND -> 0 }T
 
 0	 CONSTANT 0S
 0 INVERT CONSTANT 1S
 
-{ 0S INVERT -> 1S }
-{ 1S INVERT -> 0S }
+T{ 0S INVERT -> 1S }T
+T{ 1S INVERT -> 0S }T
 
 T{ 0 INVERT 1 AND -> 1 }T
 T{ 1 INVERT 1 AND -> 0 }T
@@ -308,18 +214,18 @@ T{ 0S 1S AND -> 0S }T
 T{ 1S 0S AND -> 0S }T
 T{ 1S 1S AND -> 1S }T
 
-{ 0S 0S OR -> 0S }
-{ 0S 1S OR -> 1S }
-{ 1S 0S OR -> 1S }
-{ 1S 1S OR -> 1S }
+T{ 0S 0S OR -> 0S }T
+T{ 0S 1S OR -> 1S }T
+T{ 1S 0S OR -> 1S }T
+T{ 1S 1S OR -> 1S }T
 
-{ 0S 0S XOR -> 0S }
-{ 0S 1S XOR -> 1S }
-{ 1S 0S XOR -> 1S }
-{ 1S 1S XOR -> 0S }
+T{ 0S 0S XOR -> 0S }T
+T{ 0S 1S XOR -> 1S }T
+T{ 1S 0S XOR -> 1S }T
+T{ 1S 1S XOR -> 0S }T
 
 0S CONSTANT <FALSE>
-1S CONSTANT <TRUE>
+1 CONSTANT <TRUE>
 
 
 : GN2 \ ( -- 16 10 )
@@ -329,10 +235,10 @@ T{ GN2 -> 16 10 }T
 
 ( WE TRUST 1S, INVERT, AND BITSSET?; WE WILL CONFIRM RSHIFT LATER )
 1S 1 RSHIFT INVERT CONSTANT MSB
-{ MSB BITSSET? -> 0 0 }
+T{ MSB BITSSET? -> 0 0 }T
 
-{ 0S 2* -> 0S }
-{ 1 2* -> 2 }
+T{ 0S 2* -> 0S }T
+T{ 1 2* -> 2 }T
 
 T{ 0 0 * -> 0 }T          \ TEST IDENTITIES
 T{ 0 1 * -> 0 }T
@@ -341,6 +247,10 @@ T{ 1 2 * -> 2 }T
 T{ 2 1 * -> 2 }T
 T{ 3 3 * -> 9 }T
 
+
+T{  5  0 - -> 5 }T
+T{ 10  3 - -> 7 }T
+
 T{ 4000 2* -> 8000 }T
 T{ 1S 2* 1 XOR -> 1S }T
 T{ MSB 2* -> 0S }T
@@ -348,6 +258,22 @@ T{ MSB 2* -> 0S }T
 T{ 3 1- -> 2 }T
 T{ 3 2+ -> 5 }T
 T{ 3 2- -> 1 }T
+
+T{ : GC1 [CHAR] X     ; -> }T
+T{ : GC2 [CHAR] HELLO ; -> }T
+T{ GC1 -> 88 }T
+T{ GC2 -> 72 }T
+
+T{ : GC3 [ GC1 ] LITERAL ; -> }T
+T{ GC3 -> 88 }T
+
+
+T{ : GT1 123 ;   ->     }T
+T{ ' GT1 EXECUTE -> 123 }T
+
+T{ : GT2 ['] GT1 ; IMMEDIATE -> }T
+T{ GT2 EXECUTE -> 123 }T
+
 
 : TMOD /MOD DROP ;
 : T/   /MOD SWAP DROP ;
@@ -367,26 +293,29 @@ T{        0 0= -> 1  }T
 T{        1 0= -> 0  }T
 T{        2 0= -> 0  }T
 
+T{  0  0 = -> <TRUE>  }T
+T{  1  1 = -> <TRUE>  }T
+T{  0  1 = -> <FALSE> }T
+
 T{ 0 1 DEPTH -> 0 1 2 }T
 T{   0 DEPTH -> 0 1   }T
 T{     DEPTH -> 0     }T
 
-{ 0S 2/ -> 0S }
-{ 1 2/ -> 0 }
-{ 4000 2/ -> 2000 }
+T{ 0S 2/ -> 0S }T
+T{ 1 2/ -> 0 }T
+T{ 4000 2/ -> 2000 }T
 
-{ 1 0 LSHIFT -> 1 }
-{ 1 1 LSHIFT -> 2 }
-{ 1 2 LSHIFT -> 4 }
-{ 1S 1 LSHIFT 1 XOR -> 1S }
-{ MSB 1 LSHIFT -> 0 }
+T{ 1 0 LSHIFT -> 1 }T
+T{ 1 1 LSHIFT -> 2 }T
+T{ 1 2 LSHIFT -> 4 }T
+T{ 1S 1 LSHIFT 1 XOR -> 1S }T
+T{ MSB 1 LSHIFT -> 0 }T
 
-{ 1 0 RSHIFT -> 1 }
-{ 1 1 RSHIFT -> 0 }
-{ 2 1 RSHIFT -> 1 }
-{ 4 2 RSHIFT -> 1 }
-{ MSB 1 RSHIFT 2* -> MSB }
-
+T{ 1 0 RSHIFT -> 1 }T
+T{ 1 1 RSHIFT -> 0 }T
+T{ 2 1 RSHIFT -> 1 }T
+T{ 4 2 RSHIFT -> 1 }T
+T{ MSB 1 RSHIFT 2* -> MSB }T
 
 T{ 1 2 2DROP -> }T
 
@@ -409,15 +338,13 @@ T{ 1 2 1 PICK -> 1 2 OVER }T
 
 T{ 1 2 NIP -> 2 }T
 
+T{ 1 2 TUCK -> 2 1 2 }T
+
 T{ : GD1 DO I LOOP ; -> }T
 T{          4        1 GD1 ->  1 2 3   }T
 
 T{ : GD3 DO 1 0 DO J LOOP LOOP ; -> }T
 T{          4        1 GD3 ->  1 2 3   }T
-
-\ Should not have an environmental dependency!
-T{ : GD4 DO 1 0 DO J LOOP 65535 +LOOP ; -> }T
-T{        1          4 GD4 -> 4 3 2 1             }T
 
 T{ : GD5 123 SWAP 0 DO 
      I 4 > IF DROP 234 LEAVE THEN 
@@ -425,6 +352,18 @@ T{ : GD5 123 SWAP 0 DO
 T{ 1 GD5 -> 123 }T
 T{ 5 GD5 -> 123 }T
 T{ 6 GD5 -> 234 }T
+
+: CS1 CASE 1 OF 111 ENDOF
+   2 OF 222 ENDOF
+   3 OF 333 ENDOF
+   >R 999 R>
+   ENDCASE
+;
+
+T{ 1 CS1 -> 111 }T
+T{ 2 CS1 -> 222 }T
+T{ 3 CS1 -> 333 }T
+T{ 4 CS1 -> 999 }T
 
 
 T{ : NOP : POSTPONE ; ; -> }T
@@ -456,7 +395,7 @@ CONSTANT 2ND
 CONSTANT 1ST
 
 
-T{       1ST 2ND < -> 1 }T \ HERE MUST GROW WITH ALLOT
+T{       1ST 2ND < -> 1    }T \ HERE MUST GROW WITH ALLOT
 T{       1ST CELL+  -> 2ND }T \ ... BY ONE CELL
 T{   1ST 1 CELLS +  -> 2ND }T
 T{     1ST @ 2ND @  -> 1 2 }T
@@ -467,7 +406,7 @@ T{     1ST @ 2ND @  -> 5 6 }T
 T{           1ST 2@ -> 6 5 }T
 T{       2 1 1ST 2! ->     }T
 T{           1ST 2@ -> 2 1 }T
-T{ 1S 1ST !  1ST @  -> 1S  }T    \ CAN STORE CELL-WIDE VALUE
+T{ 1S 1ST !  1ST @  -> 1S  }T  \ CAN STORE CELL-WIDE VALUE
 
 
 BEGIN-STRUCTURE POINT \ -- a-addr 0 ; -- lenp
@@ -487,7 +426,7 @@ HERE 1 ALLOT
 HERE
 CONSTANT 2NDA
 CONSTANT 1STA
-T{ 1STA 2NDA < ->  1 }T    \ HERE MUST GROW WITH ALLOT
+T{ 1STA 2NDA <  ->      1 }T         \ HERE MUST GROW WITH ALLOT
 T{      1STA 1+ ->   2NDA }T    \ ... BY ONE ADDRESS UNIT 
 
 
@@ -555,34 +494,28 @@ T{ GS3 HELLO -> 5 CHAR H }T
 
 \ Test exceptions.
 : T1 9 ;
-: C1 1 2 3 ' T1 CATCH ;
+: C1 1 2 3 ['] T1 CATCH ;
 T{ C1 -> 1 2 3 9 0 }T    \ NO THROW EXECUTED
 
 : T2 8 0 THROW ;
-: C2 1 2 ' T2 CATCH ;
+: C2 1 2 ['] T2 CATCH ;
 T{ C2 -> 1 2 8 0 }T    \ 0 THROW DOES NOTHING
 
 : T3 7 8 9 99 THROW ;
-: C3 1 2 ' T3 CATCH ;
+: C3 1 2 ['] T3 CATCH ;
 T{ C3 -> 1 2 99 }T    \ RESTORES STACK TO CATCH DEPTH
 
 : T5 2DROP 2DROP 9999 THROW ;
-: C5 1 2 3 4 ' T5 CATCH           \ TEST DEPTH RESTORED CORRECTLY
+: C5 1 2 3 4 ['] T5 CATCH           \ TEST DEPTH RESTORED CORRECTLY
    DEPTH >R DROP 2DROP 2DROP R> ;    \ AFTER STACK HAS BEEN EMPTIED
 T{ C5 -> 5 }T
 
-." End of tests." CR
-." End of phase 2." CR
+." Tests finished."
 
 PAGE
-HEX
-SUCCESS-TEST-COUNT . CR
-DECIMAL
 REPORT-TESTS CR CR
 
-: PRESS-TO-CONTINUE
-." Press any key to
-continue..." PAUSE CR ;
+
 
 PRESS-TO-CONTINUE
 
@@ -650,17 +583,15 @@ PAGE
 
 ." Forgetting all words
 after ACTUAL-RESULTS
-to save on space." CR
+to save on space..." CR CR
 USED
 
 FORGET ACTUAL-RESULTS
 
 USED - . ." bytes freed." CR
 
-PAUSE
+PRESS-TO-CONTINUE
 
-
-    
 : STAGE2
 
   \ Try to set RAM Memory region A to be the first RAM flash page.

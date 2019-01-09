@@ -106,11 +106,11 @@
 ;; We must relocate these variables elsewhere, where RAM is writable.
 (define (defvar name label default)
   ;; Store the list of variable default values.
-  
+
   (let ((var-label (string->symbol (format #f "var-~a" label)))
         (var-addr (next-var-addr!)))
     (set! *var-list* `((,var-label . ,default) .  ,*var-list*))
-    
+
     `(,@(defcode name 0 label)
       (push bc)
       (ld bc ,var-addr)
@@ -145,13 +145,13 @@
   `(,@(defcode "DUP" 0 'dup)
     (push bc)
     ,@next
-    
+
     ,@(defcode "?DUP" 0 '?dup)
     (ld hl 0)
     (call cp-hl-bc)
     (jp nz dup)
     ,@next
-    
+
     ,@(defcode "DROP" 0 'drop)
     (pop bc)
     ,@next
@@ -176,8 +176,8 @@
     ,@push-bc-rs
     (pop bc)
     ,@next
-    
-    ,@(defcode "R>" 0 'r>)    
+
+    ,@(defcode "R>" 0 'r>)
     (push bc)
     ,@pop-bc-rs
     ,@next
@@ -292,16 +292,16 @@
     (pop hl)
     (pop bc)
     (pop hl)
-      
+
     (push hl)
     (push bc)
     (dec sp)
     (dec sp)
     (dec sp)
-    (dec sp)  
+    (dec sp)
     (push hl)
     ,@next
-    
+
 
     ))
 
@@ -362,8 +362,11 @@
     (rl b)
     ,@next
 
-    
-    ,@(defcode "2/" 0 '>>)    
+    ,@(defcode "CHARS" 0 'chars)
+    ,@next
+
+
+    ,@(defcode "2/" 0 '2/)
     (srl b)
     (rr c)
     ,@next
@@ -384,14 +387,14 @@
     ,@hl-to-bc
     (ld de (var-temp-cell))
     ,@next
-    
+
     ,@(defcode "/MOD" 0 '/mod)
     (ld (var-temp-cell) de)
     (ld d b)
     (ld e c)
     (pop bc)
     (ld a b)
-    ;;  ac by de and places the quotient in ac and the remainder in hl 
+    ;;  ac by de and places the quotient in ac and the remainder in hl
     (label div-ac-by-de)
     (ld	hl 0)
     (ld	b 16)
@@ -405,7 +408,7 @@
     (add hl de)
     (dec c)
     (label div-ac-de-local)
-    
+
     (djnz div-ac-de-loop)
     (ld b a)
     (push hl)
@@ -414,11 +417,15 @@
 
     ,@(defword "MOD" 0 'mod)
     (dw (/mod drop exit))
-    
+
     ,@(defword "/" 0 '/)
     (dw (/mod nip exit))
-    
+
     ,@(defcode "1+" 0 '1+)
+    (inc bc)
+    ,@next
+
+    ,@(defcode "CHAR+" 0 'char+)
     (inc bc)
     ,@next
 
@@ -436,6 +443,11 @@
     (inc bc)
     ,@next
 
+    ,@(defcode "CELL+" 0 'cell+)
+    (inc bc)
+    (inc bc)
+    ,@next
+
     ,@(defword "TRUE" 0 'true)
     (dw (lit 1 exit))
 
@@ -446,7 +458,7 @@
     (push bc)
     (ld bc 48)
     ,@next
-    
+
     ,@(defcode "'9'" 0 'ninec)
     (push bc)
     (ld bc 57)
@@ -464,12 +476,12 @@
     ;; ( addr -- num | nothing)
     ;; The caller of PARSE-NUMBER should check the variable NUM-STATUS
     ;; to see if the parsing suceeded.
-    
+
     ;; Currently only parses base 10.
     ,@(defword "PARSE-NUMBER" 0 'parse-number)
     ;; Check if the first character is numeric.
     (dw (dup c@ dup num? 0jump parse-num-fail))
-    ;; Convert the first digit.    
+    ;; Convert the first digit.
     (dw (zeroc -))
     ;; It is. Continue until end of string.
     ;; Stack right now: ( addr n -- )
@@ -484,7 +496,7 @@
     (dw (over c@ num? 0jump parse-num-fail))
     ;; Continue.
     (dw (over c@ zeroc - swap lit 10 * +))
-    ;; ( addr+1 nm -- )    
+    ;; ( addr+1 nm -- )
     (dw (jump parse-num-continue))
 
     (label parse-num-done)
@@ -492,6 +504,19 @@
     (dw (lit 1 num-status ! exit))
     (label parse-num-fail)
     (dw (2drop lit 0 num-status ! exit))
+
+    ,@(defword "MAX" 0 'max)
+    (dw (2dup > 0branch 8 drop branch 4 nip exit))
+    
+    ,@(defword "MIN" 0 'min)
+    (dw (2dup < 0branch 8 drop branch 4 nip exit))
+
+    ,@(defword "2@" 0 '2@)
+    (dw (dup cell+ @ swap @ exit))
+    
+    ,@(defword "2!" 0 '2!)
+    (dw (swap over ! cell+ ! exit))
+    
     ))
 
 (define forth-memory-words
@@ -516,7 +541,7 @@
 
     ,@(defword "?" 0 '?)
     (dw (@ u. exit))
-    
+
     ,@(defcode "+!" 0 '+!)
     (pop hl)
     (ld a (bc))
@@ -589,6 +614,12 @@
     (ld de (var-temp-cell))
     (pop bc)
     ,@next
+
+    ,@(defword "USED" 0 'used)
+    (dw (here h0 - exit))
+
+    ,@(defword "UNUSED" 0 'unused)
+    (dw (lit #xc000 here - exit))
     ))
 
 (define forth-graphics-words
@@ -628,6 +659,9 @@
     (call clear-buffer)
     (call fast-copy)
     ,@next
+
+    ,@(defword "PAGE" 0 'page)
+    (dw (clear-screen origin exit))
 
     ;; Draw a sprite to the screen.
     ;; ( sprite_addr height x y -- )
@@ -680,15 +714,15 @@
     (push bc)
     (pop iy)
     (call fast-copy)
-    (pop bc)    
+    (pop bc)
     ,@next
 
     ;; Plot the default memory screen (starting at address #x8100)
     ,@(defcode "PLOT" 0 'plot)
     (ld iy screen-buffer)
     (call fast-copy)
-    ,@next    
-    
+    ,@next
+
     ;; Plot a character to the screen.
     ;; ( char -- )
     ,@(defcode "EMIT" 0 'emit)
@@ -715,7 +749,7 @@
     (ld a c)
     ;; Bounding box limits.
     (ld bc 25152)
-    
+
     (call wrap-char-shared)
     (call fast-copy)
     (ld a d)
@@ -726,7 +760,7 @@
     (pop ix)
     (pop de)
     (pop bc)
-    
+
     ,@next
 
     ;; Carriage return
@@ -737,7 +771,7 @@
     (ld d a)
     (ld a (var-cur-row))
     (ld e a)
-    (ld b 0)    
+    (ld b 0)
     (call newline)
     (ld a d)
     (ld (var-cur-col) a)
@@ -751,7 +785,7 @@
     ,@(defword "AT-XY" 0 'at-xy)
     (dw (cur-row ! cur-col !))
     (dw (exit))
-    
+
     ;; Draw a string to the screen
     ;; ( str_addr -- )
     ,@(defcode "PLOT-STRING" 0 'plot-string)
@@ -782,11 +816,15 @@
     (dw (1- swap dup c@ emit 1+ swap jump type-loop))
     (label type-done)
     (dw (drop exit))
+
+    ,@(defword "TELL" 0 'tell)
+    (dw (drop plot-string exit))
+
     ))
 
 (define forth-logic-words
   `(;; Absolute jumps!  Use with caution.
-    
+
     ;; Absolute jumps are NOT portable because they depend on the
     ;; context in which the code was written.  JUMP primitives should
     ;; only be used in the bootstrapping stage (i.e. writing Forth
@@ -806,14 +844,14 @@
     (cp c)
     (jp z zjump-maybe)
     (jp nz zjump-fail)
-    
+
     (label zjump-maybe)
     (xor a)
     (cp b)
     (jp nz zjump-fail)
     (pop bc)
     (jp jump)
-    
+
     (label zjump-fail)
     (inc de)
     (inc de)
@@ -836,14 +874,14 @@
     (cp c)
     (jp z zbranch-maybe)
     (jp nz zbranch-fail)
-    
+
     (label zbranch-maybe)
     (xor a)
     (cp b)
     (jp nz zbranch-fail)
     (pop bc)
     (jp branch)
-    
+
     (label zbranch-fail)
     (inc de)
     (inc de)
@@ -855,7 +893,7 @@
     (call cp-hl-bc)
     (jp z tru)
     (jp fal)
-    
+
     ,@(defcode "<>" 0 '<>)
     (pop hl)
     (call cp-hl-bc)
@@ -881,7 +919,7 @@
     (call cp-hl-bc)
     (jp z fal)
     (jp tru)
-    
+
 
     ,@(defcode "<=" 0 '<=)
     ,@bc-to-hl
@@ -934,7 +972,7 @@
     (push de)
     (ld h 0)
     (ld l c)
-    (ld b h) 
+    (ld b h)
     (ld de char-lookup-table)
     (add hl de)
     (ld c (hl))
@@ -951,10 +989,10 @@
     (db (#b11100000))
     (db (#b11100000))
     (db (#b11100000))
-    
+
     (label blank)
     (db (0 0 0 0 0))
-    
+
     ;; ( addr u -- )
     ;; Expect u characters (or a newline, whichever comes first) and
     ;; store them at address addr.
@@ -970,7 +1008,7 @@
     (dw (lit expect-count @ not 0jump expect-more))
     (dw (exit))
     (label expect-more)
-    (dw (clear-screen origin lit expect-ptr-initial @ plot-string))
+    (dw (page lit expect-ptr-initial @ plot-string))
     (dw (lit 8 cur-row +! lit ,(char->integer #\^) emit))
     (dw (lit 8 cur-row -!))
 
@@ -988,22 +1026,22 @@
     (dw (lit 1 lit expect-count -!))
     (dw (drop))
     (dw (jump expect-loop))
-    
+
     (label expect-got-newline)
     (dw (lit expect-ptr-initial @ lit expect-ptr @))
     (dw (<> 0jump expect-got-blank))
     (label expect-end)
     (dw (origin lit expect-ptr-initial @ plot-string))
     (dw (drop lit 0 lit expect-ptr @ c! exit))
-    
+
     (label expect-got-backspace)
-    (dw (drop))    
+    (dw (drop))
     (dw (lit expect-ptr-initial @ lit expect-ptr @))
     (dw (<> 0jump expect-backspace-to-loop))
     (dw (lit 1 lit expect-ptr -!))
     (dw (lit 0 lit expect-ptr @ c!))
     (dw (lit 1 lit expect-count +!))
-    (label expect-backspace-to-loop)    
+    (label expect-backspace-to-loop)
     (dw (drop jump expect-loop))
 
     ,@(defword "REFILL" 0 'refill)
@@ -1022,10 +1060,10 @@
 
     ,@(defword "UNGETC" 0 'ungetc)
     (dw (lit 1 lit var-input-ptr -!))
-    (dw (exit))    
-    
+    (dw (exit))
+
     ;; Parse the next word.
-    
+
     ;; We're going off the standard here and will skip whitespace
     ;; (instead of what the stack passed to it), and comments.
     ;; Whitespace includes #\space #\newline
@@ -1055,18 +1093,18 @@
     (dw (getc ?dup 0jump empty-word))
     (dw (dup lit ,(char->integer #\newline) <> 0jump skip-space))
     (dw (jump skip-comment))
-    
+
     (label actual-word)
     (dw (lit word-ptr @ c!))
     (dw (lit 1 lit word-ptr +!))
-    
+
     (label actual-word-loop)
     (dw (getc))
     (dw (dup 0jump word-done))
     (dw (dup lit ,(char->integer #\space)   <> 0jump word-done))
     (dw (dup lit ,(char->integer #\newline) <> 0jump word-done))
     (dw (dup lit ,(char->integer #\tab) <> 0jump word-done))
-    
+
     (dw (jump actual-word))
 
     (label word-done)
@@ -1079,7 +1117,14 @@
     (dw (swap exit))
     ;; Couldn't get a word, return 0.
     (label empty-word)
-    (dw (lit 0 exit))))
+    (dw (lit 0 exit))
+
+    ,@(defword "CHAR" 0 'char)
+    (dw (word drop c@ exit))
+    
+    ,@(defword "[CHAR]" immediate 'char-brac)
+    (dw (tick lit comma char comma exit))
+    ))
 
 (define forth-semantics-words
   `(,@(defcode "LIT" 0 'lit)
@@ -1091,7 +1136,16 @@
     (ld b a)
     (inc de)
     ,@next
-    
+
+    ,@(defword "LITERAL" immediate 'literal)
+    (dw (tick lit comma comma exit))
+
+    ,@(defword "POSTPONE" immediate 'postpone)
+    (dw (word find >cfa comma exit))
+
+    ,@(defword "[']" immediate 'tick-brac)
+    (dw (run-tick tick tick comma comma exit))
+
     ,@(defcode "LITSTRING" 0 'litstring)
     (ld a (de))
     (ld l a)
@@ -1107,18 +1161,19 @@
     ((ex de hl))
     ,@next
 
-    ;; ,@(defword "S\"" immediate 's-quote)
-    ;; (dw (state @ 0branch 66 tick litstring comma here lit 0 comma))
-    ;; (dw (getc dup lit 34 <> 0branch 8 c-comma branch 65518 drop))
-    ;; (dw (lit 0 c-comma dup here swap - lit 3 - swap ! branch 38))
-    ;; (dw (here getc dup 34 <> 0branch 12 over c! 1+ branch 65514))
-    ;; (dw (drop here - here swap exit))
-    
-    ;; ,@(defword ".\"" immediate dot-quote)
-    ;; (dw (state @ 0branch 30 getc dup lit 34 =))
-    ;; (dw (0branch 6 drop exit emit branch ,(- 65536 22)))
-    ;; (dw (branch 10 s-quote tick tell comma exit))
-    
+    ,@(defword "S\"" immediate 's-quote)
+    (dw (state @ 0branch 66 tick litstring comma here lit 0 comma))
+    (dw (getc dup lit 34 <> 0branch 8 c-comma branch 65518 drop))
+    (dw (lit 0 c-comma dup here swap - lit 3 - swap ! branch 38))
+    (dw (here getc dup lit 34 <> 0branch 12 over c! 1+ branch 65514))
+    (dw (drop here - here swap exit))
+
+    ,@(defword ".\"" immediate 'dot-quote)
+    (dw (state @ 0branch 14 s-quote tick tell comma branch 26))
+    (dw (getc dup lit 34 = 0branch 6 drop exit emit branch 65514))
+    (dw (exit))
+
+
     ,@(defcode "EXIT" 0 'exit)
     ,@pop-de-rs
     ,@next
@@ -1129,6 +1184,9 @@
     (jp (hl))
     ,@next
 
+    ,@(defword "RECURSE" 0 'recurse)
+    (dw (latest @ >cfa exit))
+
     ,@(defword "CATCH" 0 'catch)
     (dw (sp@ >r handler @ >r rp@ handler ! execute r> handler ! r> drop))
     (dw (lit 0 exit))
@@ -1136,7 +1194,7 @@
     ,@(defword "THROW" 0 'throw)
     (dw (?dup 0branch 26 handler @ rp! r> handler ! r> swap >r sp! drop))
     (dw (r> exit))
-    
+
     ;; Find a word.
     ;; ( addr -- xt | 0 )
     ;; Going off standard.  We're returning 0 for a word that is not
@@ -1168,7 +1226,7 @@
 
     (label find-retry)
     (dec de)
-    
+
     (label find-succ-hidden)
     (dec de)
     (dec de)
@@ -1214,7 +1272,7 @@
     (inc hl)
     (inc de)
     (jr strcmp-loop)
-    
+
     (label strcmp-end)
     (ld a (hl))
     (or a)
@@ -1223,9 +1281,9 @@
     (pop de)
     (pop hl)
     (ret)
-    
+
     ;; Not standard compilant.  Doesn't conform to run-time behavior.
-    ,@(defcode "'" 0 'tick)
+    ,@(defcode "(')" 0 'tick)
     (ld a (de))
     (ld l a)
     (inc de)
@@ -1235,7 +1293,11 @@
     (push bc)
     ,@hl-to-bc
     ,@next
-    
+
+    ;; Correct implementation of tick.
+    ,@(defword "'" 0 'run-tick)
+    (dw (word find >cfa exit))
+
     ,@(defcode "," 0 'comma)
     (call _comma)
     (pop bc)
@@ -1304,7 +1366,7 @@
     (inc hl)
     ,@hl-to-bc
     ,@next
-    
+
     ,@(defword ">DFA" 0 '>dfa)
     (dw (>cfa lit 3 + exit))
 
@@ -1318,7 +1380,7 @@
 
     ;; ( name length -- )
     ;; Parse a name and create a definition header for it.
-    
+
     ,@(defcode "CREATE_" hidden 'create_)
     (ld hl (var-dp))
     (ld (var-temp-cell) de)
@@ -1363,7 +1425,7 @@
     (ld (de) a)
     (inc de)
     (ld hl docol)
-    
+
     (ld a l)
     (ld (de) a)
     (inc de)
@@ -1399,7 +1461,7 @@
     (ld b 0)
     (ld c a)
     ,@next
-    
+
     ;; STATE is 0 while interpreting.
     ,@(defcode "[" immediate 'lbrac)
     (ld hl var-state)
@@ -1407,7 +1469,7 @@
     (inc hl)
     (ld (hl) 0)
     ,@next
-    
+
     ;; STATE is 1 while compiling.
     ,@(defcode "]" 0 'rbrac)
     (ld hl var-state)
@@ -1424,6 +1486,9 @@
     (dw (lit exit comma))
     (dw (latest @ hidden))
     (dw (lbrac exit))
+
+    ,@(defword "CONSTANT" 0 'constant)
+    (dw (create tick lit comma comma tick exit comma exit ))
 
     ,@(defcode "(DOES>)" 0 'does-brac)
     (push bc)
@@ -1490,34 +1555,34 @@
     (dw (?dup 0= 0jump not-ok))
     (dw (lit ok-msg plot-string cr jump try-more))
 
-    
+
     (label quit-eof)
-    (dw (clear-screen origin lit quit-eof-msg plot-string pause poweroff))
-    
+    (dw (page lit quit-eof-msg plot-string pause poweroff))
+
     (label not-ok)
     (dw (lit not-ok-msg plot-string abort))
     (dw (exit))
-    
+
     (label ok-msg)
     (db ,(string " ok"))
     (label not-ok-msg)
     (db ,(string "?"))
     (label quit-eof-msg)
     (db ,(string "Received EOF from input device."))
-    
+
     (label abort-msg1)
     (db ,(string "Error "))
     (label abort-msg2)
     (db ,(string "occured at "))
     (label abort-msg3)
-    (db ,(string ">>>"))
+    (db ,(string "2/>"))
     (label abort-msg4)
     (db ,(string "<<<"))
     (label abort-msg5)
     (db ,(string "Unconsumed input:"))
-    
+
     ,@(defword "ABORT" 0 'abort)
-    (dw (clear-screen origin lit abort-msg1 plot-string))
+    (dw (page lit abort-msg1 plot-string))
     ;; Print error number and rest of error message.
     (dw (u. lit abort-msg2 plot-string cr lit abort-msg3 plot-string))
     (dw (lit word-buffer plot-string lit abort-msg4 plot-string cr))
@@ -1531,16 +1596,16 @@
     (dw (word ?dup 0jump try-more))
     (dw (find ?dup 0jump maybe-number))
     (dw (state @ 0jump interpret-word))
-    
+
     (label compiling-word)
     (dw (dup ?immediate 0jump compile-word))
-    
+
     (label interpret-word)
     (dw (>cfa execute jump interpret-loop))
 
     (label compile-word)
     (dw (>cfa comma jump interpret-loop))
-    
+
 
     (label maybe-number)
     (dw (lit word-buffer parse-number))
@@ -1554,16 +1619,16 @@
 
     ;; Failed to read a number.
     (label num-fail)
-    (dw (jump undefined-word))    
-    
+    (dw (jump undefined-word))
+
     (label undefined-word)
     (dw (lit 1 exit))
-    
+
     ,@(defword "ID." 0 'id.)
     (dw (lit 3 + plot-string exit))
 
 
-    
+
     ))
 
 (define forth-control-words
@@ -1584,14 +1649,14 @@
     (dw (tick 0branch comma here - comma exit))
 
     ,@(defword "AGAIN" immediate 'again)
-    (dw (tick branch comma here - comma exit)) 
+    (dw (tick branch comma here - comma exit))
 
     ,@(defword "WHILE" immediate 'while)
     (dw (tick 0branch comma here lit 0 comma exit))
 
     ,@(defword "ALLOT" 0 'allot)
     (dw (dp +! exit))
-    
+
     ,@(defword "VARIABLE" 0 'variable)
     (dw (here lit 2 allot create tick lit comma comma))
     (dw (tick exit comma exit))
@@ -1606,7 +1671,7 @@
     ,@(defword "LOOP" immediate 'loop)
     (dw (tick r> comma tick r> comma tick 1+ comma tick 2dup comma))
     (dw (tick = comma tick 0branch comma here - comma tick 2drop comma exit))
-    
+
     ,@(defword "+LOOP" immediate '+loop)
     (dw (tick r> comma tick r> comma tick rot comma tick + comma))
     (dw (tick 2dup comma tick = comma tick 0branch comma here))
@@ -1632,7 +1697,7 @@
     (ld c (+ ix 2))
     (ld b (+ ix 3))
     ,@next
-    
+
     ,@(defcode "J" 0 'curr-loop-index2)
     (push bc)
     (ld c (+ ix 6))
@@ -1654,7 +1719,7 @@
     (label tru)
     (ld bc 1)
     ,@next
-    
+
     (label fal)
     (ld bc 0)
     ,@next
@@ -1673,7 +1738,7 @@
 
     ,@(defword "U." 0 'u.)
     (dw (u._ space exit))
-    
+
     ,@(defword "." 0 '.)
     (dw (u._ space exit))
 
@@ -1692,7 +1757,7 @@
     (dw (swap dup uwidth rot swap - spaces u._ exit))
 
     ,@(defword "DEPTH" 0 'depth)
-    (dw (sp0 @ sp@ - 2- >> exit))
+    (dw (sp0 @ sp@ - 2- 2/ exit))
 
     ,@(defword ".S" 0 '.s)
     (dw (lit ,(char->integer #\<) emit depth u._))
@@ -1702,12 +1767,13 @@
 
     ,@(defword "HEX" 0 'hex)
     (dw (lit 16 base ! exit))
-    
+
     ,@(defword "DECIMAL" 0 'dec)
     (dw (lit 10 base ! exit))
 
-    
+
     ))
+
 (define forth-misc-words
   `(;; Shut down the calculator.
     ,@(defcode "POWEROFF" 0 'poweroff)
@@ -1724,7 +1790,7 @@
 
     ;; ( src dest amount -- )
     ,@(defcode "CMOVE-FLASH" 0 'cmove-flash)
-    (ld (var-temp-cell) de) 
+    (ld (var-temp-cell) de)
 
     (pop de)
     (pop hl)
@@ -1753,7 +1819,7 @@
     (ei)
     (ld bc 1)
     ,@next
-    
+
     (label invalid-bank-selected)
     (ld bc 0)
     ,@next
@@ -1780,7 +1846,9 @@
 
     ,@(defword "SHUTDOWN" 0 'shutdown-forth)
     (dw (pause poweroff exit))
-    
+
+    ,@(defword "(" immediate 'comment)
+    (dw (getc lit 41 = 0branch 4 exit branch 65520))
     ))
 
 (define (defconst name label val)
@@ -1811,6 +1879,7 @@
     ,@(defconst "WORD-BUF" 'word-buf 'word-buffer)
     ,@(defconst "MEMA" 'mema #x4000)
     ,@(defconst "HERE" 'here '(var-dp))
+    ,@(defconst "BL" 'bl 32)
     ))
 
 (define (make-char-lookup-table)
@@ -1877,6 +1946,7 @@
     (dw (lit prompt-space lit input-buffer lit 128 cmove))
     (dw (true))
     (dw (exit))))
+
 (define forth-main
   `((label main)
     (dw (origin))
@@ -1901,7 +1971,7 @@
   `(,@forth-shared-header
     ,@forth-semantics-words
     ,@forth-control-words
-    ,@forth-text-words    
+    ,@forth-text-words
     ,@forth-logic-words
     ,@forth-stack-words
     ,@forth-math-words
@@ -1919,9 +1989,8 @@
     ;; This needs to be the last word to be defined!
     ,@(defword "STAR" 0 'star)
     (dw (lit 42 emit exit))
-    
+
     ,(lambda ()
        (format #t "End of forth.asm: 0x")
        (PRINT-PC))
     ))
-

@@ -1,4 +1,4 @@
-* Test Coverage [95/151]
+* Test Coverage [108/150]
 Excludes words with special semantics and used in the ~forth.scm~
 stage only (~0BRANCH~ ~BRANCH~, ~0JUMP~, ~JUMP~).  If a WORD word
 (e.g. ~CATCH~, ~THROW~) works correctly according to the standard
@@ -11,9 +11,9 @@ constants are omitted.
 ** DONE ~<~
 ** TODO ~<=~
 ** DONE ~<>~
-** TODO ~=~
+** DONE ~=~
 ** DONE ~>~
-** TODO ~-~
+** DONE ~-~
 ** TODO ~-!~
 ** DONE ~,~
 ** DONE ~;~
@@ -21,8 +21,8 @@ constants are omitted.
 ** DONE ~!~
 ** DONE ~/~
 ** DONE ~'~
-** TODO ~[~
-** TODO ~]~
+** DONE ~[~
+** DONE ~]~
 ** DONE ~{~
 ** DONE ~}~
 ** DONE ~@~
@@ -57,7 +57,7 @@ constants are omitted.
 ** DONE ~C,~
 ** DONE ~C!~
 ** DONE ~C@~
-** TODO ~CASE~
+** DONE ~CASE~
 ** DONE ~CATCH~
 ** TODO ~C@C!~
 ** DONE ~CELL~
@@ -72,7 +72,7 @@ constants are omitted.
 ** TODO ~CMOVE>~
 ** TODO ~CMOVE-FLASH~
 ** DONE ~CONSTANT~
-** TODO ~COUNT~
+** DONE ~COUNT~
 ** TODO ~CREATE~
 ** DONE ~DECIMAL~
 ** DONE ~DEPTH~
@@ -84,11 +84,11 @@ constants are omitted.
 ** DONE ~?DUP~
 ** DONE ~DUP~
 ** DONE ~ELSE~
-** TODO ~ENDCASE~
-** TODO ~ENDOF~
+** DONE ~ENDCASE~
+** DONE ~ENDOF~
 ** DONE ~END-STRUCTURE~
 ** TODO ~ERASE-SECTOR~
-** TODO ~EXECUTE~
+** DONE ~EXECUTE~
 ** TODO ~EXIT~
 ** TODO ~FALSE~
 ** DONE ~FIELD:~
@@ -102,16 +102,15 @@ constants are omitted.
 ** DONE ~I~
 ** DONE ~IF~
 ** TODO ~?IMMEDIATE~
-** TODO ~IMMEDIATE~
+** DONE ~IMMEDIATE~
 ** TODO ~INTERPRET~
 ** DONE ~INVERT~
 ** DONE ~J~
 ** DONE ~LEAVE~
 ** TODO ~LITSTRING~
-** TODO ~+LOOP~
+** DONE ~+LOOP~
 ** DONE ~LOOP~
 ** DONE ~LSHIFT~
-** TODO ~MEMA~
 ** DONE ~/MOD~
 ** DONE ~MOD~
 ** DONE ~NIP~
@@ -128,7 +127,6 @@ constants are omitted.
 ** DONE ~>R~
 ** DONE ~R>~
 ** DONE ~R@~
-** TODO ~R0~
 ** DONE ~RDROP~
 ** TODO ~REFILL~
 ** DONE ~REPEAT~
@@ -138,7 +136,6 @@ constants are omitted.
 ** DONE ~RP@~
 ** DONE ~RSHIFT~
 ** TODO ~SET-RAM-MEMA~
-** TODO ~SHUTDOWN~
 ** DONE ~SP!~
 ** DONE ~SP@~
 ** DONE ~STORE~
@@ -149,7 +146,7 @@ constants are omitted.
 ** DONE ~THROW~
 ** TODO ~TO-ASCII~
 ** TODO ~TRUE~
-** TODO ~TUCK~
+** DONE ~TUCK~
 ** TODO ~UNGETC~
 ** DONE ~UNTIL~
 ** TODO ~UWIDTH~
@@ -157,5 +154,5 @@ constants are omitted.
 ** DONE ~VARIABLE~
 ** DONE ~WHILE~
 ** TODO ~WITHIN~
-** TODO ~WORD~
+** DONE ~WORD~
 ** DONE ~XOR~

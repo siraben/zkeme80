@@ -29,8 +29,8 @@ PAUSE PAGE
         SWAP            ( end-of-word start-of-word )
 
         ( begin the definition with : NAME [IMMEDIATE] )
-        58 EMIT SPACE DUP ID. SPACE
-        DUP ?IMMEDIATE IF ." IMMEDIATE " THEN
+        [CHAR] : EMIT SPACE DUP ID. SPACE
+        DUP ?IMMEDIATE >R
 
         >DFA            ( get the data address, ie. points after DOCOL | end-of-word start-of-data )
 
@@ -42,51 +42,53 @@ PAUSE PAGE
                 DUP @           ( end start codeword )
 
                 CASE
-                ' LIT OF                ( is it LIT ? )
+                ['] LIT OF                ( is it LIT ? )
                         2+ DUP @                ( get next word which is the integer constant )
                         .                       ( and print it )
                 ENDOF
-                ' LITSTRING OF             ( is it LITSTRING ? )
-                         83 EMIT  34 EMIT SPACE ( print S"<space> )
+                ['] LITSTRING OF             ( is it LITSTRING ? )
+                        [CHAR] S EMIT
+                        [CHAR] " EMIT
+                        SPACE ( print S"<space> )
                         2+ DUP @                ( get the length )
                         SWAP 2+ SWAP            ( end start+2 length )
                         2DUP TELL               ( print the string )
-                         34 EMIT SPACE               ( finish the string with a final quote )
+                        [CHAR] " EMIT SPACE               ( finish the string with a final quote )
                         +                       ( end start+4+len, aligned )
                         1+                        ( because we're about to add 4 below )
                 ENDOF
-                ' 0BRANCH OF            ( is it 0BRANCH ? )
+                ['] 0BRANCH OF            ( is it 0BRANCH ? )
                         ." 0BRANCH ( "
                         2+ DUP @                ( print the offset )
                         .
                         ." ) "
                 ENDOF
-                ' BRANCH OF             ( is it BRANCH ? )
+                ['] BRANCH OF             ( is it BRANCH ? )
                         ." BRANCH ( "
                         2+ DUP @                ( print the offset )
                         .
                         ." ) "
                 ENDOF
-                ' JUMP OF             ( is it BRANCH ? )
+                ['] JUMP OF             ( is it BRANCH ? )
                         ." JUMP ( "
                         2+ DUP @                ( print the offset )
                         .
                         ." ) "
                 ENDOF
 
-                ' 0JUMP OF             ( is it BRANCH ? )
+                ['] 0JUMP OF             ( is it BRANCH ? )
                         ." 0JUMP ( "
                         2+ DUP @                ( print the offset )
                         .
                         ." ) "
                 ENDOF                
-                ' ' OF                  ( is it ' TICK ? )
-                         39 EMIT SPACE
+                ['] (') OF                  ( is it ' TICK ? )
+                        ." [']" SPACE
                         2+ DUP @                ( get the next codeword )
                         CFA>                    ( and force it to be printed as a dictionary entry )
                         ID. SPACE
                 ENDOF
-                ' EXIT OF               ( is it EXIT? )
+                ['] EXIT OF               ( is it EXIT? )
                         ( We expect the last word to be EXIT, and if it is then we don't print it
                           because EXIT is normally implied by ;.  EXIT can also appear in the middle
                           of words, and then it needs to be printed. )
@@ -105,13 +107,15 @@ PAUSE PAGE
                 2+              ( end start+2 )
         REPEAT
 
-        59 EMIT CR
+        [CHAR] ; EMIT
+
+        R> IF ."  IMMEDIATE " THEN
+        CR
 
         2DROP           ( restore stack )
 ;
 PAGE
 
-SEE SEE
   
 \ PAUSE PAGE
 
@@ -121,6 +125,9 @@ SEE SEE
 
 \ PAD INPUT-PTR !
 
+SEE ."
+
+PAUSE PAGE
 
 \ KEY-LOOP
 
