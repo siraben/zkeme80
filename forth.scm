@@ -535,8 +535,8 @@
     (ld l a)
     (inc bc)
     (ld a (bc))
-    (ld h a)
-    ,@hl-to-bc
+    (ld b a)
+    (ld c l)
     ,@next
 
     ,@(defword "?" 0 '?)
@@ -831,30 +831,19 @@
     ;; words by hand).  After that it is recommended to write in Forth
     ;; and decompile back into 0BRANCH and BRANCH primitives.
     ,@(defcode "JUMP" 0 'jump)
-    (ld a (de))
-    (ld l a)
-    (inc de)
-    (ld a (de))
-    (ld h a)
-    ,@hl-to-de
+    (ex de hl)
+    (ld e (hl))
+    (inc hl)
+    (ld d (hl))
     ,@next
 
     ,@(defcode "0JUMP" 0 '0jump)
-    (xor a)
-    (cp c)
-    (jp z zjump-maybe)
-    (jp nz zjump-fail)
-
-    (label zjump-maybe)
-    (xor a)
-    (cp b)
-    (jp nz zjump-fail)
-    (pop bc)
-    (jp jump)
-
-    (label zjump-fail)
+    (ld a b)
+    (or c)
+    (jr z zjump)
     (inc de)
     (inc de)
+    (label zjump)
     (pop bc)
     ,@next
 
@@ -870,21 +859,12 @@
     ,@next
 
     ,@(defcode "0BRANCH" 0 '0branch)
-    (xor a)
-    (cp c)
-    (jp z zbranch-maybe)
-    (jp nz zbranch-fail)
-
-    (label zbranch-maybe)
-    (xor a)
-    (cp b)
-    (jp nz zbranch-fail)
-    (pop bc)
-    (jp branch)
-
-    (label zbranch-fail)
+    (ld a b)
+    (or c)
+    (jr z zbranch)
     (inc de)
     (inc de)
+    (label zbranch)
     (pop bc)
     ,@next
 
@@ -913,9 +893,7 @@
     (call cp-hl-bc)
     (pop bc)
     (pop hl)
-    (jp nc gt-check-neq)
-    (jp fal)
-    (label gt-check-neq)
+    (jp c fal)
     (call cp-hl-bc)
     (jp z fal)
     (jp tru)
@@ -1209,14 +1187,12 @@
     (inc de)
     (label find-loop)
     (call strcmp)
-    (jp z find-succeed)
-    (jp nz find-retry)
+    (jr nz find-retry)
 
-    (label find-succeed)
     (dec de)
     (ld a (de))
     (bit 6 a)
-    (jp nz find-succ-hidden)
+    (jr nz find-succ-hidden)
     (dec de)
     (dec de)
     (pop hl)
@@ -1238,22 +1214,15 @@
     (ld h a)
     (dec de)
     (ld a l)
-    (or a)
-    (jp z find-maybe-fail)
+    (or h)
+    (jr z find-fail)
 
-    (label find-retry-cont)
     (inc hl)
     (inc hl)
     (inc hl)
     ((ex de hl))
     (pop hl)
-    (jp find-loop)
-
-    (label find-maybe-fail)
-    (ld a h)
-    (cp 0)
-    (jp z find-fail)
-    (jp nz find-retry-cont)
+    (jr find-loop)
 
     (label find-fail)
     (pop hl)
@@ -1340,8 +1309,8 @@
     (inc bc)
     (inc bc)
     (ld a (bc))
-    (bit 7 a)
-    (jp z fal)
+    (rla)
+    (jp nc fal)
     (jp tru)
 
     ,@(defcode "IMMEDIATE" 0 'immed)
@@ -1359,11 +1328,10 @@
     (ld a (bc))
     ;; len-mask
     (and 31)
+    (add a 2)
     (ld h 0)
     (ld l a)
-    (inc bc)
     (add hl bc)
-    (inc hl)
     ,@hl-to-bc
     ,@next
 
@@ -1497,12 +1465,10 @@
     (inc bc)
     (ld a (bc))
     (and 31)
+    (add a 3)  
     (ld h 0)
     (ld l a)
-    (inc bc)
     (add hl bc)
-    (inc hl)
-    (inc hl)
     (ld (hl) e)
     (inc hl)
     (ld (hl) d)
@@ -1810,7 +1776,7 @@
     ,@(defcode "SET-RAM-MEMA" 0 'set-ram-mema)
     (ld a c)
     (cp 8)
-    (jp nc invalid-bank-selected)
+    (jr nc invalid-bank-selected)
     ;; We can try loading a RAM page now.
     (di)
     (ld a 64)
