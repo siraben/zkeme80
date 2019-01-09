@@ -831,7 +831,7 @@
     ;; words by hand).  After that it is recommended to write in Forth
     ;; and decompile back into 0BRANCH and BRANCH primitives.
     ,@(defcode "JUMP" 0 'jump)
-    (ex de hl)
+    ((ex de hl))
     (ld e (hl))
     (inc hl)
     (ld d (hl))
