@@ -116,12 +116,7 @@ PAUSE PAGE
 ;
 PAGE
 
-SEE ."
-
-
 : PAD-DEVICE PAD-CLEAR PAD 48 EXPECT PAD INPUT-PTR ! ;
-
-\ KEY-LOOP
 
 \ Not usable yet until we can implement screen scrolling and carriage
 \ return "\r".  Almost there!
@@ -129,7 +124,10 @@ SEE ."
 
 \ REPL
 
-CR
+PAGE
+CR ." hello" PAUSE
+ORIGIN CR ." XXXXX" CR
+
 ." The system is going
 to shutdown!"
 SHUTDOWN 

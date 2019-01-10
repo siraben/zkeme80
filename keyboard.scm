@@ -87,7 +87,7 @@
     (label gs-keygroups)
     (db (#xFE #xFD #xFB #xF7 #xEF #xDF #xBF))
     (label gs-keygroup1)
-    (db (#x01 #x02 #x03 #x04 #x00 #x00 #x00 #x00))
+    (db (#x03 #x02 #x01 #x04 #x00 #x00 #x00 #x00))
     (label gs-keygroup2)
     (db (#x09 #x0A #x0B #x0C #x0D #x0E #x0F #x00))
     (label gs-keygroup3)

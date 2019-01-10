@@ -15,9 +15,9 @@ system.
 "
 16384 OS-END - .
 ." bytes remaining on
-page 00.
+page 00." CR CR
 
-The test suite is
+." The test suite is
 running, please wait...
 "
 

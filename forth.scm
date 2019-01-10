@@ -623,7 +623,7 @@
     ))
 
 (define forth-graphics-words
-  `(;; Draw a rectangle using OR
+  `( ;; Draw a rectangle using OR
     ;; ( x y width height -- )
     ,@(defcode "RECT-OR" 0 'rect-or-forth)
     (ld b c)
@@ -654,6 +654,16 @@
     (pop bc)
     ,@next
 
+    ;; ( x y -- )
+    ,@(defcode "SET-PIXEL" 0 'set-pixel-forth)
+    (ld iy screen-buffer)
+    (ld l c)
+    (pop bc)
+    (ld a c)
+    (call set-pixel)
+    (pop bc)
+    ,@next
+    
     ,@(defcode "CLEAR-SCREEN" 0 'clear-screen)
     (ld iy screen-buffer)
     (call clear-buffer)
@@ -723,6 +733,14 @@
     (call fast-copy)
     ,@next
 
+
+    (label all-black)
+    (db (#b11110000))
+    (db (#b11110000))
+    (db (#b11110000))
+    (db (#b11110000))
+    (db (#b11110000))
+    
     ;; Plot a character to the screen.
     ;; ( char -- )
     ,@(defcode "EMIT" 0 'emit)
@@ -745,11 +763,15 @@
     (ld e a)
 
     (ld iy screen-buffer)
+    (ld hl all-black)
+    (ld b 5)
+    (call put-sprite-and)
+
     ;; Character to print.
     (ld a c)
     ;; Bounding box limits.
     (ld bc 25152)
-
+    
     (call wrap-char-shared)
     (call fast-copy)
     (ld a d)
