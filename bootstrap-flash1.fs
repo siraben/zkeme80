@@ -1,35 +1,8 @@
 \ This file should run a bunch of tests before loading the next stage.
-
-: PRESS-TO-CONTINUE
-." Press any key to
-continue..." PAUSE CR ;
-
-
-\ Redefine ; to be verbose
-\ : ; POSTPONE ; LATEST @ ID. ."  defined." CR ; IMMEDIATE
-
-." Welcome to siraben's
-Forth-based operating
-system.
-
-"
-16384 OS-END - .
-." bytes remaining on
-page 00." CR CR
-
-." The test suite is
-running, please wait...
-"
-
-: STATUS
-DECIMAL UNUSED .
-." bytes available" CR
-HEX HERE ." HERE is at " . CR DECIMAL
-." Stack has contents" CR
-.S
-;
-
-
+: LOGO 32 30 20 20 RECT-XOR 39 37 20 20 RECT-XOR ;
+: BOOT 8 2 CHAR-AT-XY ." zkeme80" LOGO ;
+BOOT
+\ We define the rest of Forth.
 \ Bit shifts are not fast!
 : RSHIFT ?DUP IF 0 DO 2/ LOOP THEN ;
 : LSHIFT ?DUP IF 0 DO 2* LOOP THEN ;
@@ -55,22 +28,22 @@ HEX HERE ." HERE is at " . CR DECIMAL
 
 : BEGIN-STRUCTURE  \ -- addr 0 ; -- size
    CREATE
-     HERE 0 0 ,      \ mark stack, lay dummy
-   DOES> @             \ -- rec-len
+     HERE 0 0 ,    \ mark stack, lay dummy
+   DOES> @         \ -- rec-len
 ;
 
-: +FIELD  \ n <"name"> -- ; Exec: addr -- 'addr
+: +FIELD           \ n <"name"> -- ; Exec: addr -- 'addr
    CREATE OVER , +
    DOES> @ +
 ;
  
-: FIELD:    ( n1 "name" -- n2 ; addr1 -- addr2 )
+: FIELD:           ( n1 "name" -- n2 ; addr1 -- addr2 )
   1 CELLS +FIELD
 ;
 
-: END-STRUCTURE  \ addr n --
+: END-STRUCTURE    \ addr n --
   SWAP !
-;          \ set len
+;                  \ set len
 
 : VALUE  CREATE  ['] LIT , , ['] EXIT , ;
 
@@ -84,11 +57,78 @@ HEX HERE ." HERE is at " . CR DECIMAL
      THEN
 ; IMMEDIATE
 
+: LOAD-STAGE2
+  2 SET-RAM-MEMA
+  IF
+    MEMA INPUT-PTR ! PAGE
+  ELSE
+    ." Couldn't load stage 3.  Shutting down." CR
+    SHUTDOWN           
+  THEN
+;
+
 \ END OF BOOTSTRAP DEFINITIONS
+1 CONSTANT RIGHT
+2 CONSTANT LEFT
+3 CONSTANT UP
+4 CONSTANT DOWN
+
+: PRESS-TO-CONTINUE
+." Press any key to
+continue..." PAUSE CR
+;
+
+: GREETING
+PAGE
+." Welcome to siraben's
+Forth-based operating
+system, zkeme80."
+;
+
+: REPORT-PAGE0
+    16384 OS-END - .
+." bytes remaining on
+page 00."
+;
+
+: TEST-SUITE-START
+." The test suite is
+running, please wait..." CR
+;
+
+: STATUS
+DECIMAL UNUSED .
+." bytes available" CR
+HEX HERE ." HERE is at " . CR DECIMAL
+." Stack has contents" CR
+.S
+;
+
+: Y-OR-N BEGIN KEY DUP RIGHT LEFT WITHIN IF EXIT THEN DROP AGAIN ;
+
+: 2CR CR CR ;
+
+: ASK-RUN-OR-SKIP-TEST
+  ." Would you like to run
+the test suite?" 2CR
+  ."      <- NO | YES ->" CR
+  Y-OR-N
+  CASE
+    \ If the user said yes, we're exiting.
+    RIGHT OF EXIT ENDOF
+    \ Otherwise let's load bootstrap flash 2.
+    LEFT OF LOAD-STAGE2 ENDOF
+  ENDCASE
+;
+
+
+GREETING 2CR ASK-RUN-OR-SKIP-TEST
+
+TEST-SUITE-START
 
 HERE 32 CELLS ALLOT CONSTANT ACTUAL-RESULTS
 
-VARIABLE ACTUAL-DEPTH			\ stack record
+VARIABLE ACTUAL-DEPTH \ stack record
 
 VARIABLE START-DEPTH
 
@@ -227,6 +267,7 @@ T{ 1S 1S XOR -> 0S }T
 0S CONSTANT <FALSE>
 1 CONSTANT <TRUE>
 
+T{ TRUE -> <TRUE> }T
 
 : GN2 \ ( -- 16 10 )
    BASE @ >R HEX BASE @ DECIMAL BASE @ R> BASE ! ;
@@ -278,24 +319,41 @@ T{ GT2 EXECUTE -> 123 }T
 : TMOD /MOD DROP ;
 : T/   /MOD SWAP DROP ;
 
-\ only unsigned test cases
-T{       0       1 / ->       0       1 T/ }T
-T{       1       1 / ->       1       1 T/ }T
-T{       2       1 / ->       2       1 T/ }T
-T{       2       2 / ->       2       2 T/ }T 
-T{       7       3 / ->       7       3 T/ }T
+T{  0  1   / ->  0  1 T/ }T
+T{  1  1   / ->  1  1 T/ }T
+T{  2  1   / ->  2  1 T/ }T
+T{  2  2   / ->  2  2 T/ }T 
+T{  7  3   / ->  7  3 T/ }T
+    
+T{  0  1 MOD ->  0  1 TMOD }T
+T{  1  1 MOD ->  1  1 TMOD }T
+T{  2  1 MOD ->  2  1 TMOD }T
+    
+T{  0 0= -> 1  }T
+T{  1 0= -> 0  }T
+T{  2 0= -> 0  }T
 
-T{       0       1 MOD ->       0       1 TMOD }T
-T{       1       1 MOD ->       1       1 TMOD }T
-T{       2       1 MOD ->       2       1 TMOD }T
+T{  0  0  = -> <TRUE>  }T
+T{  0  0 >= -> <TRUE>  }T
+T{  0  0 <= -> <TRUE>  }T
 
-T{        0 0= -> 1  }T
-T{        1 0= -> 0  }T
-T{        2 0= -> 0  }T
+T{  0  1  = -> <FALSE> }T
+T{  0  1 >= -> <FALSE> }T
+T{  0  1 <= -> <TRUE> }T
 
-T{  0  0 = -> <TRUE>  }T
-T{  1  1 = -> <TRUE>  }T
-T{  0  1 = -> <FALSE> }T
+T{  1  0  = -> <FALSE> }T
+T{  1  0 >= -> <TRUE> }T
+T{  1  0 <= -> <FALSE> }T
+
+T{  1  1  = -> <TRUE>  }T
+T{  1  1 >= -> <TRUE>  }T
+T{  1  1 <= -> <TRUE>  }T
+
+T{   0 1 10 WITHIN -> <FALSE> }T
+T{   1 1 10 WITHIN -> <TRUE> }T
+T{   4 0 10 WITHIN -> <TRUE> }T
+T{  10 0 10 WITHIN -> <TRUE> }T
+T{  11 0 10 WITHIN -> <FALSE> }T
 
 T{ 0 1 DEPTH -> 0 1 2 }T
 T{   0 DEPTH -> 0 1   }T
@@ -353,6 +411,17 @@ T{ 1 GD5 -> 123 }T
 T{ 5 GD5 -> 123 }T
 T{ 6 GD5 -> 234 }T
 
+T{ : GD6 ( PAT: {0 0},{0 0}{1 0}{1 1},{0 0}{1 0}{1 1}{2 0}{2 1}{2 2} ) 
+      0 SWAP 0 DO 
+         I 1+ 0 DO 
+           I J + 3 = IF I UNLOOP I UNLOOP EXIT THEN 1+ 
+         LOOP 
+      LOOP ; -> }T
+T{ 1 GD6 -> 1 }T
+T{ 2 GD6 -> 3 }T
+T{ 3 GD6 -> 4 1 2 }T
+
+
 : CS1 CASE 1 OF 111 ENDOF
    2 OF 222 ENDOF
    3 OF 333 ENDOF
@@ -365,6 +434,25 @@ T{ 2 CS1 -> 222 }T
 T{ 3 CS1 -> 333 }T
 T{ 4 CS1 -> 999 }T
 
+: CS2 >R CASE
+   1 OF CASE R@ 1 OF 100 ENDOF
+                2 OF 200 ENDOF
+                >R 300 R>
+        ENDCASE
+     ENDOF
+   2 OF CASE R@ 1 OF 99 ENDOF
+                >R 199 R>
+        ENDCASE
+     ENDOF
+     >R 299 R>
+   ENDCASE R> DROP ;
+
+T{ 1 1 CS2 ->  100 }T
+T{ 1 2 CS2 ->  200 }T
+T{ 1 3 CS2 -> 300 }T
+T{ 2 1 CS2 ->  99 }T
+T{ 2 2 CS2 -> 199 }T
+T{ 0 2 CS2 ->  299 }T
 
 T{ : NOP : POSTPONE ; ; -> }T
 T{ NOP NOP1 NOP NOP2 -> }T
@@ -384,16 +472,18 @@ T{ 123 GR1 -> 123 }T
 T{ 123 GR2 -> 123 }T
 T{  1S GR1 ->  1S }T      ( Return stack holds cells )
 
+\ 2>R is semantically equivalent to SWAP >R >R
+T{ 1 2 2>R 2R> -> 1 2 SWAP >R >R R> R> SWAP }T
+
+
 \ This test fails!  Maybe this is where being non-standard is better?
 \ T{ ( A comment)1234 -> }T
-T{ : pc1 ( A comment)1234 ; pc1 -> 1234 }T
-
+T{ : PC1 ( A comment)1234 ; PC1 -> 1234 }T
 
 HERE 1 ,
 HERE 2 ,
 CONSTANT 2ND
 CONSTANT 1ST
-
 
 T{       1ST 2ND < -> 1    }T \ HERE MUST GROW WITH ALLOT
 T{       1ST CELL+  -> 2ND }T \ ... BY ONE CELL
@@ -409,10 +499,12 @@ T{           1ST 2@ -> 2 1 }T
 T{ 1S 1ST !  1ST @  -> 1S  }T  \ CAN STORE CELL-WIDE VALUE
 
 
-BEGIN-STRUCTURE POINT \ -- a-addr 0 ; -- lenp
+T{
+BEGIN-STRUCTURE POINT     \ -- a-addr 0 ; -- lenp
    FIELD: P.X             \ -- a-addr cell
    FIELD: P.Y             \ -- a-addr cell*2
 END-STRUCTURE
+-> }T
 
 HERE POINT ALLOT CONSTANT MY-POINT
 
@@ -461,6 +553,8 @@ T{    123 V1 ! ->     }T
 T{        V1 @ -> 123 }T
 T{   111 V1 +! ->     }T
 T{        V1 @ -> 234 }T
+T{   111 V1 -! ->     }T
+T{        V1 @ -> 123 }T
 
 : GS3 WORD DROP COUNT SWAP C@ ;
 T{ GS3 HELLO -> 5 CHAR H }T
@@ -515,19 +609,20 @@ T{ C5 -> 5 }T
 PAGE
 REPORT-TESTS CR CR
 
-
-
 PRESS-TO-CONTINUE
 
 PAGE
 
+: RC4-TEST-MSG
 ." Performing RC4 test
 (code taken from
 Wikipedia)." CR
 
 ." Expect this sequence:
 F1 38 29 C9 DE" CR
+;
 
+RC4-TEST-MSG
 
 0 VALUE II        0 VALUE JJ
 0 VALUE KEYADDR   0 VALUE KEYLEN
@@ -592,21 +687,5 @@ USED - . ." bytes freed." CR
 
 PRESS-TO-CONTINUE
 
-: STAGE2
+LOAD-STAGE2
 
-  \ Try to set RAM Memory region A to be the first RAM flash page.
-  2 SET-RAM-MEMA
-  IF
-    \ We set the input pointer to point to memory bank A.
-    MEMA INPUT-PTR ! PAGE
-  ELSE
-    \ Something went wrong.  Shutdown.
-    ." Couldn't load stage 3.  Shutting down." CR
-    PAUSE POWEROFF           
-  THEN
-;
-
-
-STAGE2
-
-\ Load the next bootstrap

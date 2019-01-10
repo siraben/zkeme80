@@ -1,4 +1,4 @@
-* Test Coverage [108/150]
+* Test Coverage [118/150]
 Excludes words with special semantics and used in the ~forth.scm~
 stage only (~0BRANCH~ ~BRANCH~, ~0JUMP~, ~JUMP~).  If a WORD word
 (e.g. ~CATCH~, ~THROW~) works correctly according to the standard
@@ -9,12 +9,13 @@ I/O words (key input, sprite drawing, etc.) and variables and
 constants are omitted.
 
 ** DONE ~<~
-** TODO ~<=~
+** DONE ~<=~
 ** DONE ~<>~
 ** DONE ~=~
+** DONE ~>=~
 ** DONE ~>~
 ** DONE ~-~
-** TODO ~-!~
+** DONE ~-!~
 ** DONE ~,~
 ** DONE ~;~
 ** DONE ~:~
@@ -42,8 +43,8 @@ constants are omitted.
 ** DONE ~2DROP~
 ** DONE ~2DUP~
 ** DONE ~2OVER~
-** TODO ~2>R~
-** TODO ~2R>~
+** DONE ~2>R~
+** DONE ~2R>~
 ** TODO ~2RDROP~
 ** DONE ~2SWAP~
 ** TODO ~ABORT~
@@ -89,8 +90,8 @@ constants are omitted.
 ** DONE ~END-STRUCTURE~
 ** TODO ~ERASE-SECTOR~
 ** DONE ~EXECUTE~
-** TODO ~EXIT~
-** TODO ~FALSE~
+** DONE ~EXIT~
+** DONE ~FALSE~
 ** DONE ~FIELD:~
 ** TODO ~FIND~
 ** TODO ~FORGET~
@@ -117,7 +118,7 @@ constants are omitted.
 ** TODO ~NOT~
 ** TODO ~NUM?~
 ** DONE ~NUMBER~
-** TODO ~OF~
+** DONE ~OF~
 ** DONE ~OR~
 ** DONE ~OVER~
 ** TODO ~PARSE-NUMBER~
@@ -145,9 +146,10 @@ constants are omitted.
 ** DONE ~THEN~
 ** DONE ~THROW~
 ** TODO ~TO-ASCII~
-** TODO ~TRUE~
+** DONE ~TRUE~
 ** DONE ~TUCK~
 ** TODO ~UNGETC~
+** DONE ~UNLOOP~
 ** DONE ~UNTIL~
 ** TODO ~UWIDTH~
 ** DONE ~VALUE~

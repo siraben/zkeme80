@@ -362,9 +362,9 @@
     (rl b)
     ,@next
 
+    ;; It's a no-op.
     ,@(defcode "CHARS" 0 'chars)
     ,@next
-
 
     ,@(defcode "2/" 0 '2/)
     (srl b)
@@ -573,6 +573,7 @@
     (ld a h)
     (ld (bc) a)
     (pop de)
+    (pop bc)
     ,@next
 
     ,@(defcode "C!" 0 'c!)
@@ -804,8 +805,17 @@
     ,@next
 
     ;; ( x y --)
-    ,@(defword "AT-XY" 0 'at-xy)
-    (dw (cur-row ! cur-col !))
+    ,@(defcode "AT-XY" 0 'at-xy)
+    (ld a c)
+    (ld (var-cur-row) a)
+    (pop bc)
+    (ld a c)
+    (ld (var-cur-col) a)
+    (pop bc)
+    ,@next
+
+    ,@(defword "CHAR-AT-XY" 0 'char-at-xy)
+    (dw (lit 6 * swap lit 4 * swap at-xy))
     (dw (exit))
 
     ;; Draw a string to the screen
@@ -946,6 +956,12 @@
     ,@(defcode "<=" 0 '<=)
     ,@bc-to-hl
     (pop bc)
+    (call cp-hl-bc)
+    (jp nc tru)
+    (jp fal)
+
+    ,@(defcode ">=" 0 '>=)
+    (pop hl)
     (call cp-hl-bc)
     (jp nc tru)
     (jp fal)
@@ -1915,6 +1931,16 @@
     ,@(defconst "MEMA" 'mema #x4000)
     ,@(defconst "HERE" 'here '(var-dp))
     ,@(defconst "BL" 'bl 32)
+
+    ;; Maximum x and y coordinates that can be drawn on the screen.
+    ,@(defconst "MAX-COL" 'max-col 95)
+    ,@(defconst "MAX-ROW" 'max-row 63)
+    
+    ;; Maximum x and y coordinates that can be drawn on the screen for
+    ;; characters.
+    ,@(defconst "CHAR-MAX-COL" 'char-max-col 23)
+    ,@(defconst "CHAR-MAX-ROW" 'char-max-row 11)
+    
     ))
 
 (define (make-char-lookup-table)
@@ -1973,7 +1999,6 @@
     (dw (lit bootstrap-fs lit var-input-ptr !))
     (dw (lit 1 lit bootstrap-load-bool +! lit bootstrap-load-bool @))
     (dw (exit))
-
 
     ;; The default input device, which loads the bootstrap.
     ,@(defword "PROMPT" 0 'prompt)
