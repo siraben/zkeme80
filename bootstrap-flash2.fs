@@ -12,6 +12,7 @@
 : STAGE2-END ." End of stage 3." ;
 
 : STAGE2-MAIN
+  PAGE
   STAGE2-LOADED CR
   STAGE2-END
   LOAD-STAGE3

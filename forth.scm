@@ -703,6 +703,7 @@
     (ld b c)
     (pop hl)
     (call put-sprite-or)
+    (call fast-copy)
     (pop bc)
     (ld de (var-temp-cell))
     ,@next
@@ -717,6 +718,7 @@
     (ld b c)
     (pop hl)
     (call put-sprite-and)
+    (call fast-copy)
     (pop bc)
     (ld de (var-temp-cell))
     ,@next
@@ -731,7 +733,8 @@
     (pop bc)
     (ld b c)
     (pop hl)
-    (call put-sprite-and)
+    (call put-sprite-xor)
+    (call fast-copy)
     (pop bc)
     (ld de (var-temp-cell))
     ,@next
