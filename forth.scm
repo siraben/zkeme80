@@ -635,6 +635,7 @@
     (pop de)
     (ld iy screen-buffer)
     (call rect-or)
+    (call fast-copy)
     (ld de (var-temp-cell))
     (pop bc)
     ,@next
@@ -650,6 +651,22 @@
     (pop de)
     (ld iy screen-buffer)
     (call rect-xor)
+    (call fast-copy)
+    (ld de (var-temp-cell))
+    (pop bc)
+    ,@next
+
+    ;; Draw a rectangle using AND
+    ;; ( x y width height -- )
+    ,@(defcode "RECT-AND" 0 'rect-and-forth)
+    (ld b c)
+    (pop hl)
+    (ld c l)
+    (pop hl)
+    (ld (var-temp-cell) de)
+    (pop de)
+    (ld iy screen-buffer)
+    (call rect-and)
     (call fast-copy)
     (ld de (var-temp-cell))
     (pop bc)

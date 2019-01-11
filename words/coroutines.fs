@@ -1,12 +1,13 @@
+\ Simple demonstration of coroutines.
 
 : CO R> R> SWAP >R >R ;
 
 : TOKYO
-       ." HERE TOKYO OVER" CR CO
-       ." WHAT GIVES? OVER" CR CO
-       ." YES, MORE? OVER" CR CO
-       ." OVER AND OUT" CR
- ;
+   ." HERE TOKYO OVER" CR CO
+   ." WHAT GIVES? OVER" CR CO
+   ." YES, MORE? OVER" CR CO
+   ." OVER AND OUT" CR
+;
 
 : AMSTERDAM
    TOKYO

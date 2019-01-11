@@ -74,8 +74,8 @@
   DROP
 ;
 
-' FOO WRAPPER
-CR .S \ 1 2 3 4 FAILURE
+' FOO WRAPPER \ 1 2 3 4 FAILURE
+CR .S \ should be empty
 
 : EVEN? 2 MOD 0= ;
 
@@ -112,10 +112,11 @@ CR .S \ should be empty
     ' 1+ ,
     ' DUP ,
     ' LIT ,
-    R> ,
+    R>
+    ,
     ' < ,
   POSTPONE WHILE
-    POSTPONE SUCC
+  POSTPONE SUCC
   POSTPONE REPEAT
   ' DROP ,
   POSTPONE FAIL
@@ -128,7 +129,7 @@ CR .S \ should be empty
 
 \ Succeed or fail depending on whether the number on the stack is
 \ divisible by 2.
-: //2 EVEN? IF SUCC THEN FAIL ;
+: //2 EVEN? IF SUCC ELSE FAIL THEN ;
 
 \ Take the numbers from 1 to 10, filter the even ones and print them.
 : .even1-10 1-10 //2 DUP . ;

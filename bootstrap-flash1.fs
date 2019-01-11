@@ -1,7 +1,10 @@
 \ This file should run a bunch of tests before loading the next stage.
+\ The OS logo.
 : LOGO 32 30 20 20 RECT-XOR 39 37 20 20 RECT-XOR ;
-: BOOT 8 2 CHAR-AT-XY ." zkeme80" LOGO ;
-BOOT
+: OS-NAME 8 2 CHAR-AT-XY ." zkeme80" ;
+: BOOT-SCREEN OS-NAME LOGO ;
+BOOT-SCREEN
+
 \ We define the rest of Forth.
 \ Bit shifts are not fast!
 : RSHIFT ?DUP IF 0 DO 2/ LOOP THEN ;
@@ -10,9 +13,9 @@ BOOT
 : TYPE 0 DO DUP C@ EMIT 1+ LOOP DROP ;
 
 : UNLOOP    ( -- , r: i limit -- : remove limit and i from  )
-	R>           ( save our return address )
-	RDROP        ( pop off i )
-	RDROP        ( pop off limit )
+        R>           ( save our return address )
+        RDROP        ( pop off i )
+        RDROP        ( pop off limit )
         >R
 ;
 
@@ -36,7 +39,7 @@ BOOT
    CREATE OVER , +
    DOES> @ +
 ;
- 
+
 : FIELD:           ( n1 "name" -- n2 ; addr1 -- addr2 )
   1 CELLS +FIELD
 ;
@@ -57,17 +60,33 @@ BOOT
      THEN
 ; IMMEDIATE
 
+\ Non-standard for now.
+\ Display n defined words.
+
+: WORDS ( n -- )
+  LATEST @ SWAP 0 DO
+    ?DUP IF
+      DUP ?HIDDEN NOT IF
+        DUP ID. SPACE
+      THEN
+      @
+    ELSE
+      LEAVE
+    THEN
+  LOOP
+  DROP
+;
+
+
 : LOAD-STAGE2
   2 SET-RAM-MEMA
   IF
     MEMA INPUT-PTR ! PAGE
   ELSE
     ." Couldn't load stage 3.  Shutting down." CR
-    SHUTDOWN           
+    SHUTDOWN
   THEN
 ;
-
-\ END OF BOOTSTRAP DEFINITIONS
 1 CONSTANT RIGHT
 2 CONSTANT LEFT
 3 CONSTANT UP
@@ -122,10 +141,14 @@ the test suite?" 2CR
 ;
 
 
+\ END OF BOOTSTRAP DEFINITIONS
+
 GREETING 2CR ASK-RUN-OR-SKIP-TEST
 
 TEST-SUITE-START
 
+\ Any word defined from this point on to the end of this stage.  will
+\ be forgotten.
 HERE 32 CELLS ALLOT CONSTANT ACTUAL-RESULTS
 
 VARIABLE ACTUAL-DEPTH \ stack record
@@ -175,8 +198,8 @@ VARIABLE ERROR-XT
 ;
 
 
-: ERROR1	\ ( C-ADDR U -- ) display an error message 
-		\ followed by the line that had the error.
+: ERROR1	\ ( C-ADDR U -- ) display an error message
+                \ followed by the line that had the error.
   TYPE CR INPUT-PTR @ SEEK-NEWLINE-BACK EMIT-UNTIL-NEWLINE CR
   \ display line corresponding to error
    EMPTY-STACK				\ throw away everything else
@@ -203,20 +226,21 @@ VARIABLE SUCCESS-TEST-COUNT
    START-DEPTH @ > IF		\ if there is something on the stack
        DEPTH START-DEPTH @ - 0 DO ACTUAL-RESULTS I CELLS + ! LOOP \ save them
    THEN
-; 
+;
 
 : }T		\ ( ... -- ) COMPARE STACK (EXPECTED) CONTENTS WITH SAVED
-		\ (ACTUAL) CONTENTS.
+                \ (ACTUAL) CONTENTS.
    DEPTH ACTUAL-DEPTH @ = IF		\ if depths match
       DEPTH START-DEPTH @ > IF		\ if there is something on the stack
          DEPTH START-DEPTH @ - 0 DO	\ for each stack item
-	    ACTUAL-RESULTS I CELLS + @	\ compare actual with expected
-	    <> IF S" INCORRECT RESULT: " ERROR LEAVE THEN
-	 LOOP
+            ACTUAL-RESULTS I CELLS + @	\ compare actual with expected
+            <> IF S" INCORRECT RESULT: " ERROR LEAVE THEN
+         LOOP
       THEN
    ELSE					\ depth mismatch
-      S" WRONG NUMBER OF RESULTS: " ERROR
+      S" WRONG NUMBER OF RESULTS: " ERROR EXIT
    THEN
+   \ The test was good.
    ADD-SUCCESS-TEST
 ;
 
@@ -230,8 +254,8 @@ VARIABLE SUCCESS-TEST-COUNT
 ;
 
 
-
-T{ -> }T					\ START WITH CLEAN SLATE
+\ START WITH CLEAN SLATE
+T{ -> }T
 ( TEST IF ANY BITS ARE SET; ANSWER IN BASE 1 )
 T{ : BITSSET? IF 0 0 ELSE 0 THEN ; -> }T
 T{  0 BITSSET? -> 0 }T    ( ZERO IS ALL BITS CLEAR )
@@ -322,13 +346,13 @@ T{ GT2 EXECUTE -> 123 }T
 T{  0  1   / ->  0  1 T/ }T
 T{  1  1   / ->  1  1 T/ }T
 T{  2  1   / ->  2  1 T/ }T
-T{  2  2   / ->  2  2 T/ }T 
+T{  2  2   / ->  2  2 T/ }T
 T{  7  3   / ->  7  3 T/ }T
-    
+
 T{  0  1 MOD ->  0  1 TMOD }T
 T{  1  1 MOD ->  1  1 TMOD }T
 T{  2  1 MOD ->  2  1 TMOD }T
-    
+
 T{  0 0= -> 1  }T
 T{  1 0= -> 0  }T
 T{  2 0= -> 0  }T
@@ -404,18 +428,18 @@ T{          4        1 GD1 ->  1 2 3   }T
 T{ : GD3 DO 1 0 DO J LOOP LOOP ; -> }T
 T{          4        1 GD3 ->  1 2 3   }T
 
-T{ : GD5 123 SWAP 0 DO 
-     I 4 > IF DROP 234 LEAVE THEN 
+T{ : GD5 123 SWAP 0 DO
+     I 4 > IF DROP 234 LEAVE THEN
    LOOP ; -> }T
 T{ 1 GD5 -> 123 }T
 T{ 5 GD5 -> 123 }T
 T{ 6 GD5 -> 234 }T
 
-T{ : GD6 ( PAT: {0 0},{0 0}{1 0}{1 1},{0 0}{1 0}{1 1}{2 0}{2 1}{2 2} ) 
-      0 SWAP 0 DO 
-         I 1+ 0 DO 
-           I J + 3 = IF I UNLOOP I UNLOOP EXIT THEN 1+ 
-         LOOP 
+T{ : GD6 ( PAT: {0 0},{0 0}{1 0}{1 1},{0 0}{1 0}{1 1}{2 0}{2 1}{2 2} )
+      0 SWAP 0 DO
+         I 1+ 0 DO
+           I J + 3 = IF I UNLOOP I UNLOOP EXIT THEN 1+
+         LOOP
       LOOP ; -> }T
 T{ 1 GD6 -> 1 }T
 T{ 2 GD6 -> 3 }T
@@ -519,7 +543,7 @@ HERE
 CONSTANT 2NDA
 CONSTANT 1STA
 T{ 1STA 2NDA <  ->      1 }T         \ HERE MUST GROW WITH ALLOT
-T{      1STA 1+ ->   2NDA }T    \ ... BY ONE ADDRESS UNIT 
+T{      1STA 1+ ->   2NDA }T    \ ... BY ONE ADDRESS UNIT
 
 
 HERE 1 C,
@@ -568,19 +592,19 @@ T{ GS3 HELLO -> 5 CHAR H }T
    PAGE
    ." YOU SHOULD SEE 0-9 SEPARATED BY A SPACE:" CR
    9 1+ 0 DO I . LOOP CR
-   PAGE     
+   PAGE
    ." YOU SHOULD SEE 0-9 (WITH NO SPACES):" CR
    [ CHAR 9 ] LITERAL 1+ [ CHAR 0 ] LITERAL DO I EMIT LOOP CR
-   PAGE     
+   PAGE
    ." YOU SHOULD SEE A-G SEPARATED BY A SPACE:" CR
    [ CHAR G ] LITERAL 1+ [ CHAR A ] LITERAL DO I EMIT SPACE LOOP CR
-   PAGE     
+   PAGE
    ." YOU SHOULD SEE 0-5 SEPARATED BY TWO SPACES:" CR
    5 1+ 0 DO I [ CHAR 0 ] LITERAL + EMIT 2 SPACES LOOP CR
-   PAGE     
+   PAGE
    ." YOU SHOULD SEE TWO SEPARATE LINES:" CR
    S" LINE 1" TYPE CR S" LINE 2" TYPE CR
-   PAGE     
+   PAGE
 ;
 
 \ Optional output test, may dizzy the user.
@@ -676,9 +700,8 @@ PRESS-TO-CONTINUE
 PAGE
 
 
-." Forgetting all words
-after ACTUAL-RESULTS
-to save on space..." CR CR
+." Unloading test suite
+words to save on space" CR CR
 USED
 
 FORGET ACTUAL-RESULTS
