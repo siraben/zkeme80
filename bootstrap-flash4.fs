@@ -1,3 +1,19 @@
+: LOAD-OS-MENU
+  1 SET-RAM-MEMA
+  IF
+    MEMA INPUT-PTR !
+  ELSE
+    ." Couldn't load the OS
+menu.  Shutting down." CR
+    SHUTDOWN
+  THEN
+;
+
+: GREETING
+." Welcome to the test
+suite"  
+;
+
 : PRESS-TO-CONTINUE
 ." Press any key to
 continue..." PAUSE CR
@@ -8,35 +24,13 @@ continue..." PAUSE CR
 running, please wait..." CR
 ;
 
-: STATUS
-DECIMAL UNUSED .
-." bytes available" CR
-HEX HERE ." HERE is at " . CR DECIMAL
-." Stack has contents" CR
-.S
-;
-
 : Y-OR-N BEGIN KEY DUP RIGHT LEFT WITHIN IF EXIT THEN DROP AGAIN ;
 
 : 2CR CR CR ;
 
-: ASK-RUN-OR-SKIP-TEST
-  ." Would you like to run
-the test suite?" 2CR
-  ."      <- NO | YES ->" CR
-  Y-OR-N
-  CASE
-    \ If the user said yes, we're exiting.
-    RIGHT OF EXIT ENDOF
-    \ Otherwise let's load bootstrap flash 2.
-    LEFT OF LOAD-STAGE2 ENDOF
-  ENDCASE
-;
-
-
 \ END OF BOOTSTRAP DEFINITIONS
 
-GREETING 2CR TEST-SUITE-START
+PAGE GREETING 2CR TEST-SUITE-START
 
 \ Any word defined from this point on to the end of this stage.  will
 \ be forgotten.
@@ -519,9 +513,6 @@ T{ C3 -> 1 2 99 }T    \ RESTORES STACK TO CATCH DEPTH
    DEPTH >R DROP 2DROP 2DROP R> ;    \ AFTER STACK HAS BEEN EMPTIED
 T{ C5 -> 5 }T
 
-." Tests finished."
-
-PAGE
 REPORT-TESTS CR CR
 
 PRESS-TO-CONTINUE
@@ -601,5 +592,4 @@ USED - . ." bytes freed." CR
 
 PRESS-TO-CONTINUE
 
-LOAD-STAGE2
-
+MENU-DEMO

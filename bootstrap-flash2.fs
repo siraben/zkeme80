@@ -8,13 +8,13 @@
   THEN
 ;
 
-: STAGE2-LOADED ." Bootstrap stage 3 loaded" ;
-: STAGE2-END ." End of stage 3." ;
+: STAGE2-LOADED ." Bootstrap stage 2 loaded" ;
+: STAGE2-END ." End of stage 2." ;
 
 : STAGE2-MAIN
   PAGE
   STAGE2-LOADED CR
-  STAGE2-END
+  STAGE2-END PAUSE
   LOAD-STAGE3
 ;
 

@@ -127,12 +127,13 @@ CONSTANT LOADING-DOT
 ZKEME80-LOGO
 DRAW-LOADING-DOT
 
-: LOAD-STAGE2
-  2 SET-RAM-MEMA
+: LOAD-TEST-SUITE
+  4 SET-RAM-MEMA
   IF
     MEMA INPUT-PTR !
   ELSE
-    ." Couldn't load stage 3.  Shutting down." CR
+    ." Couldn't load the test
+suite.  Shutting down." CR
     SHUTDOWN
   THEN
 ;
@@ -232,11 +233,11 @@ ROWS COLUMNS GRID MENU-ENTRIES
 \ selection and deselection updates, and what the menu entry should do
 \ when it's clicked through.
 BEGIN-STRUCTURE MENU-ENTRY
-  \ An xt of type ( -- ) that should select the menu entry.
+  \ An xt of type ( -- ) that selects the menu entry.
   FIELD: MENU-ENTRY.SELECTOR
-  \ An xt of type ( -- ) that should deselect the menu entry.
+  \ An xt of type ( -- ) that deselects the menu entry.
   FIELD: MENU-ENTRY.DESELECTOR
-  \ An xt of type ( -- ) that should deselect be the menu entry's action.
+  \ An xt of type ( -- ) that is menu entry's action.
   FIELD: MENU-ENTRY.ON-CLICK
 END-STRUCTURE
 
@@ -247,6 +248,16 @@ END-STRUCTURE
   SWAP !
 ;
 
+: STATUS
+DECIMAL UNUSED .
+." bytes available" CR
+HEX HERE ." HERE is at " . CR DECIMAL
+." Stack has contents" CR
+.S
+;
+
+\ Have we clicked through?
+0 VALUE CLICKED?
 VARIABLE XPOS
 VARIABLE YPOS
 ROWS    1- CONSTANT MENU-MAX-X
@@ -356,7 +367,6 @@ CONSTANT TEST-SPRITE
 \ Button spacing
 5  CONSTANT BUTTON-SPACING
 
-
 : MENU-START MENU-STARTX MENU-STARTY ;
 : DRAW-SELECTED-BUTTON BUTTON-SIZE DRAW-SQUARE ;
 : DRAW-DESELECTED-BUTTON BUTTON-SIZE BORDER-SIZE DRAW-SQUARE-WITH-BORDER ;
@@ -383,7 +393,49 @@ VARIABLE CURRENT-TITLE
 \ Add logo offset y
 : +LOY LOGO-OFFSETY + ;
 
+\ What's the current menu entry?
+: CURRENT-MENU-ENTRY ( -- ) XPOS @ YPOS @ MENU-ENTRIES @ ;
+\ Maybe execute something.
+: ?EXECUTE ( n -- ) ?DUP IF EXECUTE THEN ;
+\ Given a pointer to a menu entry, run its selector xt if it's not null.
+: ?RUN-SELECTOR ( menu-entry -- ) ?DUP IF MENU-ENTRY.SELECTOR @ ?EXECUTE THEN ;
+\ Given a pointer to a menu entry, run its deselector xt if it's not null.
+: ?RUN-DESELECTOR ( menu-entry -- ) ?DUP IF MENU-ENTRY.DESELECTOR @ ?EXECUTE THEN ;
+\ Given a pointer to a menu entry, run its on click xt if it's not null.
+: ?RUN-ON-CLICK ( menu-entry -- ) ?DUP IF MENU-ENTRY.ON-CLICK @ ?EXECUTE THEN ;
+\ Deselect the previous menu entry.
+: DESELECT-PREV ( -- ) CURRENT-MENU-ENTRY ?RUN-DESELECTOR ;
+\ Deselect the specified entry at (x, y).
+: DESELECT-ENTRY ( x y -- ) MENU-ENTRIES @ ?RUN-DESELECTOR ;
+\ Run the selector at the current menu choice.
+: DRAW-TICK     ( -- ) CURRENT-MENU-ENTRY ?RUN-SELECTOR ;
+
 DRAW-LOADING-DOT
+
+\ Is n an arrow key?
+: ARROW-KEY?    ( n -- b ) DUP 1 4 WITHIN SWAP 9 = OR ;
+\ Block until an arrow key is read.
+: GET-ARROW-KEY ( -- k ) BEGIN KEY DUP ARROW-KEY? IF EXIT THEN DROP AGAIN ;
+\ Set the click flag iff the xt is not null.
+: ?DO-CLICK ( xt|0 -- ) DUP MENU-ENTRY.ON-CLICK @ IF 1 TO CLICKED? THEN ;
+\ Maybe the key is enter, and act on it.
+: MAYBE-ENTER ( n -- ) 9 = IF CURRENT-MENU-ENTRY ?DO-CLICK ?RUN-ON-CLICK THEN ;
+\ Act upon a key code.
+: MAYBE-ACT ( k -- ) MAYBE-UPDATE-XY MAYBE-ENTER ;
+\ One tick of the menu demo.
+: MENU-DEMO-TICK ( -- ) GET-ARROW-KEY DESELECT-PREV DUP MAYBE-ACT DRAW-TICK ;
+\ Draw the menu deselected.
+: DRAW-ENTRIES-DESELECTED ( -- ) ROWS 0 DO COLUMNS 0 DO I J DESELECT-ENTRY LOOP LOOP ;
+\ Initialize the current x and y.
+: INIT-XY ( -- ) 0 XPOS ! 0 YPOS ! ;
+
+66 TO ZKEME80-LOGO-STARTX
+29 TO ZKEME80-LOGO-STARTY
+
+: MENU-INIT 0 TO CLICKED? PAGE ZKEME80-LOGO DRAW-ENTRIES-DESELECTED INIT-XY DRAW-TICK ;
+\ The demo.
+: MENU-DEMO ( -- ) MENU-INIT BEGIN CLICKED? NOT WHILE MENU-DEMO-TICK REPEAT ;
+
 
 0 0 BUTTON-COORDS CONSTANT TLY CONSTANT TLX
 
@@ -399,7 +451,7 @@ DRAW-LOADING-DOT
 : BL-TITLE CLEAR-TITLE INFO-TITLE ;
 : BOTTOM-LEFT-SELECT BLX BLY DRAW-SELECTED-BUTTON BL-LOGO BL-TITLE ;
 : BOTTOM-LEFT-DESELECT BLX BLY DRAW-DESELECTED-BUTTON BL-LOGO ;
-
+: BOTTOM-LEFT-ON-CLICK PAGE STATUS PAUSE MENU-INIT ;
 
 1 0 BUTTON-COORDS CONSTANT TRY CONSTANT TRX
 
@@ -415,7 +467,7 @@ DRAW-LOADING-DOT
 : BR-TITLE CLEAR-TITLE TEST-TITLE ;
 : BOTTOM-RIGHT-SELECT BRX BRY DRAW-SELECTED-BUTTON BR-LOGO BR-TITLE ;
 : BOTTOM-RIGHT-DESELECT BRX BRY DRAW-DESELECTED-BUTTON BR-LOGO ;
-
+: BOTTOM-RIGHT-ON-CLICK PAGE LOAD-TEST-SUITE ;
 
 : SET-MENU-ENTRY-SELECTOR MENU-ENTRY.SELECTOR ' SWAP ! ;
 : SET-MENU-ENTRY-DESELECTOR MENU-ENTRY.DESELECTOR ' SWAP ! ;
@@ -427,54 +479,13 @@ TOP-LEFT SET-MENU-ENTRY-ON-CLICK POWEROFF
 
 BOTTOM-LEFT SET-MENU-ENTRY-SELECTOR BOTTOM-LEFT-SELECT
 BOTTOM-LEFT SET-MENU-ENTRY-DESELECTOR BOTTOM-LEFT-DESELECT
+BOTTOM-LEFT SET-MENU-ENTRY-ON-CLICK BOTTOM-LEFT-ON-CLICK
 
 TOP-RIGHT SET-MENU-ENTRY-SELECTOR TOP-RIGHT-SELECT
 TOP-RIGHT SET-MENU-ENTRY-DESELECTOR TOP-RIGHT-DESELECT
 
 BOTTOM-RIGHT SET-MENU-ENTRY-SELECTOR BOTTOM-RIGHT-SELECT
 BOTTOM-RIGHT SET-MENU-ENTRY-DESELECTOR BOTTOM-RIGHT-DESELECT
-\ This should work, but doesn't.  Why?
-BOTTOM-RIGHT SET-MENU-ENTRY-ON-CLICK LOAD-STAGE2
-
-\ What's the current menu c.
-: CURRENT-MENU-ENTRY ( -- ) XPOS @ YPOS @ MENU-ENTRIES @ ;
-\ Maybe execute something.
-: ?EXECUTE ( n -- ) ?DUP IF EXECUTE THEN ;
-\ Given a pointer to a menu entry, run its selector if it's not null.
-: ?RUN-SELECTOR ( menu-entry -- ) ?DUP IF MENU-ENTRY.SELECTOR @ ?EXECUTE THEN ;
-\ Given a pointer to a menu entry, run its deselector if it's not null.
-: ?RUN-DESELECTOR ( menu-entry -- ) ?DUP IF MENU-ENTRY.DESELECTOR @ ?EXECUTE THEN ;
-\ Given a pointer to a menu entry, run its on click if it's not null.
-: ?RUN-ON-CLICK ( menu-entry -- ) ?DUP IF MENU-ENTRY.ON-CLICK @ ?EXECUTE THEN ;
-\ Deselect the previous menu entry.
-: DESELECT-PREV ( -- ) CURRENT-MENU-ENTRY ?RUN-DESELECTOR ;
-\ Deselect the specified entry at (x, y).
-: DESELECT-ENTRY ( x y -- ) MENU-ENTRIES @ ?RUN-DESELECTOR ;
-\ Run the selector at the current menu choice.
-: DRAW-TICK     ( -- ) CURRENT-MENU-ENTRY ?RUN-SELECTOR ;
-\ Is n an arrow key?
-: ARROW-KEY?    ( n -- b ) DUP 1 4 WITHIN SWAP 9 = OR ;
-\ Block until an arrow key is read.
-: GET-ARROW-KEY ( -- k ) BEGIN KEY DUP ARROW-KEY? IF EXIT THEN DROP AGAIN ;
-\ Maybe the key is enter, and act on it.
-: MAYBE-ENTER ( n -- ) 9 = IF CURRENT-MENU-ENTRY ?RUN-ON-CLICK THEN ;
-\ Act upon a key code.
-: MAYBE-ACT ( k -- ) MAYBE-UPDATE-XY MAYBE-ENTER ;
-\ One tick of the menu demo.
-: MENU-DEMO-TICK ( -- ) GET-ARROW-KEY DESELECT-PREV DUP MAYBE-ACT DRAW-TICK ;
-\ Draw the menu deselected.
-: DRAW-ENTRIES-DESELECTED ( -- ) ROWS 0 DO COLUMNS 0 DO I J DESELECT-ENTRY LOOP LOOP ;
-\ Initialize the current x and y.
-: INIT-XY ( -- ) 0 XPOS ! 0 YPOS ! ;
-
-66 TO ZKEME80-LOGO-STARTX
-29 TO ZKEME80-LOGO-STARTY
-
-\ The demo.
-: MENU-DEMO ( -- ) PAGE ZKEME80-LOGO DRAW-ENTRIES-DESELECTED INIT-XY DRAW-TICK BEGIN MENU-DEMO-TICK AGAIN ;
+BOTTOM-RIGHT SET-MENU-ENTRY-ON-CLICK BOTTOM-RIGHT-ON-CLICK
 
 MENU-DEMO
-
-\ STAGE1-END
-
-\ LOAD-STAGE2

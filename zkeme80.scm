@@ -150,7 +150,7 @@
     ,(lambda ()
        (format #t "End of Forth data: 0x")
        (PRINT-PC)
-       (format #t "There are ~a bytes left for page 3.\n" (- #x10000 *pc*))
+       (format #t "There are ~a bytes left for page 4.\n" (- #x14000 *pc*))
        '())
     
 
