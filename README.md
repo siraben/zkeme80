@@ -50,9 +50,9 @@ isn't easy to allow the user to extend the operating system.  Forth
 changes that.  It's just as low level as assembly, but it can as high
 level as you want.  Want exceptions?  They're already there!  Want
 garbage collection and memory safety?  Roll your own!  See `forth.scm`
-for more than one hundred examples of Forth words.  If you're not
-familiar with Forth, I highly recommend *Starting Forth* by Leo
-Brodie.  Get it [here](https://www.forth.com/starting-forth/).
+for more than 200 examples of Forth words.  If you're not familiar
+with Forth, I highly recommend *Starting Forth* by Leo Brodie.  Get it
+[here](https://www.forth.com/starting-forth/).
 
 ### Notes on standard-compliance
 Some words are not standard.  This is because I copied them from my

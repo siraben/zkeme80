@@ -3,26 +3,12 @@
 
 : TO
   WORD FIND >DFA CELL+
-  STATE @
-  IF
-    ['] LIT ,
-    ,
-    ['] ! ,
-  ELSE
-    !
-  THEN
+  STATE @ IF ['] LIT , , ['] ! , ELSE ! THEN
 ; IMMEDIATE
 
 : +TO
   WORD FIND >DFA CELL+
-  STATE @
-  IF
-    ['] LIT ,
-    ,
-    ['] +! ,
-  ELSE
-    +!
-  THEN
+  STATE @ IF ['] LIT , , ['] +! , ELSE  +! THEN
 ; IMMEDIATE
 
 
@@ -32,15 +18,7 @@
   BEGIN
     GETC DUP NUM? NOT
     IF
-      DROP \ we're done reading
-      STATE @ IF
-        \ compiling
-        ' LIT ,
-        , 
-      ELSE
-        \ interpreting
-      THEN
-      EXIT
+      DROP STATE @ IF ' LIT ,  , THEN EXIT
     ELSE
       '0' - SWAP 2* +
     THEN
@@ -196,6 +174,20 @@ suite.  Shutting down." CR
     THEN
   LOOP
   DROP
+;
+
+\ Returns the number of words defined.
+
+: NUMBER-OF-WORDS ( -- n )
+  0 HERE ! LATEST @
+  BEGIN
+    ?DUP
+  WHILE
+    DUP ?HIDDEN NOT
+    IF 1 HERE +! THEN
+    @
+  REPEAT
+  HERE @
 ;
 
 : STATUS
@@ -451,7 +443,12 @@ DRAW-LOADING-DOT
 : BL-TITLE CLEAR-TITLE INFO-TITLE ;
 : BOTTOM-LEFT-SELECT BLX BLY DRAW-SELECTED-BUTTON BL-LOGO BL-TITLE ;
 : BOTTOM-LEFT-DESELECT BLX BLY DRAW-DESELECTED-BUTTON BL-LOGO ;
-: BOTTOM-LEFT-ON-CLICK PAGE STATUS PAUSE MENU-INIT ;
+: BOTTOM-LEFT-ON-CLICK
+  PAGE STATUS CR
+  ." This sytem has " NUMBER-OF-WORDS . CR
+  ." words defined."
+  PAUSE MENU-INIT
+;
 
 1 0 BUTTON-COORDS CONSTANT TRY CONSTANT TRX
 

@@ -1,4 +1,4 @@
-* Test Coverage [118/150]
+* Test Coverage [119/150]
 Excludes words with special semantics and used in the ~forth.scm~
 stage only (~0BRANCH~ ~BRANCH~, ~0JUMP~, ~JUMP~).  If a WORD word
 (e.g. ~CATCH~, ~THROW~) works correctly according to the standard
@@ -155,6 +155,6 @@ constants are omitted.
 ** DONE ~VALUE~
 ** DONE ~VARIABLE~
 ** DONE ~WHILE~
-** TODO ~WITHIN~
+** DONE ~WITHIN~
 ** DONE ~WORD~
 ** DONE ~XOR~

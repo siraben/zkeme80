@@ -1,12 +1,6 @@
-: LOAD-OS-MENU
-  1 SET-RAM-MEMA
-  IF
-    MEMA INPUT-PTR !
-  ELSE
-    ." Couldn't load the OS
-menu.  Shutting down." CR
-    SHUTDOWN
-  THEN
+: TEST-SUITE-START
+." The test suite is
+running, please wait..." CR
 ;
 
 : GREETING
@@ -19,10 +13,6 @@ suite"
 continue..." PAUSE CR
 ;
 
-: TEST-SUITE-START
-." The test suite is
-running, please wait..." CR
-;
 
 : Y-OR-N BEGIN KEY DUP RIGHT LEFT WITHIN IF EXIT THEN DROP AGAIN ;
 
@@ -30,7 +20,7 @@ running, please wait..." CR
 
 \ END OF BOOTSTRAP DEFINITIONS
 
-PAGE GREETING 2CR TEST-SUITE-START
+PAGE GREETING 2CR TEST-SUITE-START PAGE
 
 \ Any word defined from this point on to the end of this stage.  will
 \ be forgotten.
@@ -43,7 +33,6 @@ VARIABLE START-DEPTH
 VARIABLE XCURSOR      \ for ...}T
 
 VARIABLE ERROR-XT
-
 
 : ERROR ERROR-XT @ EXECUTE ;   \ for vectoring of error reporting
 
@@ -100,7 +89,7 @@ VARIABLE SUCCESS-TEST-COUNT
 : ADD-TEST 1 TEST-COUNT +! ;
 : ADD-SUCCESS-TEST 1 SUCCESS-TEST-COUNT +! ;
 
-: REPORT-TESTS SUCCESS-TEST-COUNT @ . ." / " TEST-COUNT @ . ." tests passed" ;
+: REPORT-TESTS PAGE SUCCESS-TEST-COUNT @ . ." / " TEST-COUNT @ . ;
 
 : T{		\ ( -- ) syntactic sugar.
    ADD-TEST DEPTH START-DEPTH ! 0 XCURSOR !
@@ -112,6 +101,9 @@ VARIABLE SUCCESS-TEST-COUNT
        DEPTH START-DEPTH @ - 0 DO ACTUAL-RESULTS I CELLS + ! LOOP \ save them
    THEN
 ;
+: CLEAR-TITLE 0 0 MAX-COL 5 RECT-AND ;
+
+: UPDATE-TEST-STATUS ORIGIN CLEAR-TITLE REPORT-TESTS ;
 
 : }T		\ ( ... -- ) COMPARE STACK (EXPECTED) CONTENTS WITH SAVED
                 \ (ACTUAL) CONTENTS.
@@ -119,14 +111,14 @@ VARIABLE SUCCESS-TEST-COUNT
       DEPTH START-DEPTH @ > IF		\ if there is something on the stack
          DEPTH START-DEPTH @ - 0 DO	\ for each stack item
             ACTUAL-RESULTS I CELLS + @	\ compare actual with expected
-            <> IF S" INCORRECT RESULT: " ERROR LEAVE THEN
+            <> IF S" INCORRECT RESULT: " ERROR UPDATE-TEST-STATUS LEAVE THEN
          LOOP
       THEN
    ELSE					\ depth mismatch
-      S" WRONG NUMBER OF RESULTS: " ERROR EXIT
+      S" WRONG NUMBER OF RESULTS: " ERROR UPDATE-TEST-STATUS EXIT
    THEN
    \ The test was good.
-   ADD-SUCCESS-TEST
+   ADD-SUCCESS-TEST UPDATE-TEST-STATUS
 ;
 
 
@@ -154,9 +146,6 @@ T{ 1 INVERT 1 AND -> 0 }T
 
 T{ 0S INVERT -> 1S }T
 T{ 1S INVERT -> 0S }T
-
-T{ 0 INVERT 1 AND -> 1 }T
-T{ 1 INVERT 1 AND -> 0 }T
 
 T{ 0S 0S AND -> 0S }T
 T{ 0S 1S AND -> 0S }T
@@ -228,35 +217,35 @@ T{ GT2 EXECUTE -> 123 }T
 : TMOD /MOD DROP ;
 : T/   /MOD SWAP DROP ;
 
-T{  0  1   / ->  0  1 T/ }T
-T{  1  1   / ->  1  1 T/ }T
-T{  2  1   / ->  2  1 T/ }T
-T{  2  2   / ->  2  2 T/ }T
-T{  7  3   / ->  7  3 T/ }T
+T{ 0 1 / -> 0 1 T/ }T
+T{ 1 1 / -> 1 1 T/ }T
+T{ 2 1 / -> 2 1 T/ }T
+T{ 2 2 / -> 2 2 T/ }T
+T{ 7 3 / -> 7 3 T/ }T
 
-T{  0  1 MOD ->  0  1 TMOD }T
-T{  1  1 MOD ->  1  1 TMOD }T
-T{  2  1 MOD ->  2  1 TMOD }T
+T{ 0 1 MOD -> 0 1 TMOD }T
+T{ 1 1 MOD -> 1 1 TMOD }T
+T{ 2 1 MOD -> 2 1 TMOD }T
 
-T{  0 0= -> 1  }T
-T{  1 0= -> 0  }T
-T{  2 0= -> 0  }T
+T{ 0 0= -> 1 }T
+T{ 1 0= -> 0 }T
+T{ 2 0= -> 0 }T
 
-T{  0  0  = -> <TRUE>  }T
-T{  0  0 >= -> <TRUE>  }T
-T{  0  0 <= -> <TRUE>  }T
+T{ 0 0  = -> <TRUE>  }T
+T{ 0 0 >= -> <TRUE>  }T
+T{ 0 0 <= -> <TRUE>  }T
 
-T{  0  1  = -> <FALSE> }T
-T{  0  1 >= -> <FALSE> }T
-T{  0  1 <= -> <TRUE> }T
+T{ 0 1  = -> <FALSE> }T
+T{ 0 1 >= -> <FALSE> }T
+T{ 0 1 <= -> <TRUE> }T
 
-T{  1  0  = -> <FALSE> }T
-T{  1  0 >= -> <TRUE> }T
-T{  1  0 <= -> <FALSE> }T
+T{ 1 0  = -> <FALSE> }T
+T{ 1 0 >= -> <TRUE> }T
+T{ 1 0 <= -> <FALSE> }T
 
-T{  1  1  = -> <TRUE>  }T
-T{  1  1 >= -> <TRUE>  }T
-T{  1  1 <= -> <TRUE>  }T
+T{ 1 1  = -> <TRUE>  }T
+T{ 1 1 >= -> <TRUE>  }T
+T{ 1 1 <= -> <TRUE>  }T
 
 T{   0 1 10 WITHIN -> <FALSE> }T
 T{   1 1 10 WITHIN -> <TRUE> }T
@@ -284,28 +273,21 @@ T{ 2 1 RSHIFT -> 1 }T
 T{ 4 2 RSHIFT -> 1 }T
 T{ MSB 1 RSHIFT 2* -> MSB }T
 
-T{ 1 2 2DROP -> }T
-
-T{ 1 2 2DUP -> 1 2 1 2 }T
-
+\ Stack word tests.
+T{ 0        ?DUP -> 0           }T
+T{ 1        ?DUP -> 1 1         }T
+T{ 1 2     2DROP ->             }T
+T{ 1 2     2DUP  -> 1 2 1 2     }T
 T{ 1 2 3 4 2OVER -> 1 2 3 4 1 2 }T
-
-T{ 1 2 3 4 2SWAP -> 3 4 1 2 }T
-
-T{ 1 2 3 ROT -> 2 3 1 }T
-
-T{ 2 3 1 -ROT -> 1 2 3 }T
-
-T{ 1 2 SWAP -> 2 1 }T
-
-T{ 1 2 OVER -> 1 2 1 }T
-
-T{ 1 2 0 PICK -> 1 2 DUP }T
-T{ 1 2 1 PICK -> 1 2 OVER }T
-
-T{ 1 2 NIP -> 2 }T
-
-T{ 1 2 TUCK -> 2 1 2 }T
+T{ 1 2 3 4 2SWAP -> 3 4 1 2     }T
+T{ 1 2 3   ROT   -> 2 3 1       }T
+T{ 2 3 1   -ROT  -> 1 2 3       }T
+T{ 1 2     SWAP  -> 2 1         }T
+T{ 1 2     OVER  -> 1 2 1       }T
+T{ 1 2 0   PICK  -> 1 2 DUP     }T
+T{ 1 2 1   PICK  -> 1 2 OVER    }T
+T{ 1 2     NIP   -> 2           }T
+T{ 1 2     TUCK  -> 2 1 2       }T
 
 T{ : GD1 DO I LOOP ; -> }T
 T{          4        1 GD1 ->  1 2 3   }T
@@ -371,8 +353,7 @@ T{ NOP2 -> }T
 T{ : GDX   123 ;    : GDX   GDX 234 ; -> }T
 T{ GDX -> 123 234 }T
 
-T{  0 ?DUP ->  0    }T
-T{  1 ?DUP ->  1  1 }T
+
 
 
 T{ : GR1 >R R> ; -> }T
@@ -581,15 +562,15 @@ PRESS-TO-CONTINUE
 
 PAGE
 
-
 ." Unloading test suite
 words to save on space" CR CR
 USED
 
-FORGET ACTUAL-RESULTS
+FORGET TEST-SUITE-START
 
 USED - . ." bytes freed." CR
 
-PRESS-TO-CONTINUE
+." Press any key to
+continue..." PAUSE CR
 
 MENU-DEMO
