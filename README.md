@@ -26,7 +26,7 @@ operating system that allows you to extend it in any way you wish,
 bonus points if you don't need to know Z80 assembly to do so.
 
 **zkeme80** is that operating system, a minimal core with a mostly
-![ANS standard](https://forth-standard.org/standard/words) conforming
+[ANS standard](https://forth-standard.org/standard/words) conforming
 Forth interpreter/compiler.  From words covering sprites and graphics,
 to text and memory access, everything you need to make the next hit
 Snake clone or RPN-based layer is already there.  **zkeme80** lowers
@@ -52,7 +52,7 @@ level as you want.  Want exceptions?  They're already there!  Want
 garbage collection and memory safety?  Roll your own!  See `forth.scm`
 for more than one hundred examples of Forth words.  If you're not
 familiar with Forth, I highly recommend *Starting Forth* by Leo
-Brodie.  Get it ![here](https://www.forth.com/starting-forth/).
+Brodie.  Get it [here](https://www.forth.com/starting-forth/).
 
 ### Notes on standard-compliance
 Some words are not standard.  This is because I copied them from my
