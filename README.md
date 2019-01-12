@@ -2,42 +2,59 @@
 [![Build
 Status](https://travis-ci.org/siraben/zkeme80.svg?branch=master)](https://travis-ci.org/siraben/zkeme80)
 
-
 ![OS screenshot](screenshot.png)
 ![OS animation](demo.gif)
 
-**TLDR:** `assembler.scm` is the assembler.  There are no file
-dependencies, but your Scheme implementation needs to be recent enough
-to have the required modules to support things like bytevectors and
-`sfri-9` records.  Works on Guile, hasn't been tested on other
-implementations.
+**TLDR:** `assembler.scm` is the assembler, `zkeme80.scm` is the OS.
+To build the rom, run `make build`.  There are no dependencies apart
+from a recent version of Guile, supporting the `bytevectors` and
+`sfri-9` records modules.  On other Scheme implementations haven not
+been tested.
 
-## Motivation for the Scheme-based assembler
-Existing assemblers for the Z80 (and other instruction sets) are
-extremely lacking in their extension capabilities.  This makes it hard
-for programmers to modify the assembler to suit their needs, for
-instance, to create custom in-memory data structures and advanced
-macros. What better macro system exists than Lisp?
+## Why another OS for the TI-84+?
+The TI tinkering community has long loathed the proprietary nature of
+the default TIOS.  Few projects have attempted to create a viable
+alternative, fewer have matured to a usable state, and none are
+currently able to actually let you use the calculator *as a
+calculator*.
 
-## Motivation for the Forth-based OS
-`forth.scm` contains the Forth/Scheme/Z80 Assembly code that is the
-user-exposed part of the kernel, so if you're considering extending
-it, do so with the `defword` and `defcode` macros.  See `forth.scm`
-for more than one hundred examples of Forth words.
+If you've been looking at operating systems for the TI-84+, chances
+are you've come across **KnightOS**.  It's well developed and has
+plenty of Unix-like features such as filesystems and tasks, and even a
+C compiler.  But maybe that's not what you want.  You want an minimal
+operating system that allows you to extend it in any way you wish,
+bonus points if you don't need to know Z80 assembly to do so.
 
-### Why Forth?
-Forth is **the** extensible language, even more so than Lisp.  A
-large portion of the language is defined in terms of itself
-(although this Forth chooses to define things in assembly when it's
-more convenient/faster)).  It's *extremely* low level, allowing for
-fine-grained work with hardware and all the usual delicacy it brings,
-but at the same time it capable of reaching an infinite level of
-abstraction, as any reasonable language should.  Exceptions, types,
-garbage collection, memory protection, you don't have them by default
-but you could add them!  Also, it's plain fun to write an operating
-system in Forth.
+**zkeme80** is that operating system, a minimal core with a mostly
+![ANS standard](https://forth-standard.org/standard/words) conforming
+Forth interpreter/compiler.  From words covering sprites and graphics,
+to text and memory access, everything you need to make the next hit
+Snake clone or RPN-based layer is already there.  **zkeme80** lowers
+the barrier of entry for customizing an operating system and enable
+rapid development cycles.  Below the Forth layer, you'll find two
+lowest level and highest level languages, Z80 assembly and Scheme.
+The best assembler is an extensible one, where writing macros should
+be a joy, not a pain, and Scheme has that macro system.
 
-### Miscellaneous notes on standard-compliance
+On my MacBook Pro 11,1 running NixOS it takes around 13.5 seconds
+(real time) to compile the operating system for the first time with
+`make build`, and subsequent builds involving only changes to `.fs`
+files take around 0.5 seconds (real time).
+
+## Why Forth?
+OS development is hard, doubly so if you're using assembly.  Keep
+track of calling conventions, or which routines preserve which
+registers is a tedious and error-prone task.  Nested loops and
+`switch` statements are out of the window.  And most importantly, it
+isn't easy to allow the user to extend the operating system.  Forth
+changes that.  It's just as low level as assembly, but it can as high
+level as you want.  Want exceptions?  They're already there!  Want
+garbage collection and memory safety?  Roll your own!  See `forth.scm`
+for more than one hundred examples of Forth words.  If you're not
+familiar with Forth, I highly recommend *Starting Forth* by Leo
+Brodie.  Get it ![here](https://www.forth.com/starting-forth/).
+
+### Notes on standard-compliance
 Some words are not standard.  This is because I copied them from my
 other [Forth/Z80 project](https://github.com/siraben/ti84-forth),
 which itself is based on jonesforth.  However, I did consult the ANS
@@ -58,40 +75,41 @@ Kernel](https://github.com/knightos/kernel).  I chose SmileyOS because
 it seemed like the most "minimal" needed to get nasty stuff such as
 locking/unlocking flash, display routines, key routines etc. out of
 the way.  Code here that doesn't exist in SmileyOS was taken from
-public sources.  Apart from that initial tiny core, the rest of the
-operating system is of my own design.
+public sources, including the current version of KnightOS.  The rest
+of the operating system is of my own design.
 
-## Building the operating system
-### Using the Nix package manager (recommended)
-Thanks to `clever` on `#nixos`, if you're using the Nix package
-manager, just clone the repository and run the following to compile
-and build the assembler, operating system, and emulator.  Try it
-today!
 
-```shell
-nix-build . -A runit && ./result
-```
+## Building and running the operating system
 ### Using the Makefile
-Running `make build` should make generate a file called `zkeme80.rom` in
-the same directory.  Simply pass that file through an emulator such as
+Running `make build` should make generate a file called `zkeme80.rom`
+in the same directory.  Simply pass that file to an emulator such as
 [jsTIfied](https://www.cemetech.net/projects/jstified/) (works in the
 browser) and start playing around!
 
 Running just `make` builds and runs the project, but assumes that you have
 already properly built `tielm` (and linked it at `tilem2`) and have
 Guile installed.  Be warned, though, `tilem` is tricky to build and
-you have to enable all sorts of flags and install dependencies.  It
-may be easier to download Nix and run `nix-build` instead!
+you have to enable all sorts of flags and install dependencies.  If
+anyone knows a good emulator for macOS, please let me know.
+
+### Using the Nix package manager
+If you're using the Nix package manager, just clone the repository and
+run the following to compile and build the assembler, operating
+system, and emulator.  It will automatically run the ROM when done.
+Props to `clever` on `#nixos` for figuring out how to build `tilem`.
+
+```shell
+nix-build . -A runit && ./result
+```
 
 ## Files included
 - `assembler.scm` assembles s-exp style assembly code into binary.  Simply
   run `(load "assembler.scm")` into your Scheme REPL and
   run`(assemble-prog sample-prog)` to see the binary data.  Run
   `(assemble-to-file sample-prog "out.bin")` to write a binary file.
-- `zkeme80.scm` and its helper files are associated with my
-  Forth-based operating system.  Load `zkeme80.scm` then run
-  `(make-rom "zkeme80.rom")` to generate binary to a file `zkeme80.rom`.
-
+- `zkeme80.scm` is the Forth-based operating system.  Load
+  `zkeme80.scm` then run `(make-rom "zkeme80.rom")` to output binary
+  to a file `zkeme80.rom`.
 
 ## Design of the assembler
 The assembler's core uses pattern matching.  The program counter is
@@ -151,12 +169,7 @@ Z80 assembly program in my s-exp format and run it through a
 disassembler then compare the output.  If you're feeling particularly
 brave you may skip this step and try your program out on a Z80 chip.
 
-The operating system currently runs a suite of tests that checks the
-correctness of various Forth words.  Coverage is not 100% according to
-the standard, especially because we lack signed and floating point
-integers.
-
-## Limitations
+## Assembler Limitations
 There is currently no instruction encoding (like the `z80data.tab`
 file) that the assembler accepts, so to add new instructions the
 current workflow is to look at relevant portions of the Z80 data sheet
