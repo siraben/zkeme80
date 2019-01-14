@@ -146,6 +146,13 @@
     
     ,@(include-file-as-bytes "bootstrap-flash4.fs")
 
+    ,(lambda ()
+       (assemble-expr `(db ,(make-list
+                             (- #x14000 *pc*)
+                             #xff))))
+    
+    ,@(include-file-as-bytes "bootstrap-flash5.fs")
+
 
     ,(lambda ()
        (format #t "End of Forth data: 0x")

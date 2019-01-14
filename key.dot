@@ -1,0 +1,43 @@
+digraph {
+  dpi = 192
+  // title
+  labelloc="t";
+  label="Keyboard state transition diagram in TI-OS\nPressing \"Clear\" transitions to normal from any state\n\nGreen lines represent pressing ALPHA\nBlue lines represent pressing 2nd\nBlack lines represent other keys\n\n";
+  
+  pad=0.5
+  node [margin=0, style=bold, width=2, shape=box, fillcolor=white, style="filled, rounded"]
+  "normal" [fillcolor=gray]
+  "2nd" [fillcolor = deepskyblue]
+  alpha [fillcolor = chartreuse2]
+  "alpha lock" [fillcolor = chartreuse2]
+  "alpha 2nd" [fillcolor = deepskyblue]
+  "alpha lock 2nd" [fillcolor = deepskyblue]
+  
+  "normal" -> "2nd" [color=blue];
+  "2nd" -> "normal" [color=blue];
+  alpha -> "alpha 2nd" [color=blue];
+  "alpha 2nd" -> alpha [color=blue];
+  "alpha lock" -> "alpha lock 2nd" [color=blue];
+  "alpha lock 2nd" -> "alpha lock" [color=blue];
+  
+  "normal" -> alpha [color=green];
+  alpha -> "normal" [color=green];
+  "2nd" -> "alpha lock" [color=green];
+  "alpha lock" -> "normal" [color=green];
+  "alpha 2nd" -> "alpha lock" [color=green];
+  "alpha lock 2nd" -> "alpha lock" [color=green];
+
+  // "normal" -> "normal" [label="clear",color=brown1];
+  // "alpha lock" -> "normal" [label="clear",color=brown1];
+  // alpha -> "normal" [label="clear",color=brown1];
+  // "2nd" -> "normal" [label="clear",color=brown1];
+  // "alpha 2nd" -> "normal" [label="clear",color=brown1];
+  // "alpha lock 2nd" -> "normal" [label="clear",color=brown1];
+
+  "normal" -> "normal"
+  alpha -> "normal"
+  "alpha 2nd" -> alpha
+  "2nd" -> "normal"
+  "alpha lock" -> "alpha lock"
+  "alpha lock 2nd" -> "alpha lock"
+}

@@ -1546,7 +1546,18 @@
     (dw (lbrac exit))
 
     ,@(defword "CONSTANT" 0 'constant)
-    (dw (create tick lit comma comma tick exit comma exit ))
+    (dw (create tick lit comma comma tick exit comma exit))
+
+    ,@(defword "VALUE" 0 'value)
+    (dw (create tick lit comma comma tick exit comma exit))
+
+    ,@(defword "TO" immediate 'to)
+    (dw (word find >dfa cell+ state @ 0branch 20 tick lit comma comma))
+    (dw (tick ! comma branch 4 ! exit))
+
+    ,@(defword "+TO" immediate '+to)
+    (dw (word find >dfa cell+ state @ 0branch 20 tick lit comma comma))
+    (dw (tick +! comma branch 4 +! exit))
 
     ,@(defcode "(DOES>)" 0 'does-brac)
     (push bc)
@@ -2020,7 +2031,7 @@
     (dw (lit 1 lit bootstrap-load-bool +! lit bootstrap-load-bool @))
     (dw (exit))
 
-    ;; The default input device, which loads the bootstrap.
+    ;; An input device that should be a prompt.
     ,@(defword "PROMPT" 0 'prompt)
     (dw (lit prompt-space lit 128 expect))
     (dw (lit prompt-space lit input-buffer lit 128 cmove))

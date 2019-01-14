@@ -13,7 +13,7 @@ been tested.
 
 ## Why another OS for the TI-84+?
 The TI tinkering community has long loathed the proprietary nature of
-the default TIOS.  Few projects have attempted to create a viable
+the default TI-OS.  Few projects have attempted to create a viable
 alternative, fewer have matured to a usable state, and none are
 currently able to actually let you use the calculator *as a
 calculator*.
@@ -47,12 +47,12 @@ track of calling conventions, or which routines preserve which
 registers is a tedious and error-prone task.  Nested loops and
 `switch` statements are out of the window.  And most importantly, it
 isn't easy to allow the user to extend the operating system.  Forth
-changes that.  It's just as low level as assembly, but it can as high
-level as you want.  Want exceptions?  They're already there!  Want
-garbage collection and memory safety?  Roll your own!  See `forth.scm`
-for more than 200 examples of Forth words.  If you're not familiar
-with Forth, I highly recommend *Starting Forth* by Leo Brodie.  Get it
-[here](https://www.forth.com/starting-forth/).
+changes that.  It's just as low level as assembly, but it can be as
+high level as you want.  Want exceptions?  They're already there!
+Want garbage collection and memory safety?  Roll your own!  See
+`forth.scm` for more than 200 examples of Forth words.  If you're not
+familiar with Forth, I highly recommend *Starting Forth* by Leo
+Brodie.  Get it [here](https://www.forth.com/starting-forth/).
 
 ### Notes on standard-compliance
 Some words are not standard.  This is because I copied them from my
