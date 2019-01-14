@@ -7,9 +7,9 @@ Status](https://travis-ci.org/siraben/zkeme80.svg?branch=master)](https://travis
 
 **TLDR:** `assembler.scm` is the assembler, `zkeme80.scm` is the OS.
 To build the rom, run `make build`.  There are no dependencies apart
-from a recent version of Guile, supporting the `bytevectors` and
-`sfri-9` records modules.  On other Scheme implementations haven not
-been tested.
+from a recent version of Guile, supporting the modules `bytevectors`
+and `sfri-9` records.  Other Scheme implementations have not been
+tested.
 
 ## Why another OS for the TI-84+?
 The TI tinkering community has long loathed the proprietary nature of
