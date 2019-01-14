@@ -1,39 +1,40 @@
 \ This should be the shell.
 
 \ We should handle modal key input, so that the user can type 0-9, A-Z
-\ etc.
+\ etc.  The state transition diagram for this is shown in the file
+\ "key.dot".
 
-\ State transition diagram for switching key modes:
-(
-digraph "Keyboard transition table" {
-  normal
-  2nd [shape=circle]
-  alpha [shape=circle]
-  alpha-lock [shape=circle]
-  alpha-2nd [shape=circle]
-  normal -> 2nd [label="2nd"];
-  alpha -> alpha-2nd [label="2nd"];
-  normal -> alpha [label="alpha"];
-  2nd -> alpha-lock [label="alpha"];
-  alpha-lock -> normal [label="clear"];
-  2nd -> normal [label="clear"];
-  alpha-2nd -> normal [label="clear"];
+\ Dummy word to mark start of word definitions.
+: SHELL-START ;
 
-  normal -> normal [label="other"];
-  alpha -> normal [label="other"];
-  2nd -> normal [label="other"];
-  alpha-lock -> alpha-lock [label="other"];  
-}
-)
-)
 54 CONSTANT 2ND-KEY
 48 CONSTANT ALPHA-KEY
 
 : SHELL-KEY KEY ;
-: SHELL-TICK SHELL-KEY ORIGIN . ;
-: SHELL-LOOP BEGIN SHELL-TICK AGAIN ;
+: SHELL-TITLE
+ORIGIN
+." No REPL yet, but here's
+a key demo.
+
+Press ENTER to quit." CR CR
+;
+2 CONSTANT SHELL-ERROR
+1 CONSTANT SHELL-OK
+0 CONSTANT SHELL-EXIT
+
+1 VALUE SHELL-STATUS
+
+: SHELL-OK? SHELL-STATUS 1 = ;
+
+: ?EXIT-IF-ENTER DUP 9 = IF SHELL-EXIT TO SHELL-STATUS THEN ;
+
+: SHELL-READ-KEY KEY ?EXIT-IF-ENTER ." You pressed: " . CR CR ." Stack: " .S ;
+: SHELL-TICK SHELL-TITLE SHELL-READ-KEY ;
+: SHELL-LOOP BEGIN SHELL-OK? WHILE SHELL-TICK REPEAT ;
   
 PAGE
 
 SHELL-LOOP
-PAUSE SHUTDOWN
+
+FORGET SHELL-START
+MENU-DEMO
