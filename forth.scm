@@ -2081,7 +2081,4 @@
     ,@(defword "STAR" 0 'star)
     (dw (lit 42 emit exit))
 
-    ,(lambda ()
-       (format #t "End of forth.asm: 0x")
-       (PRINT-PC))
     ))

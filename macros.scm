@@ -44,6 +44,12 @@
        body body* ...
        ,@(pop* (reverse '(reg reg* ...)))))))
 
+(define (fill-up-to byte addr)
+  (lambda ()
+    (assemble-expr `(db ,(make-list
+                          (- addr *pc*)
+                          byte)))))
+
 (define fill-until-end
   (lambda ()
     (assemble-expr

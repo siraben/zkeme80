@@ -45,41 +45,34 @@
     
     (label os-end)
     ,(lambda ()
-       (format #t "End of zkeme80: 0x")
-       (PRINT-PC)
-       (format #t "There are ~a bytes left for page 0.\n" (- #x4000 *pc*))
+       ;; (format #t "End of zkeme80: 0x")
+       ;; (PRINT-PC)
+       (format #t "~a bytes left for page 0.\n" (- #x4000 *pc*))
        '())
     ;; Must be less than 0x4000.
 
-    ,(lambda ()
-       (assemble-expr `(db ,(make-list
-                             (- #x4000 *pc*)
-                             #xff))))
+    ,(fill-up-to #xff #x4000)
 
     (label bootstrap-flash1)
     ,@(include-file-as-bytes "bootstrap-flash1.fs")
 
-    ,(lambda ()
-       (assemble-expr `(db ,(make-list
-                             (- #x8000 *pc*)
-                             #xff))))
+    ,(fill-up-to #xff #x8000)
 
     (label bootstrap-flash2)
     ,@(include-file-as-bytes "bootstrap-flash2.fs")
 
 
     ,(lambda ()
-       (format #t "Start of Forth data: 0x")
-       (PRINT-PC)
-       (format #t "There are ~a bytes left for page 2.\n" (- #x8400 *pc*))
+       ;; (format #t "Start of Forth data: 0x")
+       ;; (PRINT-PC)
+       (format #t "~a bytes left for page 2.\n" (- #x8400 *pc*))
        '())
 
 
+    
+    ,(fill-up-to #xff #x8402)
+    
     ;; We start the Forth data here.
-    ,(lambda ()
-       (assemble-expr `(db ,(make-list
-                             (- #x8402 *pc*)
-                             #xff))))
 
     
     ,@(apply append (map (lambda (x)
@@ -90,8 +83,6 @@
     ;; Forth system variables.  Put here because it's writable when
     ;; loaded into RAM.
 
-
-    
 
     ;; Transient input buffer.
     (label input-buffer)
@@ -124,48 +115,35 @@
     (label bootstrap-load-bool)
     (dw (65535))
     
-    
     (dw ,(make-list 128 0))
     (label return-stack-start)
+    
     ;; Free space until #xc000
     (label dp-start)
-
-
-
     ,(lambda ()
-       (assemble-expr `(db ,(make-list
-                             (- #xc000 *pc*)
-                             #xff))))
+       (format #t "~a bytes left for HERE.\n" (- #xc000 *pc*))
+       '())
+
+    ,(fill-up-to #xff #xc000)
     
     ,@(include-file-as-bytes "bootstrap-flash3.fs")
-    
-    ,(lambda ()
-       (assemble-expr `(db ,(make-list
-                             (- #x10000 *pc*)
-                             #xff))))
+
+    ,(fill-up-to #xff #x10000)
     
     ,@(include-file-as-bytes "bootstrap-flash4.fs")
 
-    ,(lambda ()
-       (assemble-expr `(db ,(make-list
-                             (- #x14000 *pc*)
-                             #xff))))
+    ,(fill-up-to #xff #x14000)
     
     ,@(include-file-as-bytes "bootstrap-flash5.fs")
 
 
     ,(lambda ()
-       (format #t "End of Forth data: 0x")
-       (PRINT-PC)
-       (format #t "There are ~a bytes left for page 4.\n" (- #x14000 *pc*))
+       ;; (format #t "End of Forth data: 0x")
+       ;; (PRINT-PC)
+       (format #t "~a bytes left for page 4.\n" (- #x18000 *pc*))
        '())
-    
 
-    ,(lambda ()
-       (assemble-expr `(db ,(make-list
-                             (- #xf0000 *pc*)
-                             #xff))))
-
+    ,(fill-up-to #xff #xf0000)
     
     ,@wtf-prog
 
