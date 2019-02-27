@@ -53,11 +53,4 @@
     ;; "main", after everything has been set up.
     ;; Just go straight to the Forth portion!
     ,@forth-asm
-    (jp shutdown)
-
-    (label smiley-face)
-    (db (#b01010000))
-    (db (#b00000000))
-    (db (#b10001000))
-    (db (#b01110000))
-    ))
+    (jp shutdown)))

@@ -1,4 +1,4 @@
-
+(include "macros.scm")
 (define header-asm
   `((jp boot)
     (db ,(map char->integer (string->list "SK")))
@@ -9,6 +9,9 @@
     ,@(apply append (make-list 5 `(,@ (make-list 7 '(nop))
                                       (ret))))
     ,@(make-list 7 '(nop))
+    ,(lambda ()
+       (format #t "System interrupt at 0x")
+       (PRINT-PC))
     (jp sys-interrupt)
     ,@(make-list 24 '(nop))
     (jp boot)

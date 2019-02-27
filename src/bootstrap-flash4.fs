@@ -274,26 +274,30 @@ T{ 4 2 RSHIFT -> 1 }T
 T{ MSB 1 RSHIFT 2* -> MSB }T
 
 \ Stack word tests.
-T{ 0        ?DUP -> 0           }T
-T{ 1        ?DUP -> 1 1         }T
-T{ 1 2     2DROP ->             }T
-T{ 1 2     2DUP  -> 1 2 1 2     }T
-T{ 1 2 3 4 2OVER -> 1 2 3 4 1 2 }T
-T{ 1 2 3 4 2SWAP -> 3 4 1 2     }T
-T{ 1 2 3   ROT   -> 2 3 1       }T
-T{ 2 3 1   -ROT  -> 1 2 3       }T
-T{ 1 2     SWAP  -> 2 1         }T
-T{ 1 2     OVER  -> 1 2 1       }T
-T{ 1 2 0   PICK  -> 1 2 DUP     }T
-T{ 1 2 1   PICK  -> 1 2 OVER    }T
-T{ 1 2     NIP   -> 2           }T
-T{ 1 2     TUCK  -> 2 1 2       }T
+T{ 0       ?DUP  -> 0            }T
+T{ 1       ?DUP  -> 1 1          }T
+T{ 1 2     2DROP ->              }T
+T{ 1 2     2DUP  -> 1 2 1 2      }T
+T{ 1 2 3 4 2OVER -> 1 2 3 4 1 2  }T
+T{ 1 2 3 4 2SWAP -> 3 4 1 2      }T
+T{ 1 2 3   ROT   -> 2 3 1        }T
+T{ 2 3 1   -ROT  -> 1 2 3        }T
+T{ 1 2     SWAP  -> 2 1          }T
+T{ 1 2     OVER  -> 1 2 1        }T
+T{ 1 2 0   PICK  -> 1 2 DUP      }T
+T{ 1 2 1   PICK  -> 1 2 OVER     }T
+T{ 1 2     NIP   -> 2            }T
+T{ 1 2     TUCK  -> 2 1 2        }T
+
+\ Return stack tests.
+T{ 1 2 >R >R RDROP R>       -> 2 }T
+T{ 1 2 3 >R >R >R 2RDROP R> -> 3 }T
 
 T{ : GD1 DO I LOOP ; -> }T
-T{          4        1 GD1 ->  1 2 3   }T
+T{ 4 1 GD1 -> 1 2 3 }T
 
 T{ : GD3 DO 1 0 DO J LOOP LOOP ; -> }T
-T{          4        1 GD3 ->  1 2 3   }T
+T{ 4 1 GD3 -> 1 2 3 }T
 
 T{ : GD5 123 SWAP 0 DO
      I 4 > IF DROP 234 LEAVE THEN

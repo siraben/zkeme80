@@ -10,8 +10,7 @@ CLEAR-SCREEN ORIGIN
   ELSE
     \ Something went wrong.  Shutdown.
     \ Print "ERR"
-    69 EMIT 82 EMIT 82 EMIT 58 EMIT SPACE
-    9999 U.
+    ." ERR 9999"
     PAUSE POWEROFF           
   THEN
 ;

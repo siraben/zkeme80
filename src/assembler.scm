@@ -221,6 +221,12 @@
              `(#b11101101
                ,(make-opcode (lookup ir ir-regs) 3 #b01010111))))
 
+(define (assemble-ld-a-ir ir)
+  (make-inst 9
+             2
+             `(#b11101101
+               ,(make-opcode (lookup ir ir-regs) 3 #b01000111))))
+
 (define (assemble-ld-iimm16-a addr)
   (make-inst 13
              3
@@ -271,6 +277,8 @@
      (assemble-ld-sp-hl))
     (('a (? ir-reg? b))
      (assemble-ld-ir-reg b))
+    (((? ir-reg? b) 'a)
+     (assemble-ld-a-ir b))
     (((? 8-bit-reg? a) (? 8-bit-reg? b))
      (assemble-ld-reg8-reg8 a b))
     (((? 8-bit-reg? a) ('+ (? index-reg? b) (? 8-bit-imm? c)))
@@ -893,6 +901,30 @@
     (_
      (error (format #f "Invalid operands to srl: ~a" arg)))))
 
+(define rst-numbers
+  '((#x00 . #b000)
+    (#x08 . #b001)
+    (#x10 . #b010)
+    (#x18 . #b011)
+    (#x20 . #b100)
+    (#x28 . #b101)
+    (#x30 . #b110)
+    (#x38 . #b111)))
+
+(define (rst-number? a)
+  (lookup a rst-numbers))
+
+(define (assemble-rst arg)
+  (match arg
+    ((? rst-number? a)
+     (make-inst 11
+                1
+                `(,(make-opcode (lookup a rst-numbers)
+                                3
+                                #b11000111))))
+    (_
+     (error (format #f "Invalid operands to rst: ~a" arg)))))
+
 (define (assemble-expr expr)
   ;; Pattern match EXPR against the valid instructions and dispatch to
   ;; the corresponding sub-assembler.
@@ -965,6 +997,8 @@
      (assemble-djnz arg))
     (`(srl ,arg)
      (assemble-srl arg))
+    (`(rst ,arg)
+     (assemble-rst arg))
     (_
      (error (format #f "Unknown expression: ~s\n" expr))))
   )

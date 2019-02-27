@@ -48,12 +48,13 @@ lib.fix (self: {
     nativeBuildInputs = [ autoreconfHook pkgconfig ];
     buildInputs = [ glib self.libticonv libarchive lzma bzip2 ];
   };
+
   zkeme80 = runCommand "zkeme80.rom" { buildInputs = [ guile ]; } ''
     cp -r ${./.}/* .
     chmod -R +w .
-    echo '(begin (load "zkeme80.scm") (make-rom "zkeme80.rom"))' | guile
+    echo '(load "build.scm")' | guile
     mkdir $out
-    cp zkeme80.rom $out/
+    cp ./src/zkeme80.rom $out/
   '';
   runit = writeScript "runit" ''
     #!/bin/sh

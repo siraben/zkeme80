@@ -16,10 +16,39 @@
 ;; Essential code that modifies sets an interrupt mode of 1 and writes
 ;; to port #x14.
 (define wtf-prog
-  `((db (#xc7 #xed #x57 #xea #x08 #x40 #xed #x57 #xf5 #xf3 #x3e #x01 #x00 #x00 #xed #x56))
-    (db (#xf3 #xd3 #x14 #xf1 #xe0 #xfb #xc9 #xed #x57 #xea #x1e #x40 #xed #x57 #xf5 #xf3))
-    (db (#xaf #x00 #x00 #xed #x56 #xf3 #xd3 #x14 #xf1 #xe0 #xfb #xc9 #x00 #xff #xff #xff))))
-
+  `((rst 0)
+    (ld a i)
+    (jp pe #x4008)
+    (ld a i)
+    (push af)
+    (di)
+    (ld a 1)
+    (nop)
+    (nop)
+    (im 1)
+    (di)
+    (out (#x14) a)
+    (pop af)
+    (ret po)
+    (ei)
+    (ret)
+    (ld a i)
+    (jp pe #x401e)
+    (ld a i)
+    (push af)
+    (di)
+    (xor a)
+    (nop)
+    (nop)
+    (im 1)
+    (di)
+    (out (#x14) a)
+    (pop af)
+    (ret po)
+    (ei)
+    (ret)
+    (nop)
+    (rst #x38)))
 
 (define zkeme80
   `(,(equ 'flash-executable-ram #x8000)
@@ -45,8 +74,8 @@
     
     (label os-end)
     ,(lambda ()
-       ;; (format #t "End of zkeme80: 0x")
-       ;; (PRINT-PC)
+       (format #t "End of zkeme80 kernel: 0x")
+       (PRINT-PC)
        (format #t "~a bytes left for page 0.\n" (- #x4000 *pc*))
        '())
     ;; Must be less than 0x4000.
@@ -63,8 +92,8 @@
 
 
     ,(lambda ()
-       ;; (format #t "Start of Forth data: 0x")
-       ;; (PRINT-PC)
+       (format #t "Start of Forth data: 0x")
+       (PRINT-PC)
        (format #t "~a bytes left for page 2.\n" (- #x8400 *pc*))
        '())
 
@@ -107,6 +136,9 @@
     (label expect-row-save)
     (dw (0))
 
+    (label ddd-data)
+    (db (0))
+
     (label prompt-space)
     (db ,(make-list 128 0))
 
@@ -124,22 +156,19 @@
        (format #t "~a bytes left for HERE.\n" (- #xc000 *pc*))
        '())
 
-    ,(fill-up-to #xff #xc000)
+    ,(fill-up-to #x0 #xc000)
     
     ,@(include-file-as-bytes "bootstrap-flash3.fs")
-
     ,(fill-up-to #xff #x10000)
     
     ,@(include-file-as-bytes "bootstrap-flash4.fs")
-
     ,(fill-up-to #xff #x14000)
     
     ,@(include-file-as-bytes "bootstrap-flash5.fs")
 
-
     ,(lambda ()
-       ;; (format #t "End of Forth data: 0x")
-       ;; (PRINT-PC)
+       (format #t "End of Forth data: 0x")
+       (PRINT-PC)
        (format #t "~a bytes left for page 4.\n" (- #x18000 *pc*))
        '())
 
