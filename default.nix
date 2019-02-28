@@ -54,7 +54,7 @@ lib.fix (self: {
     chmod -R +w .
     echo '(load "build.scm")' | guile
     mkdir $out
-    cp ./src/zkeme80.rom $out/
+    cp zkeme80.rom $out/
   '';
   runit = writeScript "runit" ''
     #!/bin/sh
