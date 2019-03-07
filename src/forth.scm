@@ -1144,7 +1144,6 @@
     (dw (0jump skip-comment))
 
     (dw (jump actual-word))
-    (dw (exit))
 
     (label skip-comment)
     (dw (drop))
@@ -1246,7 +1245,7 @@
     ,@next
 
     ,@(defword "RECURSE" 0 'recurse)
-    (dw (latest @ >cfa exit))
+    (dw (latest @ >cfa comma exit))
 
     ,@(defword "CATCH" 0 'catch)
     (dw (sp@ >r handler @ >r rp@ handler ! execute r> handler ! r> drop))
@@ -1344,15 +1343,15 @@
     (ret)
 
     ;; Not standard compilant.  Doesn't conform to run-time behavior.
+    ;; Exactly the same as LIT
     ,@(defcode "(')" 0 'tick)
-    (ld a (de))
-    (ld l a)
-    (inc de)
-    (ld a (de))
-    (ld h a)
-    (inc de)
     (push bc)
-    ,@hl-to-bc
+    (ld a (de))
+    (ld c a)
+    (inc de)
+    (ld a (de))
+    (ld b a)
+    (inc de)
     ,@next
 
     ;; Correct implementation of tick.
