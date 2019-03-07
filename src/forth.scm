@@ -1,7 +1,7 @@
 ;; Forth portion of the operating system.
 
 (define (include-file-as-bytes filename)
-  (let* ((port (open-file (%search-load-path filename) "r"))
+  (let* ((port (open-file filename "r"))
          (res (get-string-all port))
          (expr `((db ,(string res)))))
     (close-port port)
