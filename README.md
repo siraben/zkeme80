@@ -29,10 +29,10 @@ bonus points if you don't need to know Z80 assembly to do so.
 [ANS standard](https://forth-standard.org/standard/words) conforming
 Forth interpreter/compiler.  From words covering sprites and graphics,
 to text and memory access, everything you need to make the next hit
-Snake clone or RPN-based layer is already there.  **zkeme80** lowers
-the barrier of entry for customizing an operating system and enable
-rapid development cycles.  Below the Forth layer, you'll find two
-lowest level and highest level languages, Z80 assembly and Scheme.
+Snake clone or RPN-based math layer is already there.  **zkeme80**
+lowers the barrier of entry for customizing an operating system and
+enable rapid development cycles.  Below the Forth layer, you'll find
+two lowest level and highest level languages, Z80 assembly and Scheme.
 The best assembler is an extensible one, where writing macros should
 be a joy, not a pain, and Scheme has that macro system.
 
@@ -67,12 +67,11 @@ of the word environment.  As time goes on I may consider making more
 words standard-conforming.
 
 ### Did you write all of this?
-Not *all* of it.  Most of the assembly code outside of `forth.scm` was
-taken from
+Most of the assembly code outside of `forth.scm` was taken from
 [SmileyOS](https://www.ticalc.org/archives/files/fileinfo/442/44227.html),
 which itself is based on an older version of the [KnightOS
 Kernel](https://github.com/knightos/kernel).  I chose SmileyOS because
-it seemed like the most "minimal" needed to get nasty stuff such as
+it was the most "minimal" needed to get nasty stuff such as
 locking/unlocking flash, display routines, key routines etc. out of
 the way.  Code here that doesn't exist in SmileyOS was taken from
 public sources, including the current version of KnightOS.  The rest
@@ -86,11 +85,12 @@ in the same directory.  Simply pass that file to an emulator such as
 [jsTIfied](https://www.cemetech.net/projects/jstified/) (works in the
 browser) and start playing around!
 
-Running just `make` builds and runs the project, but assumes that you have
-already properly built `tielm` (and linked it at `tilem2`) and have
-Guile installed.  Be warned, though, `tilem` is tricky to build and
-you have to enable all sorts of flags and install dependencies.  If
-anyone knows a good emulator for macOS, please let me know.
+Running just `make` builds and runs the project, but assumes that you
+have already properly built `tielm` and can run it with `tielm2` on
+the shell, and have Guile installed.  Be warned, though, `tilem` is
+tricky to build and you have to enable all sorts of flags and install
+dependencies.  If anyone knows a good emulator for macOS, please let
+me know.
 
 ### Using the Nix package manager
 If you're using the Nix package manager, just clone the repository and

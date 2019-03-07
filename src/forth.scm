@@ -1244,7 +1244,7 @@
     (jp (hl))
     ,@next
 
-    ,@(defword "RECURSE" 0 'recurse)
+    ,@(defword "RECURSE" immediate 'recurse)
     (dw (latest @ >cfa comma exit))
 
     ,@(defword "CATCH" 0 'catch)

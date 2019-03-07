@@ -129,6 +129,7 @@ constants are omitted.
 ** DONE R>
 ** DONE R@
 ** DONE RDROP
+** TODO RECURSE
 ** TODO REFILL
 ** DONE REPEAT
 ** DONE -ROT
