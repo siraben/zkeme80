@@ -39,11 +39,11 @@
     (in a (1))
 
     (ld de 0)
-    ,@(apply append (map (lambda (x)
-                           (let ((dest (string->symbol (format #f "gs-getk-~a" x))))
-                             `((cp ,x)
-                               (jr z ,dest))))
-                         '(254 253 251 247 239 223 191 127)))
+    ,@(concat-map (lambda (x)
+                    (let ((dest (string->symbol (format #f "gs-getk-~a" x))))
+                      `((cp ,x)
+                        (jr z ,dest))))
+                  '(254 253 251 247 239 223 191 127))
 
     (label gs-getk-loopend)
     (djnz gs-getk-loop)
@@ -51,11 +51,11 @@
     (ld (#x8000) a)
     (jr gs-getk-end)
 
-    ,@(apply append (map (lambda (x)
-                           (let ((dest (string->symbol (format #f "gs-getk-~a" x))))
-                             `((label ,dest)
-                               (inc e))))
-                         '(127 191 223 239 247 251 253)))
+    ,@(concat-map (lambda (x)
+                    (let ((dest (string->symbol (format #f "gs-getk-~a" x))))
+                      `((label ,dest)
+                        (inc e))))
+                  '(127 191 223 239 247 251 253))
 
     (label gs-getk-254)
     (push de)

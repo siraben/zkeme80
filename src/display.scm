@@ -218,8 +218,7 @@
 
 
     ;; Code generation for the win!
-    ,@(apply append
-             (map (lambda (x)
+    ,@(concat-map (lambda (x)
                     (let* ((curr-label (string->symbol (format #f "draw-x~a" x)))
                            (next-label (string->symbol (format #f "draw-x~a" (modulo (1+ x) 8))))
                            (local-label (string->symbol (format #f "local-draw-x~a" x))))
@@ -234,10 +233,9 @@
                         (label ,local-label)
                         (djnz ,next-label)
                         (ret))))
-                  (iota 8)))
+                  (iota 8))
 
-    ,@(apply append
-             (map (lambda (y)
+    ,@(concat-map (lambda (y)
                     (let* ((local-label (string->symbol (format #f "local-draw-y~a" y)))
                            (curr-label (string->symbol (format #f "draw-y~a" y)))
                            (next-local-label (string->symbol (format #f "local-draw-y~a" (modulo (1+ y) 8)))))
@@ -255,7 +253,7 @@
                         (jp nc ,next-local-label)
                         (djnz ,curr-label)
                         (ret))))
-                  (iota 8)))
+                  (iota 8))
 
     (label put-sprite-xor)
     ,@(with-regs-preserve (af bc hl de ix)

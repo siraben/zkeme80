@@ -1,3 +1,4 @@
+;; Convenience functions
 (define (string s)
   `(,@(map char->integer (string->list s)) 0))
 
@@ -55,5 +56,10 @@
     (assemble-expr
      `(db ,(make-list (- #x100000 *pc*) #xff)))))
 
-(define (n-copies-of n expr)
-  (apply append (make-list n expr)))
+(define (concat l) (apply append l))
+
+(define (repeat n expr)
+  (concat (make-list n expr)))
+
+(define (concat-map f l)
+  (concat (map f l)))

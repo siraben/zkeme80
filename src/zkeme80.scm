@@ -102,12 +102,10 @@
     ,(fill-up-to #xff #x8402)
     
     ;; We start the Forth data here.
-
-    
-    ,@(apply append (map (lambda (x)
-                           `((label ,(car x))
-                             (dw (,(cdr x)))))
-                         (reverse *var-list*)))
+    ,@(concat-map (lambda (x)
+                    `((label ,(car x))
+                      (dw (,(cdr x)))))
+                  (reverse *var-list*))
 
     ;; Forth system variables.  Put here because it's writable when
     ;; loaded into RAM.
