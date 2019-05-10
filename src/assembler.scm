@@ -76,29 +76,28 @@
           opcode))
 
 (define-record-type <inst>
-  (make-inst-rec cycles length generator)
+  (make-inst-rec length generator)
   inst?
-  (cycles inst-cycles)
   (length inst-length)
   (generator inst-generator))
 
 (define-syntax make-inst
   (syntax-rules ()
-    ((_ cycles length generator)
-     (make-inst-rec cycles length (delay generator)))))
+    ((_ length generator)
+     (make-inst-rec length (delay generator)))))
 
 (define (gen-inst inst)
   (force (inst-generator inst)))
 
 (define (assemble-push reg)
   (if (index-reg? reg)
-      (make-inst 15 2 `(,(lookup reg push-pop-index-regs) #b11100101))
-      (make-inst 11 1 `(,(make-opcode (lookup reg 16-bit-regs) 4 #b11000101)))))
+      (make-inst 2 `(,(lookup reg push-pop-index-regs) #b11100101))
+      (make-inst 1 `(,(make-opcode (lookup reg 16-bit-regs) 4 #b11000101)))))
 
 (define (assemble-pop reg)
   (if (index-reg? reg)
-      (make-inst 14 2  `(,(lookup reg push-pop-index-regs) #b11100001))
-      (make-inst 10 1 `(,(make-opcode (lookup reg 16-bit-regs) 4 #b11000001)))))
+      (make-inst 2  `(,(lookup reg push-pop-index-regs) #b11100001))
+      (make-inst 1 `(,(make-opcode (lookup reg 16-bit-regs) 4 #b11000001)))))
 
 (define (unsigned-nat? x)
   (and (integer? x) (>= x 0)))
@@ -135,8 +134,7 @@
   (or (16-bit-reg? x)  (8-bit-reg? x)))
 
 (define (assemble-ld-reg8-reg8 dest src)
-  (make-inst (if (eqv? dest '(hl)) 7 4)
-             1
+  (make-inst 1
              `(,(make-opcode (lookup src ld-regs)
                              0
                              (make-opcode (lookup dest ld-regs)
@@ -144,13 +142,11 @@
                                           #b01000000)))))
 
 (define (assemble-ld-reg8-imm8 reg8 imm8)
-  (make-inst (if (eqv? reg8 '(hl)) 10 7)
-             2
+  (make-inst 2
              `(,(make-opcode (lookup reg8 ld-regs) 3 #b00000110) ,imm8)))
 
 (define (assemble-ld-hl-iimm16 iimm16)
-  (make-inst 16
-             3
+  (make-inst 3
              (let ((iimm16 (resolve-label iimm16)))
                `(#b00101010
                  ,(lsb iimm16)
@@ -160,9 +156,7 @@
   '((bc . #b0) (de . #b1)))
 
 (define (assemble-ld-a-ireg16 reg)
-  (make-inst 7
-             1
-             `(,(make-opcode (lookup reg ld-iregs) 4 #b00001010))))
+  (make-inst 1 `(,(make-opcode (lookup reg ld-iregs) 4 #b00001010))))
 
 ;; Least significant byte.
 (define (lsb n)
@@ -179,97 +173,73 @@
           (error (format #f "Label not found: ~a" label-or-imm16)))))
 
 (define (assemble-ld-reg16-imm16 reg16 imm16)
-  (make-inst 10
-             3
-             (let ((imm16 (resolve-label imm16)))
-               `(,(make-opcode (lookup reg16 16-bit-regs) 4 #b00000001)
-                 ,(lsb imm16)
-                 ,(msb imm16)))))
+  (make-inst 3 (let ((imm16 (resolve-label imm16)))
+                 `(,(make-opcode (lookup reg16 16-bit-regs) 4 #b00000001)
+                   ,(lsb imm16)
+                   ,(msb imm16)))))
 
 
 (define (assemble-ld-reg16-iimm16 reg16 imm16)
-  (make-inst 20
-             4
-             (let ((imm16 (resolve-label imm16)))
-               `(#b11101101
-                 ,(make-opcode (lookup reg16 16-bit-regs) 4 #b01001011)
-                 ,(lsb imm16)
-                 ,(msb imm16)))))
+  (make-inst 4 (let ((imm16 (resolve-label imm16)))
+                 `(#b11101101
+                   ,(make-opcode (lookup reg16 16-bit-regs) 4 #b01001011)
+                   ,(lsb imm16)
+                   ,(msb imm16)))))
 
 
 (define (assemble-ld-ireg16-a reg16)
-  (make-inst 7
-             1
-             `(,(make-opcode (lookup reg16 16-bit-regs) 4 #b00000010))))
+  (make-inst 1 `(,(make-opcode (lookup reg16 16-bit-regs) 4 #b00000010))))
 
 (define ld-index-imm16-regs
   '((ix . #b11011101)
     (iy . #b11111101)))
 
 (define (assemble-ld-index-imm16 ireg imm16)
-  (make-inst 14
-             4
-             (let ((imm16 (resolve-label imm16)))
-               `(,(lookup ireg ld-index-imm16-regs)
-                 #b00100001
-                 ,(lsb imm16)
-                 ,(msb imm16)))))
+  (make-inst 4 (let ((imm16 (resolve-label imm16)))
+                 `(,(lookup ireg ld-index-imm16-regs)
+                   #b00100001
+                   ,(lsb imm16)
+                   ,(msb imm16)))))
 
 (define (assemble-ld-ir-reg ir)
-  (make-inst 9
-             2
-             `(#b11101101
-               ,(make-opcode (lookup ir ir-regs) 3 #b01010111))))
+  (make-inst 2 `(#b11101101
+                 ,(make-opcode (lookup ir ir-regs) 3 #b01010111))))
 
 (define (assemble-ld-a-ir ir)
-  (make-inst 9
-             2
-             `(#b11101101
-               ,(make-opcode (lookup ir ir-regs) 3 #b01000111))))
+  (make-inst 2 `(#b11101101
+                 ,(make-opcode (lookup ir ir-regs) 3 #b01000111))))
 
 (define (assemble-ld-iimm16-a addr)
-  (make-inst 13
-             3
-             (let ((addr (resolve-label addr)))
-               `(#b00110010
-                 ,(lsb addr)
-                 ,(msb addr)))))
+  (make-inst 3 (let ((addr (resolve-label addr)))
+                 `(#b00110010
+                   ,(lsb addr)
+                   ,(msb addr)))))
 
 (define (assemble-ld-a-imm16 addr)
-  (make-inst 13
-             3
-             (let ((addr (resolve-label addr)))
-               `(#b00111010
-                 ,(lsb addr)
-                 ,(msb addr)))))
+  (make-inst 3 (let ((addr (resolve-label addr)))
+                 `(#b00111010
+                   ,(lsb addr)
+                   ,(msb addr)))))
 
 (define (assemble-ld-sp-hl)
-  (make-inst 6
-             1
-             `(#b11111001)))
+  (make-inst 1 `(#b11111001)))
 
 (define (assemble-ld-reg8-index-offset a b c)
-  (make-inst 19
-             3
-             `(,(if (eq? b 'ix) #b11011101 #b11111101)
-               ,(make-opcode (lookup a ld-regs) 3 #b01000110)
-               ,c)))
+  (make-inst 3 `(,(if (eq? b 'ix) #b11011101 #b11111101)
+                 ,(make-opcode (lookup a ld-regs) 3 #b01000110)
+                 ,c)))
 
 (define (assemble-ld-index-reg8 a b c)
-  (make-inst 19
-             3
-             `(,(lookup a ld-index-imm16-regs)
-               ,(make-opcode (lookup c ld-regs) 0 #b01110000)
-               ,b)))
+  (make-inst 3 `(,(lookup a ld-index-imm16-regs)
+                 ,(make-opcode (lookup c ld-regs) 0 #b01110000)
+                 ,b)))
 
 (define (assemble-ld-iimm-reg16 a b)
-  (make-inst 20
-             4
-             (let ((a (resolve-label a)))
-               `(#b11101101
-                 ,(make-opcode (lookup b 16-bit-regs) 4 #b01000011)
-                 ,(lsb a)
-                 ,(msb a)))))
+  (make-inst 4 (let ((a (resolve-label a)))
+                 `(#b11101101
+                   ,(make-opcode (lookup b 16-bit-regs) 4 #b01000011)
+                   ,(lsb a)
+                   ,(msb a)))))
 
 (define (assemble-ld args)
   (match args
@@ -353,7 +323,7 @@
 (define (assemble-simple a)
   (let ((res (lookup a simple-ops)))
     (if res
-        (make-inst (car res) (cadr res) (caddr res))
+        (make-inst (cadr res) (caddr res))
         (error (format #f "Operation not found: ~a" a)))))
 
 (define (add-label! name val)
@@ -378,25 +348,21 @@
 (define (condition? s) (lookup s condition-codes))
 
 (define (assemble-cond-jp cond imm16)
-  (make-inst 10
-             3
-             (let ((imm16 (resolve-label imm16)))
-               `(,(make-opcode (lookup cond condition-codes) 3 #b11000010)
-                 ,(lsb imm16)
-                 ,(msb imm16)))))
+  (make-inst 3 (let ((imm16 (resolve-label imm16)))
+                 `(,(make-opcode (lookup cond condition-codes) 3 #b11000010)
+                   ,(lsb imm16)
+                   ,(msb imm16)))))
 
 (define (assemble-uncond-jp imm16)
-  (make-inst 10
-             3
-             (let ((imm16 (resolve-label imm16)))
-               `(#b11000011
-                 ,(lsb imm16)
-                 ,(msb imm16)))))
+  (make-inst 3 (let ((imm16 (resolve-label imm16)))
+                 `(#b11000011
+                   ,(lsb imm16)
+                   ,(msb imm16)))))
 
 (define (assemble-jp args)
   (match args
     ((('hl))
-     (make-inst 4 1 `(#b11101001)))
+     (make-inst 1 `(#b11101001)))
     (((? condition? a) b)
      (assemble-cond-jp a b))
     (((? 16-bit-imm-or-label? a))
@@ -428,19 +394,15 @@
            (jr-simm8-convert (- x *pc*)))))
 
 (define (assemble-cond-jr cond simm8)
-  (make-inst 9.5
-             2
-             (let ((simm8 (resolve-jr-label-or-simm simm8)))
-               `(,(make-opcode (lookup cond condition-codes) 3 #b00100000)
-                 ,simm8))))
+  (make-inst 2 (let ((simm8 (resolve-jr-label-or-simm simm8)))
+                 `(,(make-opcode (lookup cond condition-codes) 3 #b00100000)
+                   ,simm8))))
 
 (define (assemble-uncond-jr simm8)
-  (make-inst 12
-             2
-             (let ((simm8 (resolve-jr-label-or-simm simm8)))
-               `(#b00011000
-                 ;; Follwed by a signed byte, -127 to +127
-                 ,simm8))))
+  (make-inst 2 (let ((simm8 (resolve-jr-label-or-simm simm8)))
+                 `(#b00011000
+                   ;; Follwed by a signed byte, -127 to +127
+                   ,simm8))))
 
 (define (assemble-jr args)
   (match args
@@ -453,20 +415,16 @@
 
 
 (define (assemble-cond-call cond imm16)
-  (make-inst 13.5
-             3
-             (let ((imm16 (resolve-label imm16)))
-               `(,(make-opcode (lookup cond condition-codes) 3 #b11000100)
-                 ,(lsb imm16)
-                 ,(msb imm16)))))
+  (make-inst 3 (let ((imm16 (resolve-label imm16)))
+                 `(,(make-opcode (lookup cond condition-codes) 3 #b11000100)
+                   ,(lsb imm16)
+                   ,(msb imm16)))))
 
 (define (assemble-uncond-call imm16)
-  (make-inst 17
-             3
-             (let ((imm16 (resolve-label imm16)))
-               `(#b11001101
-                 ,(lsb imm16)
-                 ,(msb imm16)))))
+  (make-inst 3 (let ((imm16 (resolve-label imm16)))
+                 `(#b11001101
+                   ,(lsb imm16)
+                   ,(msb imm16)))))
 
 (define (assemble-call args)
   (match args
@@ -478,34 +436,28 @@
      (error (format #f "Invalid operands to call: ~a" args)))))
 
 (define (assemble-dw word-list)
-  (make-inst 0
-             (ash (length word-list) 1)
-             (flatten (map
-                       (lambda (x)
-                         (let ((x (if (symbol? x) (resolve-label x) x)))
-                           (if x
-                               (list (lsb x) (msb x))
-                               (error (format #f "Invalid word in dw: ~a" x)))))
-                       word-list))))
+  (make-inst (ash (length word-list) 1)
+                          (flatten (map
+                                    (lambda (x)
+                                      (let ((x (if (symbol? x) (resolve-label x) x)))
+                                        (if x
+                                            (list (lsb x) (msb x))
+                                            (error (format #f "Invalid word in dw: ~a" x)))))
+                                    word-list))))
 
 (define (assemble-db byte-list)
-  (make-inst 0
-             (length byte-list)
-             (if (all-sat? 8-bit-imm? byte-list)
-                 byte-list
-                 (error (format #f "Invalid byte in db: ~a" byte-list)))))
+  (make-inst (length byte-list)
+                          (if (all-sat? 8-bit-imm? byte-list)
+                              byte-list
+                              (error (format #f "Invalid byte in db: ~a" byte-list)))))
 
 (define (assemble-out-iimm8-a port)
-  (make-inst 11
-             2
-             `(#b11010011
-               ,port)))
+  (make-inst 2 `(#b11010011
+                 ,port)))
 
 (define (assemble-out-c-reg reg)
-  (make-inst 12
-             2
-             `(#b11101011
-               ,(make-opcode (lookup reg ld-regs) 3 #b01000001))))
+  (make-inst 2 `(#b11101011
+                 ,(make-opcode (lookup reg ld-regs) 3 #b01000001))))
 
 (define (assemble-out arg)
   (match arg
@@ -517,16 +469,12 @@
      (error (format #f "Invalid operands to out: ~a" arg)))))
 
 (define (assemble-in-a-iimm8 imm8)
-  (make-inst 11
-             2
-             `(#b11011011
-               ,imm8)))
+  (make-inst 2 `(#b11011011
+                 ,imm8)))
 
 (define (assemble-in-reg8-ic reg)
-  (make-inst 12
-             2
-             `(#b11101011
-               ,(make-opcode (lookup reg ld-regs) 3 #b01000000))))
+  (make-inst 2 `(#b11101011
+                 ,(make-opcode (lookup reg ld-regs) 3 #b01000000))))
 
 (define (assemble-in arg)
   (match arg
@@ -538,15 +486,11 @@
      (error (format #f "Invalid operands to out: ~a" arg)))))
 
 (define (assemble-xor-8-bit-reg a)
-  (make-inst (if (eqv? a '(hl)) 7 4)
-             1
-             `(,(make-opcode (lookup a ld-regs) 0 #b10101000))))
+  (make-inst 1 `(,(make-opcode (lookup a ld-regs) 0 #b10101000))))
 
 (define (assemble-xor-8-bit-imm a)
-  (make-inst 7
-             2
-             `(#b11101110
-               ,a)))
+  (make-inst 2 `(#b11101110
+                 ,a)))
 
 (define (assemble-xor arg)
   (match arg
@@ -558,20 +502,14 @@
      (error (format #f "Invalid operands to xor: ~a" arg)))))
 
 (define (assemble-dec-8-bit-reg a)
-  (make-inst (if (eqv? a '(hl)) 11 4)
-             1
-             `(,(make-opcode (lookup a ld-regs) 3 #b00000101))))
+  (make-inst 1 `(,(make-opcode (lookup a ld-regs) 3 #b00000101))))
 
 (define (assemble-dec-16-bit-reg a)
-  (make-inst 6
-             1
-             `(,(make-opcode (lookup a 16-bit-regs) 4 #b00001011))))
+  (make-inst 1 `(,(make-opcode (lookup a 16-bit-regs) 4 #b00001011))))
 
 (define (assemble-dec-index-reg a)
-  (make-inst 10
-             2
-             `(,(lookup a ld-index-imm16-regs)
-               #b00101011)))
+  (make-inst 2 `(,(lookup a ld-index-imm16-regs)
+                 #b00101011)))
 
 (define (assemble-dec arg)
   (match arg
@@ -586,21 +524,15 @@
 
 
 (define (assemble-inc-8-bit-reg arg)
-  (make-inst (if (eqv? arg '(hl)) 11 4)
-             1
-             `(,(make-opcode (lookup arg ld-regs) 3 #b00000100))))
+  (make-inst 1 `(,(make-opcode (lookup arg ld-regs) 3 #b00000100))))
 
 (define (assemble-inc-16-bit-reg arg)
-  (make-inst 6
-             1
-             `(,(make-opcode (lookup arg 16-bit-regs) 4 #b00000011))))
+  (make-inst 1 `(,(make-opcode (lookup arg 16-bit-regs) 4 #b00000011))))
 
 
 (define (assemble-inc-index-reg arg)
-  (make-inst 10
-             2
-             `(,(lookup arg ld-index-imm16-regs)
-               #b00100011)))
+  (make-inst 2 `(,(lookup arg ld-index-imm16-regs)
+                 #b00100011)))
 
 (define (assemble-inc arg)
   (match arg
@@ -614,50 +546,38 @@
      (error #f "Invalid operands to inc: ~a" arg))))
 
 (define (assemble-bit imm3 reg8)
-  (make-inst (if (eqv? reg8 '(hl)) 12 8)
-             2
-             `(#b11001011
-               ,(make-opcode imm3
-                             3
-                             (make-opcode (lookup reg8 ld-regs) 0 #b01000000)))))
+  (make-inst 2 `(#b11001011
+                 ,(make-opcode imm3
+                               3
+                               (make-opcode (lookup reg8 ld-regs) 0 #b01000000)))))
 
 (define (assemble-res imm3 reg8)
-  (make-inst (if (eqv? reg8 '(hl)) 15 8)
-             2
-             `(#b11001011
-               ,(make-opcode imm3
-                             3
-                             (make-opcode (lookup reg8 ld-regs) 0 #b10000000)))))
+  (make-inst 2 `(#b11001011
+                 ,(make-opcode imm3
+                               3
+                               (make-opcode (lookup reg8 ld-regs) 0 #b10000000)))))
 
 (define (assemble-set imm3 reg)
   (cond ((8-bit-reg? reg)
-         (make-inst (if (eqv? reg '(hl)) 15 8)
-                    2
-                    `(#b11001011
-                      ,(make-opcode imm3
-                                    3
-                                    (make-opcode (lookup reg ld-regs) 0 #b11000000)))))
+         (make-inst 2 `(#b11001011
+                        ,(make-opcode imm3
+                                      3
+                                      (make-opcode (lookup reg ld-regs) 0 #b11000000)))))
         ((index-reg? (car reg))
-         (make-inst 23
-                    4
-                    `(,(lookup (car reg) ld-index-imm16-regs)
-                      #b11001011
-                      ;; No offset for now.
-                      #b00000000
-                      ,(make-opcode imm3 3 #b11000110))))
+         (make-inst 4 `(,(lookup (car reg) ld-index-imm16-regs)
+                        #b11001011
+                        ;; No offset for now.
+                        #b00000000
+                        ,(make-opcode imm3 3 #b11000110))))
         (else
          (error (format #f "Invalid operands to set: ~a" `(,imm3 ,reg))))))
 
 (define (assemble-adc-8-bit-reg reg)
-  (make-inst (if (eqv? reg '(hl)) 7 4)
-             1
-             `(,(make-opcode (lookup reg ld-regs) 0 #b10001000))))
+  (make-inst 1 `(,(make-opcode (lookup reg ld-regs) 0 #b10001000))))
 
 (define (assemble-adc-16-bit-reg reg)
-  (make-inst 15
-             2
-             `(#b11101101
-               ,(make-opcode (lookup reg 16-bit-regs) 4 #b01001010))))
+  (make-inst 2 `(#b11101101
+                 ,(make-opcode (lookup reg 16-bit-regs) 4 #b01001010))))
 
 (define (assemble-adc arg)
   (match arg
@@ -669,23 +589,16 @@
      (error (format #f "Invalid operands to adc: ~a" arg)))))
 
 (define (assemble-and-8-bit-reg a)
-  (make-inst (if (eqv? a '(hl)) 7 4)
-             1
-             `(,(make-opcode (lookup a ld-regs) 0 #b10100000))))
+  (make-inst 1 `(,(make-opcode (lookup a ld-regs) 0 #b10100000))))
 
 (define (assemble-and-8-bit-imm a)
-  (make-inst 7
-             2
-             `(#b11100110
-               ,a)))
+  (make-inst 2 `(#b11100110 ,a)))
 
 (define (assemble-and-index-reg a)
-  (make-inst 19
-             3
-             `(,(lookup a ld-index-imm16-regs)
-               #b10100110
-               ;; No offset for now.
-               #b00000000)))
+  (make-inst 3 `(,(lookup a ld-index-imm16-regs)
+                 #b10100110
+                 ;; No offset for now.
+                 #b00000000)))
 
 (define (assemble-and arg)
   (match arg
@@ -699,15 +612,10 @@
      (error (format #f "Invalid operands to and: ~a" arg)))))
 
 (define (assemble-or-8-bit-reg a)
-  (make-inst (if (eqv? a '(hl)) 7 4)
-             1
-             `(,(make-opcode (lookup a ld-regs) 0 #b10110000))))
+  (make-inst 1 `(,(make-opcode (lookup a ld-regs) 0 #b10110000))))
 
 (define (assemble-or-8-bit-imm a)
-  (make-inst 7
-             2
-             `(#b11110110
-               ,a)))
+  (make-inst 2 `(#b11110110 ,a)))
 
 (define (assemble-or arg)
   (match arg
@@ -719,31 +627,20 @@
      (error (format #f "Invalid operands to or: ~a" arg)))))
 
 (define (assemble-ret-cond c)
-  (make-inst 8
-             1
-             `(,(make-opcode (lookup c condition-codes) 3 #b11000000))))
+  (make-inst 1 `(,(make-opcode (lookup c condition-codes) 3 #b11000000))))
 
 (define (assemble-add-hl-reg16 a)
-  (make-inst 11
-             1
-             `(,(make-opcode (lookup a 16-bit-regs) 4 #b00001001))))
+  (make-inst 1 `(,(make-opcode (lookup a 16-bit-regs) 4 #b00001001))))
 
 (define (assemble-add-reg8 a)
-  (make-inst (if (eqv? a '(hl)) 7 4)
-             1
-             `(,(make-opcode (lookup a ld-regs) 0 #b10000000))))
+  (make-inst 1 `(,(make-opcode (lookup a ld-regs) 0 #b10000000))))
 
 (define (assemble-add-index-reg16 a b)
-  (make-inst 15
-             2
-             `(,(if (eq? a 'ix) #b11011101 #b11111101)
-               ,(make-opcode (lookup b 16-bit-regs) 4 #b00001001))))
+  (make-inst 2 `(,(if (eq? a 'ix) #b11011101 #b11111101)
+                 ,(make-opcode (lookup b 16-bit-regs) 4 #b00001001))))
 
 (define (assemble-add-imm8 a)
-  (make-inst 7
-             2
-             `(#b11000110
-               ,a)))
+  (make-inst 2 `(#b11000110 ,a)))
 
 (define (assemble-add arg)
   (match arg
@@ -759,15 +656,10 @@
      (error (format #f "Invalid operands to add: ~a" arg)))))
 
 (define (assemble-sub-reg8 a)
-  (make-inst (if (eqv? a '(hl)) 7 4)
-             1
-             `(,(make-opcode (lookup a ld-regs) 0 #b10010000))))
+  (make-inst 1 `(,(make-opcode (lookup a ld-regs) 0 #b10010000))))
 
 (define (assemble-sub-imm8 a)
-  (make-inst 7
-             2
-             `(#b11010110
-               ,a)))
+  (make-inst 2 `(#b11010110 ,a)))
 
 (define (assemble-sub arg)
   (match arg
@@ -787,15 +679,11 @@
      (error (format #f "Invalid operands to ret: ~a" arg)))))
 
 (define (assemble-cp-reg8 arg)
-  (make-inst (if (eqv? arg '(hl)) 7 4)
-             1
+  (make-inst 1
              `(,(make-opcode (lookup arg ld-regs) 0 #b10111000))))
 
 (define (assemble-cp-imm8 arg)
-  (make-inst 7
-             2
-             `(#b11111110
-               ,arg)))
+  (make-inst 2 `(#b11111110 ,arg)))
 
 
 (define (assemble-cp arg)
@@ -809,10 +697,8 @@
 
 
 (define (assemble-sbc-hl-reg16 a)
-  (make-inst 15
-             2
-             `(#b11101101
-               ,(make-opcode (lookup a 16-bit-regs) 4 #b01000010))))
+  (make-inst 2 `(#b11101101
+                 ,(make-opcode (lookup a 16-bit-regs) 4 #b01000010))))
 
 (define (assemble-sbc arg)
   (match arg
@@ -824,27 +710,13 @@
 
 (define (assemble-im arg)
   (match arg
-    (0
-     (make-inst 8
-                2
-                '(#b11101101
-                  #b01000110)))
-    (1
-     (make-inst 8
-                2
-                '(#b11101101
-                  #b01010110)))
-    (2
-     (make-inst 4
-                2
-                '(#b11101101
-                  #b01011110)))))
+    (0 (make-inst 2 '(#b11101101 #b01000110)))
+    (1 (make-inst 2 '(#b11101101 #b01010110)))
+    (2 (make-inst 2 '(#b11101101 #b01011110)))))
 
 (define (assemble-sla-reg8 a)
-  (make-inst (if (eqv? a '(hl)) 15 8)
-             2
-             `(#b11001011
-               ,(make-opcode (lookup a ld-regs) 0 #b00100000))))
+  (make-inst 2 `(#b11001011
+                 ,(make-opcode (lookup a ld-regs) 0 #b00100000))))
 
 (define (assemble-sla arg)
   (match arg
@@ -854,10 +726,8 @@
      (error (format #f "Invalid operands to sla: ~a" arg)))))
 
 (define (assemble-rl-reg8 a)
-  (make-inst (if (eqv? a '(hl)) 15 8)
-             2
-             `(#b11001011
-               ,(make-opcode (lookup a ld-regs) 0 #b00010000))))
+  (make-inst 2 `(#b11001011
+                 ,(make-opcode (lookup a ld-regs) 0 #b00010000))))
 
 (define (assemble-rl arg)
   (match arg
@@ -868,10 +738,7 @@
 
 
 (define (assemble-rr-reg8 a)
-  (make-inst (if (eqv? a '(hl)) 15 8)
-             2
-             `(#b11001011
-               ,(make-opcode (lookup a ld-regs) 0 #b00011000))))
+  (make-inst 2 `(#b11001011 ,(make-opcode (lookup a ld-regs) 0 #b00011000))))
 
 (define (assemble-rr arg)
   (match arg
@@ -881,16 +748,14 @@
      (error (format #f "Invalid operands to rr: ~a" arg)))))
 
 (define (assemble-djnz simm8)
-  (make-inst 10.5
-             2
+  (make-inst 2
              (let ((simm8 (resolve-jr-label-or-simm simm8)))
                `(#b00010000
                  ;; Follwed by a signed byte, -127 to +127
                  ,simm8))))
 
 (define (assemble-srl-reg8 a)
-  (make-inst (if (eqv? a '(hl)) 15 8)
-             2
+  (make-inst 2
              `(#b11001011
                ,(make-opcode (lookup a ld-regs) 0 #b00111000))))
 
@@ -917,8 +782,7 @@
 (define (assemble-rst arg)
   (match arg
     ((? rst-number? a)
-     (make-inst 11
-                1
+     (make-inst 1
                 `(,(make-opcode (lookup a rst-numbers)
                                 3
                                 #b11000111))))

@@ -136,7 +136,6 @@ type that has the following fields (for a normal instruction):
 
 | Record entry | Type      | Description                                       |
 | :-:          | :-:       | :-:                                               |
-| `cycles`     | `integer` | The number of cycles this instruction takes.      |
 | `length`     | `integer` | The length of the instruction, in bytes.          |
 | `gen-instr`  | `lambda`  | Thunk that computes the actual instruction bytes. |
 
