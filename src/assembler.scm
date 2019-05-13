@@ -1,7 +1,4 @@
-(use-modules (ice-9 match)
-             (rnrs io ports)
-             (rnrs bytevectors)
-             (srfi srfi-9))
+(use-modules (ice-9 match) (rnrs io ports) (rnrs bytevectors) (srfi srfi-9))
 
 ;; set! this to #t to see debugging information.  Note that `lookup`
 ;; will complain a lot but generally it's fine.
@@ -99,8 +96,13 @@
       (make-inst 2  `(,(lookup reg push-pop-index-regs) #b11100001))
       (make-inst 1 `(,(make-opcode (lookup reg 16-bit-regs) 4 #b11000001)))))
 
-(define (unsigned-nat? x)
-  (and (integer? x) (>= x 0)))
+(define (unsigned-nat? x) (and (integer? x) (>= x 0)))
+(define (num->binary n) (format #f "~8,'0b" n))
+(define (num->hex n) (format #f "~2,'0x" n))
+(define (16-bit-reg? x) (lookup x 16-bit-regs))
+(define (8-bit-reg? x) (member x '(a b c d e f h l i r (hl))))
+(define (ir-reg? x) (lookup x ir-regs))
+(define (reg? x) (or (16-bit-reg? x)  (8-bit-reg? x)))
 
 (define (8-bit-imm? x)
   (and (unsigned-nat? x)
@@ -115,23 +117,6 @@
   (and (unsigned-nat? x)
        (> (ash 1 16) x)))
 
-(define (num->binary n)
-  (format #f "~8,'0b" n))
-
-(define (num->hex n)
-  (format #f "~2,'0x" n))
-
-(define (16-bit-reg? x)
-  (lookup x 16-bit-regs))
-
-(define (8-bit-reg? x)
-  (member x '(a b c d e f h l i r (hl))))
-
-(define (ir-reg? x)
-  (lookup x ir-regs))
-
-(define (reg? x)
-  (or (16-bit-reg? x)  (8-bit-reg? x)))
 
 (define (assemble-ld-reg8-reg8 dest src)
   (make-inst 1
@@ -152,19 +137,16 @@
                  ,(lsb iimm16)
                  ,(msb iimm16)))))
 
-(define ld-iregs
-  '((bc . #b0) (de . #b1)))
+(define ld-iregs '((bc . #b0) (de . #b1)))
 
 (define (assemble-ld-a-ireg16 reg)
   (make-inst 1 `(,(make-opcode (lookup reg ld-iregs) 4 #b00001010))))
 
 ;; Least significant byte.
-(define (lsb n)
-  (logand n 255))
+(define (lsb n) (logand n 255))
 
 ;; Most significant byte.
-(define (msb n)
-  (ash n -8))
+(define (msb n) (ash n -8))
 
 (define (resolve-label label-or-imm16)
   (if (16-bit-imm? label-or-imm16)
@@ -185,7 +167,6 @@
                    ,(make-opcode (lookup reg16 16-bit-regs) 4 #b01001011)
                    ,(lsb imm16)
                    ,(msb imm16)))))
-
 
 (define (assemble-ld-ireg16-a reg16)
   (make-inst 1 `(,(make-opcode (lookup reg16 16-bit-regs) 4 #b00000010))))
@@ -243,42 +224,24 @@
 
 (define (assemble-ld args)
   (match args
-    ('(sp hl)
-     (assemble-ld-sp-hl))
-    (('a (? ir-reg? b))
-     (assemble-ld-ir-reg b))
-    (((? ir-reg? b) 'a)
-     (assemble-ld-a-ir b))
-    (((? 8-bit-reg? a) (? 8-bit-reg? b))
-     (assemble-ld-reg8-reg8 a b))
-    (((? 8-bit-reg? a) ('+ (? index-reg? b) (? 8-bit-imm? c)))
-     (assemble-ld-reg8-index-offset a b c))
-    (((? 8-bit-reg? a) ('+ (? 8-bit-imm? c) (? index-reg? b)))
-     (assemble-ld-reg8-index-offset a b c))
-    (('a ((? 16-bit-reg? b)))
-     (assemble-ld-a-ireg16 b))
-    (('a ((? 16-bit-imm-or-label? b)))
-     (assemble-ld-a-imm16 b))
-    ((((? 16-bit-reg? b)) 'a)
-     (assemble-ld-ireg16-a b))
-    ((((? 16-bit-imm-or-label? a)) 'a)
-     (assemble-ld-iimm16-a a))
-    (((? 8-bit-reg? a) (? 8-bit-imm? b))
-     (assemble-ld-reg8-imm8 a b))
-    (((? 16-bit-reg? a) (? 16-bit-imm-or-label? b))
-     (assemble-ld-reg16-imm16 a b))
-    (((? 16-bit-reg? a) ((? 16-bit-imm-or-label? b)))
-     (assemble-ld-reg16-iimm16 a b))
-    (('hl ((? 16-bit-imm-or-label? b)))
-     (assemble-ld-hl-iimm16 b))
-    (((? index-reg? a) (? 16-bit-imm-or-label? b))
-     (assemble-ld-index-imm16 a b))
-    ((('+ (? index-reg? a) (? 8-bit-imm? b)) (? 8-bit-reg? c))
-     (assemble-ld-index-reg8 a b c))
-    ((('+ (? 8-bit-imm? b) (? index-reg? a)) (? 8-bit-reg? c))
-     (assemble-ld-index-reg8 a b c))
-    ((((? 16-bit-imm-or-label? a)) (? 16-bit-reg? b))
-     (assemble-ld-iimm-reg16 a b))
+    ('(sp hl)                                                  (assemble-ld-sp-hl))
+    (('a (? ir-reg? b))                                        (assemble-ld-ir-reg b))
+    (((? ir-reg? b) 'a)                                        (assemble-ld-a-ir b))
+    (((? 8-bit-reg? a) (? 8-bit-reg? b))                       (assemble-ld-reg8-reg8 a b))
+    (((? 8-bit-reg? a) ('+ (? index-reg? b) (? 8-bit-imm? c))) (assemble-ld-reg8-index-offset a b c))
+    (((? 8-bit-reg? a) ('+ (? 8-bit-imm? c) (? index-reg? b))) (assemble-ld-reg8-index-offset a b c))
+    (('a ((? 16-bit-reg? b)))                                  (assemble-ld-a-ireg16 b))
+    (('a ((? 16-bit-imm-or-label? b)))                         (assemble-ld-a-imm16 b))
+    ((((? 16-bit-reg? b)) 'a)                                  (assemble-ld-ireg16-a b))
+    ((((? 16-bit-imm-or-label? a)) 'a)                         (assemble-ld-iimm16-a a))
+    (((? 8-bit-reg? a) (? 8-bit-imm? b))                       (assemble-ld-reg8-imm8 a b))
+    (((? 16-bit-reg? a) (? 16-bit-imm-or-label? b))            (assemble-ld-reg16-imm16 a b))
+    (((? 16-bit-reg? a) ((? 16-bit-imm-or-label? b)))          (assemble-ld-reg16-iimm16 a b))
+    (('hl ((? 16-bit-imm-or-label? b)))                        (assemble-ld-hl-iimm16 b))
+    (((? index-reg? a) (? 16-bit-imm-or-label? b))             (assemble-ld-index-imm16 a b))
+    ((('+ (? index-reg? a) (? 8-bit-imm? b)) (? 8-bit-reg? c)) (assemble-ld-index-reg8 a b c))
+    ((('+ (? 8-bit-imm? b) (? index-reg? a)) (? 8-bit-reg? c)) (assemble-ld-index-reg8 a b c))
+    ((((? 16-bit-imm-or-label? a)) (? 16-bit-reg? b))          (assemble-ld-iimm-reg16 a b))
     (_
      (error (format #f "Invalid operands to ld: ~a" args))))
   )
@@ -287,43 +250,43 @@
 
 ;; Operations that don't receive arguments or have specific ones.
 (define simple-ops
-  '((otdr         .  (0 2 (#b11101101 #b10111011)))
-    (lddr         .  (0 2 (#b11101101 #b10111000)))
-    (otir         .  (0 2 (#b11101101 #b10110011)))
-    (indr         .  (0 2 (#b11101101 #b10110010)))
-    (cpir         .  (0 2 (#b11101101 #b10110001)))    
-    (ldir         .  (0 2 (#b11101101 #b10110000)))
-    (outd         .  (0 2 (#b11101101 #b10101011)))
-    (ind          .  (0 2 (#b11101101 #b10101010)))
-    (outi         .  (0 2 (#b11101101 #b10100011)))
-    (ldi          .  (0 2 (#b11101101 #b10100000)))
-    (rld          .  (0 2 (#b11101101 #b01101111)))
-    (rrd          .  (0 2 (#b11101101 #b01100111)))
-    (reti         .  (0 2 (#b11101101 #b01001101)))
-    (retn         .  (0 2 (#b11101101 #b01000101)))
-    (neg          .  (8 2 (#b11101101 #b01000100)))
-    (ei           .  (0 1 (#b11111011)))
-    (di           .  (0 1 (#b11110011)))
-    ((ex de hl)   .  (4 1 (#b11101011)))
-    ((ex (sp) hl) .  (19 1 (#b11100011)))
-    (exx          .  (0 1 (#b11011001)))
-    (ret          .  (0 1 (#b11001001)))
-    (halt         .  (0 1 (#b01110110)))
-    (ccf          .  (0 1 (#b00111111)))
-    (scf          .  (4 1 (#b00110111)))
-    (cpl          .  (4 1 (#b00101111)))
-    (rra          .  (0 1 (#b00011111)))
-    (rla          .  (0 1 (#b00010111)))
-    (rrca         .  (0 1 (#b00001111)))
-    ((ex af afs)  .  (0 1 (#b00001000)))
-    (rlca         .  (0 1 (#b00000111)))
-    (nop          .  (0 1 (#b00000000)))
+  '((otdr         .  (#b11101101 #b10111011))
+    (lddr         .  (#b11101101 #b10111000))
+    (otir         .  (#b11101101 #b10110011))
+    (indr         .  (#b11101101 #b10110010))
+    (cpir         .  (#b11101101 #b10110001))    
+    (ldir         .  (#b11101101 #b10110000))
+    (outd         .  (#b11101101 #b10101011))
+    (ind          .  (#b11101101 #b10101010))
+    (outi         .  (#b11101101 #b10100011))
+    (ldi          .  (#b11101101 #b10100000))
+    (rld          .  (#b11101101 #b01101111))
+    (rrd          .  (#b11101101 #b01100111))
+    (reti         .  (#b11101101 #b01001101))
+    (retn         .  (#b11101101 #b01000101))
+    (neg          .  (#b11101101 #b01000100))
+    (ei           .  (#b11111011))
+    (di           .  (#b11110011))
+    ((ex de hl)   .  (#b11101011))
+    ((ex (sp) hl) .  (#b11100011))
+    (exx          .  (#b11011001))
+    (ret          .  (#b11001001))
+    (halt         .  (#b01110110))
+    (ccf          .  (#b00111111))
+    (scf          .  (#b00110111))
+    (cpl          .  (#b00101111))
+    (rra          .  (#b00011111))
+    (rla          .  (#b00010111))
+    (rrca         .  (#b00001111))
+    ((ex af afs)  .  (#b00001000))
+    (rlca         .  (#b00000111))
+    (nop          .  (#b00000000))
     ))
 
 (define (assemble-simple a)
   (let ((res (lookup a simple-ops)))
     (if res
-        (make-inst (cadr res) (caddr res))
+        (make-inst (length res) res)
         (error (format #f "Operation not found: ~a" a)))))
 
 (define (add-label! name val)
@@ -334,8 +297,7 @@
             (format #t "Adding label ~a with value 0x~4,'0x\n" name val))
         (set! *labels* `((,name . ,val) . ,*labels*)))))
 
-(define (advance-pc! count)
-  (set! *pc* (+ *pc* count)))
+(define (advance-pc! count) (set! *pc* (+ *pc* count)))
 
 (define (assemble-label name)
   (add-label! name *pc*)
@@ -361,25 +323,17 @@
 
 (define (assemble-jp args)
   (match args
-    ((('hl))
-     (make-inst 1 `(#b11101001)))
-    (((? condition? a) b)
-     (assemble-cond-jp a b))
-    (((? 16-bit-imm-or-label? a))
-     (assemble-uncond-jp a))
+    ((('hl))                      (make-inst 1 `(#b11101001)))
+    (((? condition? a) b)         (assemble-cond-jp a b))
+    (((? 16-bit-imm-or-label? a)) (assemble-uncond-jp a))
     (_
      (error (format #f "Invalid operands to jp: ~a" args)))))
 
-
 (define (signed-8-bit-imm? x)
-  (and (integer? x)
-       (>= 127 (abs x))))
+  (and (integer? x) (>= 127 (abs x))))
 
 (define (jr-simm8-convert x)
-  (if (negative? x)
-      (+ 256 x)
-      x)
-  )
+  (if (negative? x) (+ 256 x) x))
 
 (define (resolve-jr-label-or-simm x)
   (if (symbol? x)
@@ -388,7 +342,7 @@
         ;; (format #t "~a\n" *pc*)
         ;; Compute the offset from the current program counter
         (if (not (signed-8-bit-imm? offset))
-            (error (format #f "Offset ~a too far for 8-bit signed." offset))
+            (error (format #f "Operand to jr ~a not an 8-bit signed integer." offset))
             (jr-simm8-convert offset)))
       (and (signed-8-bit-imm? x)
            (jr-simm8-convert (- x *pc*)))))
@@ -406,13 +360,10 @@
 
 (define (assemble-jr args)
   (match args
-    (((? condition? a) b)
-     (assemble-cond-jr a b))
-    (((? 16-bit-imm-or-label? a))
-     (assemble-uncond-jr a))
+    (((? condition? a) b)         (assemble-cond-jr a b))
+    (((? 16-bit-imm-or-label? a)) (assemble-uncond-jr a))
     (_
      (error (format #f "Invalid operands to jr: ~a" args)))))
-
 
 (define (assemble-cond-call cond imm16)
   (make-inst 3 (let ((imm16 (resolve-label imm16)))
@@ -428,10 +379,8 @@
 
 (define (assemble-call args)
   (match args
-    (((? condition? a) (? 16-bit-imm-or-label? b))
-     (assemble-cond-call a b))
-    (((? 16-bit-imm-or-label? a))
-     (assemble-uncond-call a))
+    (((? condition? a) (? 16-bit-imm-or-label? b)) (assemble-cond-call a b))
+    (((? 16-bit-imm-or-label? a))                  (assemble-uncond-call a))
     (_
      (error (format #f "Invalid operands to call: ~a" args)))))
 
@@ -461,12 +410,9 @@
 
 (define (assemble-out arg)
   (match arg
-    ((((? 8-bit-imm? p)) 'a)
-     (assemble-out-iimm8-a p))
-    (`((c) ,(? 8-bit-reg? r))
-     (assemble-out-c-reg r))
-    (_
-     (error (format #f "Invalid operands to out: ~a" arg)))))
+    ((((? 8-bit-imm? p)) 'a)     (assemble-out-iimm8-a p))
+    (`((c) ,(? 8-bit-reg? r))    (assemble-out-c-reg r))
+    (_ (error (format #f "Invalid operands to out: ~a" arg)))))
 
 (define (assemble-in-a-iimm8 imm8)
   (make-inst 2 `(#b11011011
@@ -478,12 +424,9 @@
 
 (define (assemble-in arg)
   (match arg
-    (('a ((? 8-bit-imm? p)))
-     (assemble-in-a-iimm8 p))
-    (((? 8-bit-reg? r) '(c))
-     (assemble-in-reg8-ic r))
-    (_
-     (error (format #f "Invalid operands to out: ~a" arg)))))
+    (('a ((? 8-bit-imm? p))) (assemble-in-a-iimm8 p))
+    (((? 8-bit-reg? r) '(c)) (assemble-in-reg8-ic r))
+    (_ (error (format #f "Invalid operands to out: ~a" arg)))))
 
 (define (assemble-xor-8-bit-reg a)
   (make-inst 1 `(,(make-opcode (lookup a ld-regs) 0 #b10101000))))
@@ -494,10 +437,8 @@
 
 (define (assemble-xor arg)
   (match arg
-    ((? 8-bit-reg? a)
-     (assemble-xor-8-bit-reg a))
-    ((? 8-bit-imm? a)
-     (assemble-xor-8-bit-imm a))
+    ((? 8-bit-reg? a) (assemble-xor-8-bit-reg a))
+    ((? 8-bit-imm? a) (assemble-xor-8-bit-imm a))
     (_
      (error (format #f "Invalid operands to xor: ~a" arg)))))
 
@@ -513,15 +454,11 @@
 
 (define (assemble-dec arg)
   (match arg
-    ((? 8-bit-reg? a)
-     (assemble-dec-8-bit-reg a))
-    ((? 16-bit-reg? a)
-     (assemble-dec-16-bit-reg a))
-    ((? index-reg? a)
-     (assemble-dec-index-reg a))
+    ((? 8-bit-reg?  a) (assemble-dec-8-bit-reg a))
+    ((? 16-bit-reg? a) (assemble-dec-16-bit-reg a))
+    ((? index-reg?  a) (assemble-dec-index-reg a))
     (_
      (error (format #f "Invalid operands to dec: ~a" arg)))))
-
 
 (define (assemble-inc-8-bit-reg arg)
   (make-inst 1 `(,(make-opcode (lookup arg ld-regs) 3 #b00000100))))
@@ -536,12 +473,9 @@
 
 (define (assemble-inc arg)
   (match arg
-    ((? 8-bit-reg? a)
-     (assemble-inc-8-bit-reg a))
-    ((? 16-bit-reg? a)
-     (assemble-inc-16-bit-reg a))
-    ((? index-reg? a)
-     (assemble-inc-index-reg a))
+    ((? 8-bit-reg? a)  (assemble-inc-8-bit-reg a))
+    ((? 16-bit-reg? a) (assemble-inc-16-bit-reg a))
+    ((? index-reg? a)  (assemble-inc-index-reg a))
     (_
      (error #f "Invalid operands to inc: ~a" arg))))
 
@@ -602,12 +536,9 @@
 
 (define (assemble-and arg)
   (match arg
-    ((? 8-bit-reg? a)
-     (assemble-and-8-bit-reg a))
-    ((? 8-bit-imm? a)
-     (assemble-and-8-bit-imm a))
-    (((? index-reg? a))
-     (assemble-and-index-reg a))
+    ((? 8-bit-reg? a)   (assemble-and-8-bit-reg a))
+    ((? 8-bit-imm? a)   (assemble-and-8-bit-imm a))
+    (((? index-reg? a)) (assemble-and-index-reg a))
     (_
      (error (format #f "Invalid operands to and: ~a" arg)))))
 
@@ -619,10 +550,8 @@
 
 (define (assemble-or arg)
   (match arg
-    ((? 8-bit-reg? a)
-     (assemble-or-8-bit-reg a))
-    ((? 8-bit-imm? a)
-     (assemble-or-8-bit-imm a))
+    ((? 8-bit-reg? a) (assemble-or-8-bit-reg a))
+    ((? 8-bit-imm? a) (assemble-or-8-bit-imm a))
     (_
      (error (format #f "Invalid operands to or: ~a" arg)))))
 
@@ -644,14 +573,10 @@
 
 (define (assemble-add arg)
   (match arg
-    (('hl (? 16-bit-reg? a))
-     (assemble-add-hl-reg16 a))
-    (((? index-reg? a) (? 16-bit-reg? b))
-     (assemble-add-index-reg16 a b))
-    (('a (? 8-bit-reg? a))
-     (assemble-add-reg8 a))
-    (('a (? 8-bit-imm? a))
-     (assemble-add-imm8 a))
+    (('hl (? 16-bit-reg? a))              (assemble-add-hl-reg16 a))
+    (((? index-reg? a) (? 16-bit-reg? b)) (assemble-add-index-reg16 a b))
+    (('a (? 8-bit-reg? a))                (assemble-add-reg8 a))
+    (('a (? 8-bit-imm? a))                (assemble-add-imm8 a))
     (_
      (error (format #f "Invalid operands to add: ~a" arg)))))
 
@@ -663,24 +588,19 @@
 
 (define (assemble-sub arg)
   (match arg
-    (((? 8-bit-reg? a))
-     (assemble-sub-reg8 a))
-    (((? 8-bit-imm? a))
-     (assemble-sub-imm8 a))
+    (((? 8-bit-reg? a)) (assemble-sub-reg8 a))
+    (((? 8-bit-imm? a)) (assemble-sub-imm8 a))
     (_
      (error (format #f "Invalid operands to sub: ~a" arg)))))
 
-
 (define (assemble-ret arg)
   (match arg
-    ((? condition? a)
-     (assemble-ret-cond a))
+    ((? condition? a) (assemble-ret-cond a))
     (_
      (error (format #f "Invalid operands to ret: ~a" arg)))))
 
 (define (assemble-cp-reg8 arg)
-  (make-inst 1
-             `(,(make-opcode (lookup arg ld-regs) 0 #b10111000))))
+  (make-inst 1 `(,(make-opcode (lookup arg ld-regs) 0 #b10111000))))
 
 (define (assemble-cp-imm8 arg)
   (make-inst 2 `(#b11111110 ,arg)))
@@ -688,13 +608,10 @@
 
 (define (assemble-cp arg)
   (match arg
-    ((? 8-bit-reg? arg)
-     (assemble-cp-reg8 arg))
-    ((? 8-bit-imm? arg)
-     (assemble-cp-imm8 arg))
+    ((? 8-bit-reg? arg) (assemble-cp-reg8 arg))
+    ((? 8-bit-imm? arg) (assemble-cp-imm8 arg))
     (_
      (error (format #f "Invalid operands to cp: ~a" arg)))))
-
 
 (define (assemble-sbc-hl-reg16 a)
   (make-inst 2 `(#b11101101
@@ -702,11 +619,9 @@
 
 (define (assemble-sbc arg)
   (match arg
-    (('hl (? 16-bit-reg? a))
-     (assemble-sbc-hl-reg16 a))
+    (('hl (? 16-bit-reg? a)) (assemble-sbc-hl-reg16 a))
     (_
      (error (format #f "Invalid operands to sbc: ~a" arg)))))
-
 
 (define (assemble-im arg)
   (match arg
@@ -720,8 +635,7 @@
 
 (define (assemble-sla arg)
   (match arg
-    ((? 8-bit-reg? a)
-     (assemble-sla-reg8 a))
+    ((? 8-bit-reg? a) (assemble-sla-reg8 a))
     (_
      (error (format #f "Invalid operands to sla: ~a" arg)))))
 
@@ -731,19 +645,16 @@
 
 (define (assemble-rl arg)
   (match arg
-    ((? 8-bit-reg? a)
-     (assemble-rl-reg8 a))
+    ((? 8-bit-reg? a) (assemble-rl-reg8 a))
     (_
      (error (format #f "Invalid operands to rl: ~a" arg)))))
-
 
 (define (assemble-rr-reg8 a)
   (make-inst 2 `(#b11001011 ,(make-opcode (lookup a ld-regs) 0 #b00011000))))
 
 (define (assemble-rr arg)
   (match arg
-    ((? 8-bit-reg? a)
-     (assemble-rr-reg8 a))
+    ((? 8-bit-reg? a) (assemble-rr-reg8 a))
     (_
      (error (format #f "Invalid operands to rr: ~a" arg)))))
 
@@ -761,8 +672,7 @@
 
 (define (assemble-srl arg)
   (match arg
-    ((? 8-bit-reg? a)
-     (assemble-srl-reg8 a))
+    ((? 8-bit-reg? a) (assemble-srl-reg8 a))
     (_
      (error (format #f "Invalid operands to srl: ~a" arg)))))
 
@@ -776,8 +686,7 @@
     (#x30 . #b110)
     (#x38 . #b111)))
 
-(define (rst-number? a)
-  (lookup a rst-numbers))
+(define (rst-number? a) (lookup a rst-numbers))
 
 (define (assemble-rst arg)
   (match arg
@@ -793,89 +702,47 @@
   ;; Pattern match EXPR against the valid instructions and dispatch to
   ;; the corresponding sub-assembler.
   (match expr
-    (((? simple-op? a))
-     (assemble-simple a))
-    (`(ld ,dest ,src)
-     (assemble-ld `(,dest ,src)))
-    (`(push ,a)
-     (assemble-push a))
-    (`(pop ,a)
-     (assemble-pop a))
-    (`(label ,name)
-     (assemble-label name))
-    (`(org ,(? 16-bit-imm? a))
-     (assemble-org a))
-    ;; Some instructions have multiple possible arguments, they should
-    ;; be handled by the sub-assembler.
-    (`(jp . ,args)
-     (assemble-jp args))
-    (`(jr . ,args)
-     (assemble-jr args))
-    (`(call . ,args)
-     (assemble-call args))
-    (`(bit ,imm3 ,arg)
-     (assemble-bit imm3 arg))
-    (`(res ,imm3 ,arg)
-     (assemble-res imm3 arg))
-    (`(set ,imm3 ,arg)
-     (assemble-set imm3 arg))
-    (`(ret ,arg)
-     (assemble-ret arg))
-    (`(db ,arg)
-     (assemble-db arg))
-    (`(dw ,arg)
-     (assemble-dw arg))
-    (`(out ,dest ,src)
-     (assemble-out `(,dest ,src)))
-    (`(in ,dest ,src)
-     (assemble-in `(,dest ,src)))
-    (`(xor ,arg)
-     (assemble-xor arg))
-    (`(cp ,arg)
-     (assemble-cp arg))
-    (`(or ,arg)
-     (assemble-or arg))
-    (`(dec ,arg)
-     (assemble-dec arg))
-    (`(inc ,arg)
-     (assemble-inc arg))
-    (`(add . ,args)
-     (assemble-add args))
-    (`(sub . ,args)
-     (assemble-sub args))
-    (`(sbc . ,args)
-     (assemble-sbc args))
-    (`(adc . ,args)
-     (assemble-adc args))
-    (`(and ,arg)
-     (assemble-and arg))
-    (`(im ,arg)
-     (assemble-im arg))
-    (`(sla ,arg)
-     (assemble-sla arg))
-    (`(rl ,arg)
-     (assemble-rl arg))
-    (`(rr ,arg)
-     (assemble-rr arg))
-    (`(djnz ,arg)
-     (assemble-djnz arg))
-    (`(srl ,arg)
-     (assemble-srl arg))
-    (`(rst ,arg)
-     (assemble-rst arg))
-    (_
-     (error (format #f "Unknown expression: ~s\n" expr))))
+    (((? simple-op? a))          (assemble-simple a))
+    (`(ld    ,dest ,src)         (assemble-ld `(,dest ,src)))
+    (`(push  ,arg)               (assemble-push arg))
+    (`(pop   ,arg)               (assemble-pop arg))
+    (`(label ,name)              (assemble-label name))
+    (`(org   ,(? 16-bit-imm? a)) (assemble-org a))
+    (`(jp    .     ,args)        (assemble-jp args))
+    (`(jr    .     ,args)        (assemble-jr args))
+    (`(call  .     ,args)        (assemble-call args))
+    (`(add   .     ,args)        (assemble-add args))
+    (`(sub   .     ,args)        (assemble-sub args))
+    (`(sbc   .     ,args)        (assemble-sbc args))
+    (`(adc   .     ,args)        (assemble-adc args))
+    (`(bit   ,imm3 ,arg)         (assemble-bit imm3 arg))
+    (`(res   ,imm3 ,arg)         (assemble-res imm3 arg))
+    (`(set   ,imm3 ,arg)         (assemble-set imm3 arg))
+    (`(ret         ,arg)         (assemble-ret arg))
+    (`(db          ,arg)         (assemble-db arg))
+    (`(dw          ,arg)         (assemble-dw arg))
+    (`(out   ,dest ,src)         (assemble-out `(,dest ,src)))
+    (`(in    ,dest ,src)         (assemble-in `(,dest ,src)))
+    (`(xor         ,arg)         (assemble-xor arg))
+    (`(cp          ,arg)         (assemble-cp arg))
+    (`(or          ,arg)         (assemble-or arg))
+    (`(dec         ,arg)         (assemble-dec arg))
+    (`(inc         ,arg)         (assemble-inc arg))
+    (`(and         ,arg)         (assemble-and arg))
+    (`(im          ,arg)         (assemble-im arg))
+    (`(sla         ,arg)         (assemble-sla arg))
+    (`(rl          ,arg)         (assemble-rl arg))
+    (`(rr          ,arg)         (assemble-rr arg))
+    (`(djnz        ,arg)         (assemble-djnz arg))
+    (`(srl         ,arg)         (assemble-srl arg))
+    (`(rst         ,arg)         (assemble-rst arg))
+    (_ (error (format #f "Unknown expression: ~a" expr))))
   )
 
-(define *pc* 0)
-
-(define *labels* 0)
-
-(define (reset-pc!)
-  (set! *pc* 0))
-(define (reset-labels!)
-  
-  (set! *labels* '()))
+(define *pc*            0)
+(define *labels*        0)
+(define (reset-pc!)     (set! *pc* 0))
+(define (reset-labels!) (set! *labels* '()))
 
 (define (write-bytevector-to-file bv fn)
   (let ((port (open-output-file fn)))
@@ -895,8 +762,7 @@
 (define (pass1 exprs)
   ;; Check each instruction for correct syntax and produce code
   ;; generating thunks.  Meanwhile, increment PC accordingly and build
-  ;; up labels.
-  
+  ;; up labels.  
   (reset-labels!)
   (reset-pc!)
   (format #t "Pass one...\n")
@@ -906,6 +772,8 @@
   ;; pass 2.
   (filter
    (lambda (x) (not (null? (car x))))
+   ;; Order of SRFI1 map is unspecified, but Guile's map-in-order goes from
+   ;; left to right.
    (map-in-order
     (lambda (expr)
       (if (procedure? expr)
@@ -916,7 +784,7 @@
             (if (not (or (null? macro-val)
                          (inst? macro-val)))
                 (error (format #f
-                               "Error during pass one: macro did not return an instruction record: instead got ~a.  PC: ~a\n"
+                               "Error during pass one: macro did not return an instruction record: instead got ~a.  PC: ~a"
                                macro-val
                                *pc*))
                 (begin (if (inst? macro-val)
@@ -924,7 +792,7 @@
                            ;; record, so advance the program counter.
                            (advance-pc! (inst-length macro-val)))
                        ;; Return a "tagged" result, where the original
-                       ;; expression is preserved.
+                       ;; expression is preserved for debugging.
                        (cons macro-val expr))))
 
           ;; Assemble a normal instruction.
@@ -932,7 +800,7 @@
             (if (inst? res)
                 (advance-pc! (inst-length res)))
             ;; Return a "tagged" result, where the original expression
-            ;; is preserved, for debugging purposes.
+            ;; is preserved, for debugging..
             (cons res expr))))
     exprs)))
 
@@ -943,24 +811,27 @@
   (map-in-order
    (lambda (x)
      (if (not (inst? (car x)))
-         (error (format #f "Error during pass two: not an instruction record: ~a. PC: ~a." (car x) (num->hex *pc*))))
+         (error (format #f "Pass 2: not an instruction record: ~a. PC: ~a." (car x) (num->hex *pc*))))
      (advance-pc! (inst-length (car x)))
      (let ((res (gen-inst (car x))))
-       (if verbose?
-           (format #t "PC: ~a ~a\n" (num->hex *pc*) (cdr x)))
+       (if verbose? (format #t "PC: ~a ~a\n" (num->hex *pc*) (cdr x)))
        (cond
         ;; Check consistency of declared instruction length and actual
         ;; length.
         ((not (= (inst-length (car x)) (length res)))
-         (error (format #f "Instruction length declared does not match actual: Expected length ~a, got length ~a of expression ~a\n PC: ~a" (inst-length (car x)) (length res) res *pc*)))
+         (error (format #f
+                        "Pass 2: Instruction length declared does not match actual: Expected length ~a, got length ~a of expression ~a\n PC: ~a"
+                        (inst-length (car x))
+                        (length res)
+                        res
+                        *pc*)))
         ;; Check that everything is an 8-bit unsigned number.
         ((not (all-sat? 8-bit-imm? res))
          (error (format #f "Invalid byte at ~4'0x: ~a" *pc* res)))
         (else
          ;; We're ok.
          res))))
-   insts)
-  )
+   insts))
 
 (define (assemble-prog prog)
   (pass2 (pass1 prog)))
@@ -976,7 +847,6 @@
    (u8-list->bytevector (flatten (assemble-prog prog)))
    filename))
 
-
 ;; Take n elements from a list.
 (define (take n list)
   (if (or (zero? n) (null? list))
@@ -988,9 +858,8 @@
 ;; instruction that is at the specified byte address.
 (define (assemble-find-instr-byte byte prog context)
   (let ((partial-asm (pass1 prog)))
-    (let loop ((pc 0)
-               (rest-insts partial-asm))
-      (cond ((null? rest-insts) (error "Reached end of program before specified byte address."))
+    (let loop ((pc 0) (rest-insts partial-asm))
+      (cond ((null? rest-insts) (error (format #f "Reached end of program before specified address ~a" byte)))
             ((>= pc byte)
              (map cdr (take context rest-insts)))
             (else
