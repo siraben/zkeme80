@@ -59,7 +59,7 @@ Some words are not standard.  This is because I copied them from my
 other [Forth/Z80 project](https://github.com/siraben/ti84-forth),
 which itself is based on jonesforth.  However, I did consult the ANS
 standard to incorporate some of their good ideas.  For instance, the
-test suite currently found in `bootstrap-flash1.fs` is only a very
+test suite currently found in `bootstrap-flash4.fs` is only a very
 slight (sans the floating point stuff) adaptation of the [offical test
 suite](www.forth200x.org/tests/ttester.fs).  The current version of
 the operating system runs a series of tests to check the correctness

@@ -13,14 +13,9 @@ suite"
 continue..." PAUSE CR
 ;
 
+\ end of bootstrap definitions
 
-: Y-OR-N BEGIN KEY DUP RIGHT LEFT WITHIN IF EXIT THEN DROP AGAIN ;
-
-: 2CR CR CR ;
-
-\ END OF BOOTSTRAP DEFINITIONS
-
-PAGE GREETING 2CR TEST-SUITE-START PAGE
+PAGE GREETING CR CR TEST-SUITE-START PAGE
 
 \ Any word defined from this point on to the end of this stage.  will
 \ be forgotten.
@@ -72,7 +67,7 @@ VARIABLE ERROR-XT
 ;
 
 
-: ERROR1	\ ( C-ADDR U -- ) display an error message
+: ERROR1	\ ( c-addr u -- ) display an error message
                 \ followed by the line that had the error.
   TYPE CR INPUT-PTR @ SEEK-NEWLINE-BACK EMIT-UNTIL-NEWLINE CR
   \ display line corresponding to error
@@ -105,8 +100,8 @@ VARIABLE SUCCESS-TEST-COUNT
 
 : UPDATE-TEST-STATUS ORIGIN CLEAR-TITLE REPORT-TESTS ;
 
-: }T		\ ( ... -- ) COMPARE STACK (EXPECTED) CONTENTS WITH SAVED
-                \ (ACTUAL) CONTENTS.
+: }T		\ ( ... -- ) compare stack (expected) contents with saved
+                \ (actual) contents.
    DEPTH ACTUAL-DEPTH @ = IF		\ if depths match
       DEPTH START-DEPTH @ > IF		\ if there is something on the stack
          DEPTH START-DEPTH @ - 0 DO	\ for each stack item
@@ -131,12 +126,12 @@ VARIABLE SUCCESS-TEST-COUNT
 ;
 
 
-\ START WITH CLEAN SLATE
+\ start with clean slate
 T{ -> }T
-( TEST IF ANY BITS ARE SET; ANSWER IN BASE 1 )
+( test if any bits are set; answer in base 1 )
 T{ : BITSSET? IF 0 0 ELSE 0 THEN ; -> }T
-T{  0 BITSSET? -> 0 }T    ( ZERO IS ALL BITS CLEAR )
-T{  1 BITSSET? -> 0 0 }T  ( OTHER NUMBER HAVE AT LEAST ONE BIT )
+T{  0 BITSSET? -> 0 }T    ( zero is all bits clear )
+T{  1 BITSSET? -> 0 0 }T  ( other number have at least one bit )
 
 T{ 0 INVERT 1 AND -> 1 }T
 T{ 1 INVERT 1 AND -> 0 }T
@@ -172,14 +167,14 @@ T{ TRUE -> <TRUE> }T
 T{ GN2 -> 16 10 }T
 
 
-( WE TRUST 1S, INVERT, AND BITSSET?; WE WILL CONFIRM RSHIFT LATER )
+( we trust 1s, invert, and bitsset?; we will confirm rshift later )
 1S 1 RSHIFT INVERT CONSTANT MSB
 T{ MSB BITSSET? -> 0 0 }T
 
 T{ 0S 2* -> 0S }T
 T{ 1 2* -> 2 }T
 
-T{ 0 0 * -> 0 }T          \ TEST IDENTITIES
+T{ 0 0 * -> 0 }T  \ Test identities
 T{ 0 1 * -> 0 }T
 T{ 1 0 * -> 0 }T
 T{ 1 2 * -> 2 }T
@@ -358,8 +353,6 @@ T{ : GDX   123 ;    : GDX   GDX 234 ; -> }T
 T{ GDX -> 123 234 }T
 
 
-
-
 T{ : GR1 >R R> ; -> }T
 T{ : GR2 >R R@ R> DROP ; -> }T
 T{ 123 GR1 -> 123 }T
@@ -483,19 +476,19 @@ T{ GS3 HELLO -> 5 CHAR H }T
 \ Test exceptions.
 : T1 9 ;
 : C1 1 2 3 ['] T1 CATCH ;
-T{ C1 -> 1 2 3 9 0 }T    \ NO THROW EXECUTED
+T{ C1 -> 1 2 3 9 0 }T    \ no throw executed
 
 : T2 8 0 THROW ;
 : C2 1 2 ['] T2 CATCH ;
-T{ C2 -> 1 2 8 0 }T    \ 0 THROW DOES NOTHING
+T{ C2 -> 1 2 8 0 }T    \ 0 throw does nothing
 
 : T3 7 8 9 99 THROW ;
 : C3 1 2 ['] T3 CATCH ;
-T{ C3 -> 1 2 99 }T    \ RESTORES STACK TO CATCH DEPTH
+T{ C3 -> 1 2 99 }T    \ restores stack to catch depth
 
 : T5 2DROP 2DROP 9999 THROW ;
-: C5 1 2 3 4 ['] T5 CATCH           \ TEST DEPTH RESTORED CORRECTLY
-   DEPTH >R DROP 2DROP 2DROP R> ;    \ AFTER STACK HAS BEEN EMPTIED
+: C5 1 2 3 4 ['] T5 CATCH           \ test depth restored correctly
+   DEPTH >R DROP 2DROP 2DROP R> ;    \ after stack has been emptied
 T{ C5 -> 5 }T
 
 REPORT-TESTS CR CR
@@ -533,7 +526,7 @@ HERE 256 CELLS ALLOT CONSTANT SARRAY
     II SARRAY SET-BYTE
 ;
 
-: RC4-INIT ( KEYADDR KEYLEN -- )
+: RC4-INIT ( keyaddr keylen -- )
     256 MIN TO KEYLEN   TO KEYADDR
     256 0 DO   I I SARRAY SET-BYTE   LOOP
     RESET-IJ
@@ -545,6 +538,7 @@ HERE 256 CELLS ALLOT CONSTANT SARRAY
     REPEAT
     RESET-IJ
 ;
+
 : RC4-BYTE
     II I-UPDATE   JJ J-UPDATE
     SWAP-S-IJ
@@ -558,13 +552,7 @@ HERE    97 C, 138 C, 99 C, 210 C, 251 C, CONSTANT MKEY
 MKEY 5 RC4-INIT
 44 249 76 238 220 5 TEST
 
-DECIMAL
-
-CR
-
-PRESS-TO-CONTINUE
-
-PAGE
+DECIMAL CR PRESS-TO-CONTINUE PAGE
 
 ." Unloading test suite
 words to save on space" CR CR
@@ -574,7 +562,6 @@ FORGET TEST-SUITE-START
 
 USED - . ." bytes freed." CR
 
-." Press any key to
-continue..." PAUSE CR
+PRESS-TO-CONTINUE
 
 MENU-DEMO

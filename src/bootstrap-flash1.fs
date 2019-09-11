@@ -232,7 +232,7 @@ BEGIN-STRUCTURE MENU-ENTRY
   FIELD: MENU-ENTRY.SELECTOR
   \ An xt of type ( -- ) that deselects the menu entry.
   FIELD: MENU-ENTRY.DESELECTOR
-  \ An xt of type ( -- ) that is menu entry's action.
+  \ An xt of type ( -- ) that is the menu entry's action.
   FIELD: MENU-ENTRY.ON-CLICK
 END-STRUCTURE
 
