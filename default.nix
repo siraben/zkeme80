@@ -1,4 +1,4 @@
-with import <nixpkgs> {};
+with import (builtins.fetchTarball https://github.com/nixos/nixpkgs/archive/6141939d6e0.tar.gz) {};
 
 lib.fix (self: {
   tilem = stdenv.mkDerivation {
