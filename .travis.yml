@@ -1,2 +1,2 @@
 language: nix
-script: nix-build . -A runit
+script: nix-build -A runit

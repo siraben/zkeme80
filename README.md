@@ -11,6 +11,10 @@ from a recent version of Guile, supporting the modules `bytevectors`
 and `sfri-9` records.  Other Scheme implementations have not been
 tested.
 
+Alternatively, if you're using the Nix package manager on macOS or
+Linux, running `nix-build -A runit && ./result` in the root of this
+repository builds the OS and emulator, then runs it.
+
 ## Why another OS for the TI-84+?
 The TI tinkering community has long loathed the proprietary nature of
 the default TI-OS.  Few projects have attempted to create a viable
@@ -92,14 +96,14 @@ tricky to build and you have to enable all sorts of flags and install
 dependencies.  If anyone knows a good emulator for macOS, please let
 me know.
 
-### Using the Nix package manager
+### Using the Nix package manager (macOS or Linux)
 If you're using the Nix package manager, just clone the repository and
 run the following to compile and build the assembler, operating
 system, and emulator.  It will automatically run the ROM when done.
 Props to `clever` on `#nixos` for figuring out how to build `tilem`.
 
 ```shell
-nix-build . -A runit && ./result
+nix-build -A runit && ./result
 ```
 
 ## Files included
