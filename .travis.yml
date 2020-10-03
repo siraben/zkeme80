@@ -1,2 +1,2 @@
 language: nix
-script: nix-build . -A zkeme80
+script: nix-build . -A runit

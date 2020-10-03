@@ -1,7 +1,7 @@
 with import (builtins.fetchTarball {
-  name = "nixos-unstable-2020-10-03";
-  url = "https://github.com/nixos/nixpkgs/archive/73cf9833213c5077f63d8d1dbe0cf75762d21930.tar.gz";
-  sha256 = "12aysmr7325fnsajylw24gpk46f0pkyv6qwv5avqh649p2mm49xx";
+  name = "nixos-unstable-2018-11-07";
+  url = "https://github.com/nixos/nixpkgs/archive/6141939d6e0a77c84905efd560c03c3032164ef1.tar.gz";
+  sha256 = "1nz2z71qvjna8ki5jq4kl6pnl716hj66a0gs49l18q24pj2kbjwh";
 }) {};
 
 rec {
@@ -45,7 +45,8 @@ rec {
     src = "${tilibs2}/libticalcs2-1.1.9.tar.bz2";
     nativeBuildInputs = [ autoreconfHook pkgconfig ];
     buildInputs = [ glib libticables libticonv libtifiles lzma bzip2 ]
-      ++ lib.optionals stdenv.isDarwin [ darwin.libobjc ];
+                  ++ lib.optionals stdenv.isLinux [ acl ]
+                  ++ lib.optionals stdenv.isDarwin [ darwin.libobjc ];
   };
   libtifiles = stdenv.mkDerivation {
     name = "libtifiles";
