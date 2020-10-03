@@ -1,6 +1,10 @@
-with import (builtins.fetchTarball https://github.com/nixos/nixpkgs/archive/6141939d6e0.tar.gz) {};
+with import (builtins.fetchTarball {
+  name = "nixos-unstable-2020-10-03";
+  url = "https://github.com/nixos/nixpkgs/archive/73cf9833213c5077f63d8d1dbe0cf75762d21930.tar.gz";
+  sha256 = "12aysmr7325fnsajylw24gpk46f0pkyv6qwv5avqh649p2mm49xx";
+}) {};
 
-lib.fix (self: {
+rec {
   tilem = stdenv.mkDerivation {
     name = "tilem";
     src = fetchurl {
@@ -9,7 +13,7 @@ lib.fix (self: {
       sha256 = "1ba38xzhp3yf21ip3cgql6jzy49jc34sfnjsl4syxyrd81d269zw";
     };
     nativeBuildInputs = [ pkgconfig ];
-    buildInputs = [ glib gnome2.gtk self.libticonv self.libtifiles self.libticables self.libticalcs ];
+    buildInputs = [ glib gnome2.gtk libticonv libtifiles libticables libticalcs ];
   };
   tilibs = fetchurl {
     url = "https://www.ticalc.org/pub/unix/tilibs.tar.gz";
@@ -18,37 +22,37 @@ lib.fix (self: {
   tilibs2 = runCommand "tilibs2" {} ''
     mkdir $out
     cd $out
-    unpackFile ${self.tilibs}
+    unpackFile ${tilibs}
     mv -vi tilibs2/* .
     rmdir tilibs2
   '';
   libticonv = stdenv.mkDerivation {
     name = "libticonv";
-    src = "${self.tilibs2}/libticonv-1.1.5.tar.bz2";
+    src = "${tilibs2}/libticonv-1.1.5.tar.bz2";
     nativeBuildInputs = [ autoreconfHook pkgconfig ];
     buildInputs = [ glib ];
     configureFlags = [ "--enable-iconv" ];
   };
   libticables = stdenv.mkDerivation {
     name = "libticables";
-    src = "${self.tilibs2}/libticables2-1.3.5.tar.bz2";
+    src = "${tilibs2}/libticables2-1.3.5.tar.bz2";
     nativeBuildInputs = [ autoreconfHook pkgconfig ];
     buildInputs = [ glib libusb1 ];
     configureFlags = [ "--enable-libusb10" ];
   };
   libticalcs = stdenv.mkDerivation {
     name = "libticalcs";
-    src = "${self.tilibs2}/libticalcs2-1.1.9.tar.bz2";
+    src = "${tilibs2}/libticalcs2-1.1.9.tar.bz2";
     nativeBuildInputs = [ autoreconfHook pkgconfig ];
-    buildInputs = [ glib self.libticables self.libticonv self.libtifiles acl lzma bzip2 ];
+    buildInputs = [ glib libticables libticonv libtifiles lzma bzip2 ]
+      ++ lib.optionals stdenv.isDarwin [ darwin.libobjc ];
   };
   libtifiles = stdenv.mkDerivation {
     name = "libtifiles";
-    src = "${self.tilibs2}/libtifiles2-1.1.7.tar.bz2";
+    src = "${tilibs2}/libtifiles2-1.1.7.tar.bz2";
     nativeBuildInputs = [ autoreconfHook pkgconfig ];
-    buildInputs = [ glib self.libticonv libarchive lzma bzip2 ];
+    buildInputs = [ glib libticonv libarchive lzma bzip2 ];
   };
-
   zkeme80 = runCommand "zkeme80.rom" { buildInputs = [ guile ]; } ''
     cp -r ${./.}/src/* .
     chmod -R +w .
@@ -57,7 +61,7 @@ lib.fix (self: {
     cp zkeme80.rom $out/
   '';
   runit = writeScript "runit" ''
-    #!/bin/sh
-    ${self.tilem}/bin/tilem2 -r ${self.zkeme80}/zkeme80.rom
+    #!/usr/bin/env sh
+    ${tilem}/bin/tilem2 -r ${zkeme80}/zkeme80.rom
   '';
-})
+}
