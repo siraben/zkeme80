@@ -54,7 +54,7 @@
                         (add hl de)
                         (label ,curr))))
                   (iota 7))
-    
+
     (pop de)
     (ret)
 
@@ -75,4 +75,3 @@
     (ret)
 
     ))
-

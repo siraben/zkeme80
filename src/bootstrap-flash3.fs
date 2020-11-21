@@ -4,7 +4,7 @@
 ;
 
 : STAGE4-END
-  STATUS  
+  STATUS
   ." The system is going
 to shutdown!"
   SHUTDOWN

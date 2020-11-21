@@ -5,7 +5,7 @@ running, please wait..." CR
 
 : GREETING
 ." Welcome to the test
-suite"  
+suite"
 ;
 
 : PRESS-TO-CONTINUE
@@ -559,9 +559,11 @@ words to save on space" CR CR
 USED
 
 FORGET TEST-SUITE-START
-
 USED - . ." bytes freed." CR
 
-PRESS-TO-CONTINUE
+\ Cannot use PRESS-TO-CONTINUE here because forgotten already
+
+." Press any key to
+continue..." PAUSE CR
 
 MENU-DEMO

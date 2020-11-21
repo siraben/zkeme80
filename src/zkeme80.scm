@@ -55,7 +55,7 @@
     ,(equ 'flash-executable-ram-size 100)
     ,(equ 'screen-buffer #x8100)
     ,(equ 'swap-sector #x38)
-    
+
     ,@header-asm
     ,@boot-asm
     ,@interrupt-asm
@@ -70,8 +70,6 @@
     (label bootstrap-fs)
     ,@(include-file-as-bytes "boot.fs")
 
-
-    
     (label os-end)
     ,(lambda ()
        (format #t "End of zkeme80 kernel: 0x")
@@ -98,9 +96,9 @@
        '())
 
 
-    
+
     ,(fill-up-to #xff #x8402)
-    
+
     ;; We start the Forth data here.
     ,@(concat-map (lambda (x)
                     `((label ,(car x))
@@ -144,10 +142,10 @@
     ;; detect that this "device" no longer has input, and thus will stop.
     (label bootstrap-load-bool)
     (dw (65535))
-    
+
     (dw ,(make-list 128 0))
     (label return-stack-start)
-    
+
     ;; Free space until #xc000
     (label dp-start)
     ,(lambda ()
@@ -155,13 +153,13 @@
        '())
 
     ,(fill-up-to #x0 #xc000)
-    
+
     ,@(include-file-as-bytes "bootstrap-flash3.fs")
     ,(fill-up-to #xff #x10000)
-    
+
     ,@(include-file-as-bytes "bootstrap-flash4.fs")
     ,(fill-up-to #xff #x14000)
-    
+
     ,@(include-file-as-bytes "bootstrap-flash5.fs")
 
     ,(lambda ()
@@ -171,11 +169,11 @@
        '())
 
     ,(fill-up-to #xff #xf0000)
-    
+
     ,@wtf-prog
 
     ,fill-until-end
-    
+
     ,(lambda ()
        (format #t "End of binary: 0x")
        (PRINT-PC))

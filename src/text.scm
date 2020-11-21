@@ -20,7 +20,7 @@
 
     (label wrap-char-and)
     (push ix)
-    (db (#xdd))    
+    (db (#xdd))
     (ld l 1)
     (call wrap-char-shared)
     (pop ix)
@@ -75,7 +75,7 @@
     (add a 6)
     (ld d a)
     (jr dcs-exit)
-    
+
     (label local-label22)
     (push de)
     (sub #x20)
@@ -108,7 +108,7 @@
     (pop af)
     (add a d)
     (ld d a)
-    
+
     (label dcs-exit)
     ,@(pop* '(bc hl af))
     (ret)
@@ -160,7 +160,7 @@
     (ld e a)
     (db (#xdd))
     (ld d h)
-    
+
     (label local-label26)
     (ld a e)
     (cp c)
@@ -182,7 +182,7 @@
     (label wcs-exit)
     ,@(pop* '(hl bc af))
     (ret)
-    
+
     (label local-label27)
     (ld e c)
     (jr wcs-exit)
@@ -221,7 +221,7 @@
     (call draw-char-shared)
     (inc hl)
     (jr local-label28)
-    
+
     (label local-label29)
     (pop af)
     (pop hl)
@@ -254,7 +254,7 @@
     (jr done-100)
     (label no-100)
     (pop af)
-    
+
     (label done-100)
     (push af)
     (push de)
@@ -290,7 +290,7 @@
     (pop bc)
     (pop af)
     (ret)
-    
+
 
     (label draw-dec-hl)
     (push hl)
@@ -349,7 +349,7 @@
     (jr nc wss-local2)
     (inc hl)
     (jr wss-local1)
-    
+
     (label wss-local2)
     (pop af)
     (ret)

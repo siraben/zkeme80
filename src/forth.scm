@@ -507,16 +507,16 @@
 
     ,@(defword "MAX" 0 'max)
     (dw (2dup > 0branch 8 drop branch 4 nip exit))
-    
+
     ,@(defword "MIN" 0 'min)
     (dw (2dup < 0branch 8 drop branch 4 nip exit))
 
     ,@(defword "2@" 0 '2@)
     (dw (dup cell+ @ swap @ exit))
-    
+
     ,@(defword "2!" 0 '2!)
     (dw (swap over ! cell+ ! exit))
-    
+
     ))
 
 (define forth-memory-words
@@ -681,7 +681,7 @@
     (call set-pixel)
     (pop bc)
     ,@next
-    
+
     ,@(defcode "CLEAR-SCREEN" 0 'clear-screen)
     (ld iy screen-buffer)
     (call clear-buffer)
@@ -761,7 +761,7 @@
     (db (#b11110000))
     (db (#b11110000))
     (db (#b11110000))
-    
+
     ;; Plot a character to the screen.
     ;; ( char -- )
     ,@(defcode "EMIT" 0 'emit)
@@ -792,7 +792,7 @@
     (ld a c)
     ;; Bounding box limits.
     (ld bc 25152)
-    
+
     (call wrap-char-shared)
     (call fast-copy)
     (ld a d)
@@ -1178,7 +1178,7 @@
 
     ,@(defword "CHAR" 0 'char)
     (dw (word drop c@ exit))
-    
+
     ,@(defword "[CHAR]" immediate 'char-brac)
     (dw (tick lit comma char comma exit))
     ))
@@ -1886,7 +1886,7 @@
     (label ddd)
     ((ex af afs))
     (exx)
-    
+
     (ld iy #x8100)
     (ld de ddd-data)
     (ld a (de))
@@ -1912,7 +1912,7 @@
 
     (ret)
 
-    
+
     ;; ( addr byte -- )
     ;; Set the current interrupt register to BYTE with routine at ADDR.
     ,@(defcode "SET-INTERRUPT" 0 'set-interrupt)
@@ -1924,7 +1924,7 @@
     ;; HL now contains the address of the interrupt service routine
     ;; (ISR).  Save DE and use it as a pointer to write the ISR.
     (push de)
-    
+
     ;; 0x??3F
     (ld d a)
     (ld e #x3f)
@@ -1933,7 +1933,7 @@
     (inc de)
     (ld a h)
     (ld (de) a)
-    
+
     ;; 0x??7F
     (ld e #x7f)
     (ld a l)
@@ -2073,12 +2073,12 @@
     ;; Maximum x and y coordinates that can be drawn on the screen.
     ,@(defconst "MAX-COL" 'max-col 95)
     ,@(defconst "MAX-ROW" 'max-row 63)
-    
+
     ;; Maximum x and y coordinates that can be drawn on the screen for
     ;; characters.
     ,@(defconst "CHAR-MAX-COL" 'char-max-col 23)
     ,@(defconst "CHAR-MAX-ROW" 'char-max-row 11)
-    
+
     ))
 
 (define (make-char-lookup-table)

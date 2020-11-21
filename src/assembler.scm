@@ -254,7 +254,7 @@
     (lddr         .  (#b11101101 #b10111000))
     (otir         .  (#b11101101 #b10110011))
     (indr         .  (#b11101101 #b10110010))
-    (cpir         .  (#b11101101 #b10110001))    
+    (cpir         .  (#b11101101 #b10110001))
     (ldir         .  (#b11101101 #b10110000))
     (outd         .  (#b11101101 #b10101011))
     (ind          .  (#b11101101 #b10101010))
@@ -762,7 +762,7 @@
 (define (pass1 exprs)
   ;; Check each instruction for correct syntax and produce code
   ;; generating thunks.  Meanwhile, increment PC accordingly and build
-  ;; up labels.  
+  ;; up labels.
   (reset-labels!)
   (reset-pc!)
   (format #t "Pass one...\n")

@@ -30,7 +30,7 @@
     (bit 0 a)
     (jr z get-battery-level-done)
     (ld b 4)
-    
+
     (label get-battery-level-done)
     (ld a #b110)
     (out (6) a)
@@ -172,7 +172,7 @@
     (jr z end-qs)
     (pop de)
     (jp qs-loop)
-    
+
     (label next1)
     (push de)
     (push bc)
@@ -180,13 +180,13 @@
     (ld h a)
     (dec bc)
     (inc de)
-    
+
     (label fleft)
     (inc bc)
     (ld a (bc))
     (cp h)
     (jp c fleft)
-    
+
     (label fright)
     (dec de)
     (ld a (de))
@@ -208,7 +208,7 @@
     (ld (de) a)
     (pop hl)
     (jp fleft)
-    
+
     (label next2)
     (pop hl)
     (pop hl)
@@ -216,7 +216,7 @@
     (ld b h)
     (ld c l)
     (jp qs-loop)
-    
+
     (label end-qs)
     ,@(pop* '(af bc de hl))
     (ret)))

@@ -244,7 +244,7 @@
                         (sub h)
                         (dec b)
                         (ret z)
-                        
+
                         (label ,curr-label)
                         (set ,(- 7 y) (ix))
                         (add ix de)

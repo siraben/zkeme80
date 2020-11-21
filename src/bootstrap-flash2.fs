@@ -4,7 +4,7 @@
     MEMA INPUT-PTR ! PAGE
   ELSE
     ." Couldn't load stage 4.  Shutting down." CR
-    PAUSE POWEROFF           
+    PAUSE POWEROFF
   THEN
 ;
 
