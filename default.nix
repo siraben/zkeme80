@@ -1,10 +1,5 @@
-{ pkgs ? import
-    (builtins.fetchTarball {
-      name = "nixos-unstable-2020-10-21";
-      url = "https://github.com/nixos/nixpkgs/archive/5d0e2dedd5594cdf3ebbda8bc61310e227235a9c.tar.gz";
-      sha256 = "1npc0viqm99gbj1q6vfqj4j4gz8jg5s6c6iiv3j01z2dbimwqyab";
-    })
-    { }
+{ sources ? import nix/sources.nix
+, pkgs ? import sources.nixpkgs { }
 }:
 with pkgs;
 
