@@ -25,7 +25,7 @@ calculator*.
 If you've been looking at operating systems for the TI-84+, chances
 are you've come across **KnightOS**.  It's well developed and has
 plenty of Unix-like features such as filesystems and tasks, and even a
-C compiler.  But maybe that's not what you want.  You want an minimal
+C compiler.  But maybe that's not what you want.  You want a minimal
 operating system that allows you to extend it in any way you wish,
 bonus points if you don't need to know Z80 assembly to do so.
 
