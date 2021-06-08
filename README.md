@@ -103,7 +103,10 @@ system, and emulator.  It will automatically run the ROM when done.
 Props to `clever` on `#nixos` for figuring out how to build `tilem`.
 
 ```shell
-nix-build -A runit && ./result
+# With flakes
+$ nix run
+# Without flakes
+$ nix-build && ./result
 ```
 
 ## Files included
