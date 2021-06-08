@@ -1,6 +1,5 @@
 # zkeme80 - a Forth-based OS for the TI-84+ calculator
-[![Build
-Status](https://travis-ci.org/siraben/zkeme80.svg?branch=master)](https://travis-ci.org/siraben/zkeme80)
+![Build Status](https://github.com/siraben/zkeme80/workflows/Build/badge.svg)
 
 ![OS screenshot](screenshot.png)
 ![OS animation](demo.gif)
