@@ -11,8 +11,8 @@ and `srfi-9` records.  Other Scheme implementations have not been
 tested.
 
 Alternatively, if you're using the Nix package manager on macOS or
-Linux, running `nix-build -A runit && ./result` in the root of this
-repository builds the OS and emulator, then runs it.
+Linux, running `nix-build && ./result` in the root of this repository
+builds the OS and emulator, then runs it.
 
 ## Why another OS for the TI-84+?
 The TI tinkering community has long loathed the proprietary nature of
