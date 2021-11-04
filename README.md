@@ -7,7 +7,7 @@
 **TLDR:** `assembler.scm` is the assembler, `zkeme80.scm` is the OS.
 To build the rom, run `make build`.  There are no dependencies apart
 from a recent version of Guile, supporting the modules `bytevectors`
-and `sfri-9` records.  Other Scheme implementations have not been
+and `srfi-9` records.  Other Scheme implementations have not been
 tested.
 
 Alternatively, if you're using the Nix package manager on macOS or
