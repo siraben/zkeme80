@@ -11,7 +11,7 @@ and `srfi-9` records.  Other Scheme implementations have not been
 tested.
 
 Alternatively, if you're using the Nix package manager on macOS or
-Linux, running `nix-build && ./result` in the root of this repository
+Linux, running `nix-build && ./result/bin/runit` in the root of this repository
 builds the OS and emulator, then runs it.
 
 ## Why another OS for the TI-84+?
@@ -89,7 +89,7 @@ in the same directory.  Simply pass that file to an emulator such as
 browser) and start playing around!
 
 Running just `make` builds and runs the project, but assumes that you
-have already properly built `tielm` and can run it with `tielm2` on
+have already properly built `tilem` and can run it with `tilem2` on
 the shell, and have Guile installed.  Be warned, though, `tilem` is
 tricky to build and you have to enable all sorts of flags and install
 dependencies.  If anyone knows a good emulator for macOS, please let
@@ -105,15 +105,16 @@ Props to `clever` on `#nixos` for figuring out how to build `tilem`.
 # With flakes
 $ nix run
 # Without flakes
-$ nix-build && ./result
+$ nix-build && ./result/bin/runit
 ```
 
 ## Files included
-- `assembler.scm` assembles s-exp style assembly code into binary.  Simply
+
+* `assembler.scm` assembles s-exp style assembly code into binary.  Simply
   run `(load "assembler.scm")` into your Scheme REPL and
   run`(assemble-prog sample-prog)` to see the binary data.  Run
   `(assemble-to-file sample-prog "out.bin")` to write a binary file.
-- `zkeme80.scm` is the Forth-based operating system.  Load
+* `zkeme80.scm` is the Forth-based operating system.  Load
   `zkeme80.scm` then run `(make-rom "zkeme80.rom")` to output binary
   to a file `zkeme80.rom`.
 
