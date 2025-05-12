@@ -2045,7 +2045,7 @@
     ,@(defvar "DP" 'dp 'dp-start)
     ;; The current column (in pixels) for the cursor.
     ,@(defvar "CUR-COL" 'cur-col 0)
-    ;; The current column (in pixels) for the cursor.
+    ;; The current row (in pixels) for the cursor.
     ,@(defvar "CUR-ROW" 'cur-row 0)
     ;; The current numerical base
     ,@(defvar "BASE" 'base 10)
