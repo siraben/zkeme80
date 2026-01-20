@@ -15,12 +15,13 @@
           zkeme80 = runCommand "zkeme80.rom" { buildInputs = [ guile ]; } ''
             cp -r ${./.}/src/* .
             chmod -R +w .
-            echo '(begin (load "zkeme80.scm") (make-rom "zkeme80.rom"))' | guile
+            echo '(begin (load "zkeme80.scm") (make-rom+map "zkeme80.rom" "zkeme80.ram-labelmap.json"))' | guile
             mkdir $out
-            cp zkeme80.rom $out/
+            cp zkeme80.rom zkeme80.ram-labelmap.json $out/
           '';
         };
         defaultPackage = self.packages.${system}.default;
+        
       }
     );
 

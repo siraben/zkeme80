@@ -307,6 +307,23 @@
   (set! *pc* new-pc)
   '())
 
+(define (reset-ram-range!)
+  (set! *ram-start* #f)
+  (set! *ram-end* #f))
+
+(define (set-ram-range! start end)
+  (if (and (unsigned-nat? start)
+           (unsigned-nat? end)
+           (<= start end))
+      (begin
+        (set! *ram-start* start)
+        (set! *ram-end* end))
+      (error (format #f "Invalid RAM range: ~a ~a" start end))))
+
+(define (assemble-ram-range start end)
+  (set-ram-range! start end)
+  '())
+
 (define (condition? s) (lookup s condition-codes))
 
 (define (assemble-cond-jp cond imm16)
@@ -708,6 +725,8 @@
     (`(pop   ,arg)               (assemble-pop arg))
     (`(label ,name)              (assemble-label name))
     (`(org   ,(? 16-bit-imm? a)) (assemble-org a))
+    (`(ram-range ,(? unsigned-nat? start) ,(? unsigned-nat? end))
+                                  (assemble-ram-range start end))
     (`(jp    .     ,args)        (assemble-jp args))
     (`(jr    .     ,args)        (assemble-jr args))
     (`(call  .     ,args)        (assemble-call args))
@@ -739,10 +758,35 @@
     (_ (error (format #f "Unknown expression: ~a" expr))))
   )
 
-(define *pc*            0)
-(define *labels*        0)
-(define (reset-pc!)     (set! *pc* 0))
-(define (reset-labels!) (set! *labels* '()))
+(define *pc*                 0)
+(define *labels*             0)
+(define *ram-start*          #f)
+(define *ram-end*            #f)
+(define *debug-output-file*  #f)
+(define *debug-records*      '())
+(define (reset-pc!)          (set! *pc* 0))
+(define (reset-labels!)      (set! *labels* '()))
+(define (reset-debug!)       (set! *debug-records* '()))
+
+(define (debug-enabled?) (not (eq? *debug-output-file* #f)))
+
+(define (ram-range-set?) (and (integer? *ram-start*) (integer? *ram-end*)))
+
+(define (pc-in-ram? pc)
+  (and (ram-range-set?)
+       (<= *ram-start* pc)
+       (< pc *ram-end*)))
+
+(define (entry-overlaps-ram? pc len)
+  (and (ram-range-set?)
+       (< pc *ram-end*)
+       (> (+ pc len) *ram-start*)))
+
+(define (record-debug! pc len expr)
+  (if (or (not (ram-range-set?)) (entry-overlaps-ram? pc len))
+      (set! *debug-records*
+            (cons (list pc len (expr->op expr) (expr->summary expr))
+                  *debug-records*))))
 
 (define (write-bytevector-to-file bv fn)
   (let ((port (open-output-file fn)))
@@ -763,6 +807,7 @@
   ;; Check each instruction for correct syntax and produce code
   ;; generating thunks.  Meanwhile, increment PC accordingly and build
   ;; up labels.
+  (reset-ram-range!)
   (reset-labels!)
   (reset-pc!)
   (format #t "Pass one...\n")
@@ -812,9 +857,12 @@
    (lambda (x)
      (if (not (inst? (car x)))
          (error (format #f "Pass 2: not an instruction record: ~a. PC: ~a." (car x) (num->hex *pc*))))
-     (advance-pc! (inst-length (car x)))
-     (let ((res (gen-inst (car x))))
-       (if verbose? (format #t "PC: ~a ~a\n" (num->hex *pc*) (cdr x)))
+     (let ((pc-start *pc*))
+       (advance-pc! (inst-length (car x)))
+       (let ((res (gen-inst (car x))))
+         (if (debug-enabled?)
+             (record-debug! pc-start (inst-length (car x)) (cdr x)))
+         (if verbose? (format #t "PC: ~a ~a\n" (num->hex *pc*) (cdr x)))
        (cond
         ;; Check consistency of declared instruction length and actual
         ;; length.
@@ -830,7 +878,7 @@
          (error (format #f "Invalid byte at ~4'0x: ~a" *pc* res)))
         (else
          ;; We're ok.
-         res))))
+         res)))))
    insts))
 
 (define (assemble-prog prog)
@@ -846,6 +894,139 @@
   (write-bytevector-to-file
    (u8-list->bytevector (flatten (assemble-prog prog)))
    filename))
+
+(define (expr->op expr)
+  (if (and (pair? expr) (symbol? (car expr)))
+      (symbol->string (car expr))
+      "macro"))
+
+(define (expr->data-summary tag items)
+  (if (list? items)
+      (let* ((n (length items))
+             (preview (take (min n 8) items)))
+        (format #f "(~a len=~a preview=~s)" tag n preview))
+      (format #f "(~a len=unknown)" tag)))
+
+(define (expr->summary expr)
+  (cond
+   ((and (pair? expr) (symbol? (car expr)))
+    (case (car expr)
+      ((db) (expr->data-summary "db" (cadr expr)))
+      ((dw) (expr->data-summary "dw" (cadr expr)))
+      (else (format #f "~s" expr))))
+   (else (format #f "~s" expr))))
+
+(define (write-json-string port s)
+  (display "\"" port)
+  (let loop ((chars (string->list s)))
+    (if (null? chars)
+        (display "\"" port)
+        (let* ((c (car chars))
+               (code (char->integer c)))
+          (cond
+           ((char=? c #\") (display "\\\"" port))
+           ((char=? c #\\) (display "\\\\" port))
+           ((char=? c #\newline) (display "\\n" port))
+           ((char=? c #\tab) (display "\\t" port))
+           ((char=? c #\return) (display "\\r" port))
+           ((char=? c #\backspace) (display "\\b" port))
+           ((char=? c #\page) (display "\\f" port))
+           ((or (< code 32) (> code 126))
+            (format port "\\u~4,'0x" code))
+           (else (display c port)))
+          (loop (cdr chars))))))
+
+(define (write-json-array port items indent write-item)
+  (display "[\n" port)
+  (let loop ((rest items) (first? #t))
+    (if (null? rest)
+        (begin
+          (display indent port)
+          (display "]" port))
+        (begin
+          (if (not first?) (display ",\n" port))
+          (display indent port)
+          (display "  " port)
+          (write-item port (car rest))
+          (loop (cdr rest) #f)))))
+
+(define (label-in-ram? entry)
+  (pc-in-ram? (cdr entry)))
+
+(define (insert-label label sorted)
+  (cond
+   ((null? sorted) (list label))
+   ((<= (cdr label) (cdr (car sorted))) (cons label sorted))
+   (else (cons (car sorted) (insert-label label (cdr sorted))))))
+
+(define (sort-labels labels)
+  (let loop ((rest labels) (sorted '()))
+    (if (null? rest)
+        sorted
+        (loop (cdr rest) (insert-label (car rest) sorted)))))
+
+(define (write-label-entry port label)
+  (let ((name (symbol->string (car label)))
+        (addr (cdr label)))
+    (display "{\"name\": " port)
+    (write-json-string port name)
+    (display ", \"addr\": " port)
+    (display addr port)
+    (display ", \"addr_hex\": " port)
+    (write-json-string port (format #f "0x~x" addr))
+    (display "}" port)))
+
+(define (write-layout-entry port entry)
+  (match entry
+    ((addr len op summary)
+     (display "{\"addr\": " port)
+     (display addr port)
+     (display ", \"addr_hex\": " port)
+     (write-json-string port (format #f "0x~x" addr))
+     (display ", \"len\": " port)
+     (display len port)
+     (display ", \"op\": " port)
+     (write-json-string port op)
+     (display ", \"summary\": " port)
+     (write-json-string port summary)
+     (display "}" port))))
+
+(define (write-debug-json filename)
+  (let* ((labels (if (ram-range-set?)
+                     (filter label-in-ram? *labels*)
+                     *labels*))
+         (sorted-labels (sort-labels labels))
+         (layout (reverse *debug-records*))
+         (port (open-output-file filename)))
+    (display "{\n" port)
+    (display "  \"ram_range\": " port)
+    (if (ram-range-set?)
+        (begin
+          (display "{\"start\": " port)
+          (display *ram-start* port)
+          (display ", \"start_hex\": " port)
+          (write-json-string port (format #f "0x~x" *ram-start*))
+          (display ", \"end\": " port)
+          (display *ram-end* port)
+          (display ", \"end_hex\": " port)
+          (write-json-string port (format #f "0x~x" *ram-end*))
+          (display "}" port))
+        (display "null" port))
+    (display ",\n  \"labels\": " port)
+    (write-json-array port sorted-labels "  " write-label-entry)
+    (display ",\n  \"layout\": " port)
+    (write-json-array port layout "  " write-layout-entry)
+    (display "\n}\n" port)
+    (close-port port)))
+
+(define (assemble-to-file+debug prog filename debug-filename)
+  (set! *debug-output-file* debug-filename)
+  (reset-debug!)
+  (write-bytevector-to-file
+   (u8-list->bytevector (flatten (assemble-prog prog)))
+   filename)
+  (write-debug-json debug-filename)
+  (set! *debug-output-file* #f))
 
 ;; Take n elements from a list.
 (define (take n list)

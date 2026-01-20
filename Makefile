@@ -1,8 +1,8 @@
 build:
-	cd src && make build && cp zkeme80.rom ../
+	cd src && make build && cp zkeme80.rom zkeme80.ram-labelmap.json ../
 
 all:
-	cd src && make build && cp zkeme80.rom ../
+	cd src && make build && cp zkeme80.rom zkeme80.ram-labelmap.json ../
 	tilem2 -r zkeme80.rom
 
 upgrade:
