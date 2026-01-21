@@ -1082,7 +1082,6 @@
     (dw (lit expect-ptr @ c!))
     (dw (lit 1 lit expect-ptr +!))
     (dw (lit 1 lit expect-count -!))
-    (dw (drop))
     (dw (jump expect-loop))
 
     (label expect-got-newline)
