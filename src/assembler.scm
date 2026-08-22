@@ -720,6 +720,11 @@
   ;; the corresponding sub-assembler.
   (match expr
     (((? simple-op? a))          (assemble-simple a))
+    ;; An instruction form may itself be a simple-op key, e.g.
+    ;; (ex de hl), so it can be written without an extra layer of
+    ;; parens.  Keys that are plain symbols (nop, ei, ret, ...) are
+    ;; still matched by the clause above as (nop) etc.
+    ((? simple-op? a)            (assemble-simple a))
     (`(ld    ,dest ,src)         (assemble-ld `(,dest ,src)))
     (`(push  ,arg)               (assemble-push arg))
     (`(pop   ,arg)               (assemble-pop arg))
