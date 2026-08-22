@@ -81,6 +81,8 @@
 
 (define (defcode name flags label)
   (let ((len (string-length name)))
+    ;; Record dictionary metadata for the labelmap/debug output.
+    (set! *forth-words* (cons (list name flags label) *forth-words*))
     `(,make-link
       (db (,(+ len flags)))
       (db ,(string->bytes name))
