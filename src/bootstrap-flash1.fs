@@ -204,8 +204,10 @@ HEX HERE ." HERE is at " . CR DECIMAL
 
 1 CONSTANT RIGHT
 2 CONSTANT LEFT
-3 CONSTANT UP
-4 CONSTANT DOWN
+\ Scan group $FE emits code 4 for the physical up key and 3 for
+\ down (keyboard.scm gs-keygroup1); y=0 is the top menu row.
+4 CONSTANT UP
+3 CONSTANT DOWN
 
 DRAW-LOADING-DOT
 \ Simple grid menu system demo.
@@ -276,8 +278,8 @@ COLUMNS 1- CONSTANT MENU-MAX-Y
   CASE
     RIGHT OF INC-XPOS ENDOF
     LEFT  OF DEC-XPOS ENDOF
-    UP    OF INC-YPOS ENDOF
-    DOWN  OF DEC-YPOS ENDOF
+    UP    OF DEC-YPOS ENDOF
+    DOWN  OF INC-YPOS ENDOF
   ENDCASE
   NORMALIZE-POS
 ;

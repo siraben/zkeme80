@@ -493,20 +493,7 @@ T{ C5 -> 5 }T
 
 REPORT-TESTS CR CR
 
-PRESS-TO-CONTINUE
-
 PAGE
-
-: RC4-TEST-MSG
-." Performing RC4 test
-(code taken from
-Wikipedia)." CR
-
-." Expect this sequence:
-F1 38 29 C9 DE" CR
-;
-
-RC4-TEST-MSG
 
 0 VALUE II        0 VALUE JJ
 0 VALUE KEYADDR   0 VALUE KEYLEN
@@ -539,31 +526,132 @@ HERE 256 CELLS ALLOT CONSTANT SARRAY
     RESET-IJ
 ;
 
-: RC4-BYTE
+: RC4-BYTE ( plaintext-byte -- cipher-byte )
     II I-UPDATE   JJ J-UPDATE
     SWAP-S-IJ
     II SARRAY GET-BYTE   JJ SARRAY GET-BYTE +   AS-BYTE SARRAY GET-BYTE  XOR
 ;
 
 
-HEX
-HERE    97 C, 138 C, 99 C, 210 C, 251 C, CONSTANT MKEY
-: TEST   CR   0 DO  RC4-BYTE . LOOP  CR ;
-MKEY 5 RC4-INIT
-44 249 76 238 220 5 TEST
+DECIMAL
 
-DECIMAL CR PRESS-TO-CONTINUE PAGE
+\ RC4 known-answer tests (published Wikipedia vectors).  These
+\ assertions replace the old print-and-eyeball demo and need no user
+\ input.  Byte values are spelled in decimal because the number
+\ parser accepts digits only -- even under HEX, tokens like "6B"
+\ are rejected.
+
+\ Vector 1: key "Wiki" encrypting "pedia" gives 10 21 BF 04 20.
+HERE 87 C, 105 C, 107 C, 105 C, CONSTANT WIKI-KEY
+T{ WIKI-KEY 4 RC4-INIT
+   112 RC4-BYTE 101 RC4-BYTE 100 RC4-BYTE 105 RC4-BYTE 97 RC4-BYTE
+   -> 16 33 191 4 32 }T
+
+\ Vector 2: key "Key" encrypting "Plaintext" gives
+\ 187 243 22 232 217 64 175 10 211.
+HERE 75 C, 101 C, 121 C, CONSTANT KEY3-KEY
+T{ KEY3-KEY 3 RC4-INIT
+   80 RC4-BYTE 108 RC4-BYTE 97 RC4-BYTE 105 RC4-BYTE 110 RC4-BYTE
+   116 RC4-BYTE 101 RC4-BYTE 120 RC4-BYTE 116 RC4-BYTE
+   -> 187 243 22 232 217 64 175 10 211 }T
+
+\ ---------------------------------------------------------------
+\ Extended coverage pins.  Words that were previously unasserted,
+\ plus regressions for recently-changed kernel code.  Note: this
+\ Forth has unsigned comparisons and logical shifts; several tests
+\ below pin that behavior deliberately.
+." [XT]" CR
+
+\ <> and FALSE (previously marked done but never executed)
+T{ 0 0 <> -> 0 }T
+T{ 1 2 <> -> 1 }T
+T{ 1 65535 <> -> 1 }T
+T{ FALSE -> 0 }T
+
+\ Multiplication keeps the low 16 bits (math.scm optimization).
+T{ 255 257 * -> 65535 }T
+T{ 300 300 * -> 24464 }T
+T{ 65535 DUP * -> 1 }T
+
+\ /MOD and MOD absolute values (the older tests only compared /
+\ against /MOD itself).
+T{ 40000 7 /MOD -> 2 5714 }T
+T{ 65535 DUP /MOD -> 0 1 }T
+T{ 7 9 MOD -> 7 }T
+T{ 0 7 - 3 /MOD -> 0 21843 }T
+
+\ Comparisons are UNSIGNED and 2/ is a LOGICAL shift right.
+T{ 0 1- 1 < -> 0 }T
+T{ 0 1- 1 > -> 1 }T
+T{ 0 4 - 2/ -> 32766 }T
+
+\ Number parsing wraps at 16 bits and accepts digits only.
+T{ 65536 -> 0 }T
+T{ 99999 -> 34463 }T
+T{ 00042 -> 42 }T
+
+\ NOT, RECURSE, AGAIN.
+T{ 0 NOT -> 1 }T
+T{ 5 NOT -> 0 }T
+T{ : RSUM DUP 0 <> IF DUP 1- RECURSE + THEN ; -> }T
+T{ 5 RSUM -> 15 }T
+T{ : AG1 BEGIN 1+ DUP 3 = IF EXIT THEN AGAIN ; -> }T
+T{ 0 AG1 -> 3 }T
+
+\ DO +LOOP including negative increments (never executed before).
+T{ : PL1 10 0 DO I 2 +LOOP ; -> }T
+T{ PL1 -> 0 2 4 6 8 }T
+T{ : PL2 0 10 DO I 0 1- +LOOP ; -> }T
+T{ PL2 -> 10 9 8 7 6 5 4 3 2 1 }T
+
+\ MAX MIN follow the unsigned order too.
+T{ 1 2 MAX -> 2 }T
+T{ 1 2 MIN -> 1 }T
+T{ 0 1- 1 MAX -> 65535 }T
+T{ 0 1- 1 MIN -> 1 }T
+
+\ UWIDTH in the current base (decimal here).
+T{ 0 UWIDTH -> 1 }T
+T{ 9999 UWIDTH -> 4 }T
+T{ 65535 UWIDTH -> 5 }T
+
+\ VALUE with TO / +TO.  Note TO and +TO parse the value name
+\ themselves (ANS style): "5 TO TV1", not "TV1 TO"-style postfix.
+T{ 0 VALUE TV1 -> }T
+T{ 5 TO TV1 TV1 -> 5 }T
+T{ 2 +TO TV1 TV1 -> 7 }T
+
+\ Compiler primitives get absolute HERE-delta assertions.
+T{ HERE 1 , HERE 2- = -> 1 }T
+T{ HERE 65 C, HERE 1- = -> 1 }T
+T{ HERE 4 ALLOT HERE SWAP - 4 = -> 1 }T
+
+\ [ and ] bracket interpretation inside a definition: the tokens
+\ between them run NOW, while the enclosing word is being compiled.
+VARIABLE BRACK-VISITS
+T{ : BRACKET-TEST [ 1 BRACK-VISITS ! ] ; -> }T
+T{ BRACKET-TEST BRACK-VISITS @ -> 1 }T
+
+\ Stack pointer introspection.
+T{ SP@ SP@ SWAP 2 - = -> 1 }T
+T{ : RW1 RP@ ; RP@ RW1 > -> 1 }T
+
+\ USED UNUSED partition the dictionary space up to #xC000.
+T{ USED UNUSED + H0 + 49152 = -> 1 }T
+
+\ S" and COUNT.
+T{ S" ABC" DROP COUNT SWAP C@ -> 3 65 }T
+
+\ Final report: the suite's single interactive point.
+PAGE REPORT-TESTS CR CR
+." Press any key to unload
+test words"
+PAUSE
 
 ." Unloading test suite
 words to save on space" CR CR
-USED
-
-FORGET TEST-SUITE-START
-USED - . ." bytes freed." CR
-
-\ Cannot use PRESS-TO-CONTINUE here because forgotten already
-
-." Press any key to
-continue..." PAUSE CR
+USED ." F1"
+FORGET TEST-SUITE-START ." F2"
+USED - . ." F3" CR
 
 MENU-DEMO
