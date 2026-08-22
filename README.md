@@ -122,9 +122,18 @@ $ nix-build && ./result/bin/runit
 * `zkeme80.scm` is the Forth-based operating system.  Load
   `zkeme80.scm` then run `(make-rom "zkeme80.rom")` to output binary
   to a file `zkeme80.rom`.
-* `coverage.org` tracks which Forth words are covered by the on-demand
+* `re/` contains reverse-engineering and tracing tools adapted from
+  the TI-84+ OS RE project: Ghidra scripts that apply the build's
+  labelmap (symbols, threaded-code annotations, Forth call graphs)
+  and headless-TilEm macros plus a trace analyzer for dynamic Forth
+  word tracing.  See `re/README.md`.
+* `docs/boot-process.md` documents how the TI-84+ boots and how
+  zkeme80 satisfies (and where it deviates from) the retail boot
+  process, including the installed-OS handshake at page-0 offset
+  `0x56`.
+* `coverage.org` tracks which Forth words are covered by the boot-time
   test suite; `src/bootstrap-flash4.fs` runs it, and
-  `debug/macros/run-test-suite.macro` drives it headlessly under TilEm,
+  `re/macros/run-test-suite.macro` drives it headlessly under TilEm,
   including the automated RC4 known-answer tests (Wikipedia vectors).
 
 ## Design of the assembler

@@ -1,0 +1,25 @@
+# Drive the full boot-time test suite headlessly.
+#
+# The suite is input-free except for one final "press any key to
+# unload" pause, which the ENTER below dismisses.  Screenshots land
+# next to this macro: the final tally and the menu it returns to.
+#
+# Menu quirk: the constants UP=3/DOWN=4 in bootstrap-flash1.fs are
+# swapped relative to the physical arrow keys, so the physical DOWN
+# key is what reaches MAYBE-UPDATE-XY's INC-YPOS arm (bottom row).
+set key_hold 0.25s
+set key_delay 0.05s
+key ON
+wait 10s
+key RIGHT
+wait 0.3s
+key DOWN
+wait 0.3s
+screenshot MENU_BEFORE.png
+key ENTER
+wait 25s
+screenshot TALLY.png
+key ENTER
+wait 8s
+screenshot BACK_AT_MENU.png
+memdump SUITE_RAM ram-logical
