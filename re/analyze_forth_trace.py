@@ -75,9 +75,9 @@ class Mapper:
     def observe(self, opcode, regs):
         """Update mapper state from one executed instruction."""
         wz = regs["wz"]
-        if opcode & 0xFF == 0xD3:  # OUT (n),A: WZ=(A<<8)|n
+        if (opcode & 0xFF) == 0xD3:  # OUT (n),A: WZ=(A<<8)|n
             self.out(wz & 0xFF, (wz >> 8) & 0xFF)
-        elif opcode & 0xFFFF == 0xED79:  # OUT (C),A
+        elif (opcode & 0xFFFF) == 0xED79:  # OUT (C),A
             self.out(regs["bc"] & 0xFF, (regs["af"] >> 8) & 0xFF)
 
     def out(self, port, value):

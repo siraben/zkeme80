@@ -102,9 +102,16 @@ need deeper forensics.
 
 `re/macros/boot-only.macro` just boots and screenshots;
 `re/macros/run-test-suite.macro` navigates the main menu to the test
-suite button and captures the final tally — handy as a smoke test
-after any kernel change.  Menu quirk worth knowing: the constants
-`UP`=3/`DOWN`=4 in `bootstrap-flash1.fs` are swapped relative to the
-physical arrow keys (scan group `$FE` bit 3 = physical up emits code
-4); `MAYBE-UPDATE-XY`'s CASE arms compensate, so controls behave
-correctly but the naming is misleading.
+suite button, captures the final tally (240/240 as of this writing)
+and the menu it returns to — handy as a smoke test after any kernel
+change.
+
+Known headless limitation: `PAUSE` (built on kernel `KEY`, i.e.
+flush-keys + wait-key) never observes key events sent by
+tilem-headless in this context, while `KEYC` polling (the menu loop)
+and the shell's key-echo demo both work.  The suite therefore parks at
+its final "press any key to unload" view under headless runs; a
+throwaway build with that one `PAUSE` removed confirms the whole
+lifecycle (tests → unload via `FORGET TEST-SUITE-START` → menu)
+succeeds.  Worth investigating in `src/keyboard.scm`'s debounce cell
+interaction versus tilem's key injection.
