@@ -764,6 +764,10 @@
 (define *ram-end*            #f)
 (define *debug-output-file*  #f)
 (define *debug-records*      '())
+;; Forth dictionary metadata collected by DEFWORD/DEFCODE at load time:
+;; each entry is (name flags label-symbol).  Addresses are resolved at
+;; debug-output time because labels only exist after assembly.
+(define *forth-words*        '())
 (define (reset-pc!)          (set! *pc* 0))
 (define (reset-labels!)      (set! *labels* '()))
 (define (reset-debug!)       (set! *debug-records* '()))
@@ -965,6 +969,9 @@
         sorted
         (loop (cdr rest) (insert-label (car rest) sorted)))))
 
+(define (label-region addr)
+  (if (pc-in-ram? addr) "ram" "flash"))
+
 (define (write-label-entry port label)
   (let ((name (symbol->string (car label)))
         (addr (cdr label)))
@@ -974,7 +981,68 @@
     (display addr port)
     (display ", \"addr_hex\": " port)
     (write-json-string port (format #f "0x~x" addr))
+    (display ", \"region\": " port)
+    (write-json-string port (label-region addr))
     (display "}" port)))
+
+;; Keep only the last definition for each (name . label) pair, so
+;; reloading the sources in one Guile session doesn't duplicate entries.
+(define (collect-forth-words)
+  (let loop ((rest (reverse *forth-words*)) (seen '()) (out '()))
+    (if (null? rest)
+        out
+        (let* ((w (car rest))
+               (key (cons (car w) (caddr w))))
+          (loop (cdr rest)
+                (cons key seen)
+                (if (member key seen)
+                    out
+                    (cons w out)))))))
+
+(define (resolve-forth-word w)
+  (let* ((name (car w))
+         (flags (cadr w))
+         (sym (caddr w))
+         (addr (assq-ref *labels* sym)))
+    (and addr
+         (list name flags (symbol->string sym) addr))))
+
+(define (insert-forth-word-desc w sorted)
+  ;; Sort by address descending: latest dictionary definition first.
+  (cond
+   ((null? sorted) (list w))
+   ((>= (list-ref w 3) (list-ref (car sorted) 3)) (cons w sorted))
+   (else (cons (car sorted) (insert-forth-word-desc w (cdr sorted))))))
+
+(define (sorted-forth-words)
+  (let loop ((rest (collect-forth-words))
+             (resolved '()))
+    (if (null? rest)
+        (let loop ((rest resolved) (sorted '()))
+          (if (null? rest)
+              sorted
+              (loop (cdr rest)
+                    (insert-forth-word-desc (car rest) sorted))))
+        (loop (cdr rest)
+              (let ((w (resolve-forth-word (car rest))))
+                (if w (cons w resolved) resolved))))))
+
+(define (write-forth-word-entry port w)
+  (match w
+    ((name flags label-sym addr)
+     (display "{\"name\": " port)
+     (write-json-string port name)
+     (display ", \"flags\": " port)
+     (display flags port)
+     (display ", \"label\": " port)
+     (write-json-string port label-sym)
+     (display ", \"addr\": " port)
+     (display addr port)
+     (display ", \"addr_hex\": " port)
+     (write-json-string port (format #f "0x~x" addr))
+     (display ", \"region\": " port)
+     (write-json-string port (label-region addr))
+     (display "}" port))))
 
 (define (write-layout-entry port entry)
   (match entry
@@ -992,10 +1060,7 @@
      (display "}" port))))
 
 (define (write-debug-json filename)
-  (let* ((labels (if (ram-range-set?)
-                     (filter label-in-ram? *labels*)
-                     *labels*))
-         (sorted-labels (sort-labels labels))
+  (let* ((sorted-labels (sort-labels *labels*))
          (layout (reverse *debug-records*))
          (port (open-output-file filename)))
     (display "{\n" port)
@@ -1014,6 +1079,8 @@
         (display "null" port))
     (display ",\n  \"labels\": " port)
     (write-json-array port sorted-labels "  " write-label-entry)
+    (display ",\n  \"forth_words\": " port)
+    (write-json-array port (sorted-forth-words) "  " write-forth-word-entry)
     (display ",\n  \"layout\": " port)
     (write-json-array port layout "  " write-layout-entry)
     (display "\n}\n" port)
