@@ -16,9 +16,13 @@ wait 0.3s
 key DOWN
 wait 0.3s
 screenshot MENU_BEFORE.png
+# The first tap can be swallowed by KEY's flush-keys debounce; send a
+# second one for the wait-key loop to catch.
 key ENTER
 wait 25s
 screenshot TALLY.png
+key ENTER
+wait 0.6s
 key ENTER
 wait 8s
 screenshot BACK_AT_MENU.png
