@@ -3,3 +3,6 @@
 *.rom
 .direnv
 result
+zkeme80.8xu
+zkeme80.ram-labelmap.json
+*.sav
