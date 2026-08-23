@@ -27,6 +27,8 @@ VARIABLE START-DEPTH
 
 VARIABLE XCURSOR      \ for ...}T
 
+VARIABLE TEST-FAILED
+
 VARIABLE ERROR-XT
 
 : ERROR ERROR-XT @ EXECUTE ;   \ for vectoring of error reporting
@@ -87,7 +89,7 @@ VARIABLE SUCCESS-TEST-COUNT
 : REPORT-TESTS PAGE SUCCESS-TEST-COUNT @ . ." / " TEST-COUNT @ . ;
 
 : T{		\ ( -- ) syntactic sugar.
-   ADD-TEST DEPTH START-DEPTH ! 0 XCURSOR !
+   ADD-TEST DEPTH START-DEPTH ! 0 XCURSOR ! 0 TEST-FAILED !
 ;
 
 : ->		\ ( ... -- ) record depth and contents of stack.
@@ -106,12 +108,19 @@ VARIABLE SUCCESS-TEST-COUNT
       DEPTH START-DEPTH @ > IF		\ if there is something on the stack
          DEPTH START-DEPTH @ - 0 DO	\ for each stack item
             ACTUAL-RESULTS I CELLS + @	\ compare actual with expected
-            <> IF S" INCORRECT RESULT: " ERROR UPDATE-TEST-STATUS LEAVE THEN
+            2DUP <> IF
+               ." E/A: " SWAP . . CR
+               1 TEST-FAILED ! S" INCORRECT RESULT: " ERROR
+               UPDATE-TEST-STATUS LEAVE
+            ELSE
+               2DROP
+            THEN
          LOOP
       THEN
    ELSE					\ depth mismatch
       S" WRONG NUMBER OF RESULTS: " ERROR UPDATE-TEST-STATUS EXIT
    THEN
+   TEST-FAILED @ IF EXIT THEN
    \ The test was good.
    ADD-SUCCESS-TEST UPDATE-TEST-STATUS
 ;
@@ -535,11 +544,7 @@ HERE 256 CELLS ALLOT CONSTANT SARRAY
 
 DECIMAL
 
-\ RC4 known-answer tests (published Wikipedia vectors).  These
-\ assertions replace the old print-and-eyeball demo and need no user
-\ input.  Byte values are spelled in decimal because the number
-\ parser accepts digits only -- even under HEX, tokens like "6B"
-\ are rejected.
+\ RC4 known-answer tests; bytes stay decimal because NUM? is digit-only.
 
 \ Vector 1: key "Wiki" encrypting "pedia" gives 10 21 BF 04 20.
 HERE 87 C, 105 C, 107 C, 105 C, CONSTANT WIKI-KEY
@@ -555,32 +560,25 @@ T{ KEY3-KEY 3 RC4-INIT
    116 RC4-BYTE 101 RC4-BYTE 120 RC4-BYTE 116 RC4-BYTE
    -> 187 243 22 232 217 64 175 10 211 }T
 
-\ ---------------------------------------------------------------
-\ Extended coverage pins.  Words that were previously unasserted,
-\ plus regressions for recently-changed kernel code.  Note: this
-\ Forth has unsigned comparisons and logical shifts; several tests
-\ below pin that behavior deliberately.
-." [XT]" CR
-
-\ <> and FALSE (previously marked done but never executed)
+\ Extended kernel regression coverage.
+\ <> and FALSE.
 T{ 0 0 <> -> 0 }T
 T{ 1 2 <> -> 1 }T
 T{ 1 65535 <> -> 1 }T
 T{ FALSE -> 0 }T
 
-\ Multiplication keeps the low 16 bits (math.scm optimization).
+\ Low-16-bit multiplication.
 T{ 255 257 * -> 65535 }T
 T{ 300 300 * -> 24464 }T
 T{ 65535 DUP * -> 1 }T
 
-\ /MOD and MOD absolute values (the older tests only compared /
-\ against /MOD itself).
+\ /MOD and MOD results.
 T{ 40000 7 /MOD -> 2 5714 }T
 T{ 65535 DUP /MOD -> 0 1 }T
 T{ 7 9 MOD -> 7 }T
 T{ 0 7 - 3 /MOD -> 0 21843 }T
 
-\ Comparisons are UNSIGNED and 2/ is a LOGICAL shift right.
+\ Unsigned comparisons and logical 2/.
 T{ 0 1- 1 < -> 0 }T
 T{ 0 1- 1 > -> 1 }T
 T{ 0 4 - 2/ -> 32766 }T
@@ -598,36 +596,34 @@ T{ 5 RSUM -> 15 }T
 T{ : AG1 BEGIN 1+ DUP 3 = IF EXIT THEN AGAIN ; -> }T
 T{ 0 AG1 -> 3 }T
 
-\ DO +LOOP including negative increments (never executed before).
+\ DO +LOOP in both directions.
 T{ : PL1 10 0 DO I 2 +LOOP ; -> }T
 T{ PL1 -> 0 2 4 6 8 }T
 T{ : PL2 0 10 DO I 0 1- +LOOP ; -> }T
 T{ PL2 -> 10 9 8 7 6 5 4 3 2 1 }T
 
-\ MAX MIN follow the unsigned order too.
+\ Unsigned MAX and MIN.
 T{ 1 2 MAX -> 2 }T
 T{ 1 2 MIN -> 1 }T
 T{ 0 1- 1 MAX -> 65535 }T
 T{ 0 1- 1 MIN -> 1 }T
 
-\ UWIDTH in the current base (decimal here).
+\ UWIDTH in decimal.
 T{ 0 UWIDTH -> 1 }T
 T{ 9999 UWIDTH -> 4 }T
 T{ 65535 UWIDTH -> 5 }T
 
-\ VALUE with TO / +TO.  Note TO and +TO parse the value name
-\ themselves (ANS style): "5 TO TV1", not "TV1 TO"-style postfix.
+\ VALUE with ANS-style TO and +TO.
 T{ 0 VALUE TV1 -> }T
 T{ 5 TO TV1 TV1 -> 5 }T
 T{ 2 +TO TV1 TV1 -> 7 }T
 
-\ Compiler primitives get absolute HERE-delta assertions.
+\ Compiler primitives.
 T{ HERE 1 , HERE 2- = -> 1 }T
 T{ HERE 65 C, HERE 1- = -> 1 }T
 T{ HERE 4 ALLOT HERE SWAP - 4 = -> 1 }T
 
-\ [ and ] bracket interpretation inside a definition: the tokens
-\ between them run NOW, while the enclosing word is being compiled.
+\ Bracket interpretation during compilation.
 VARIABLE BRACK-VISITS
 T{ : BRACKET-TEST [ 1 BRACK-VISITS ! ] ; -> }T
 T{ BRACKET-TEST BRACK-VISITS @ -> 1 }T
@@ -636,11 +632,55 @@ T{ BRACKET-TEST BRACK-VISITS @ -> 1 }T
 T{ SP@ SP@ SWAP 2 - = -> 1 }T
 T{ : RW1 RP@ ; RP@ RW1 > -> 1 }T
 
-\ USED UNUSED partition the dictionary space up to #xC000.
+\ Dictionary-space accounting.
 T{ USED UNUSED + H0 + 49152 = -> 1 }T
 
 \ S" and COUNT.
 T{ S" ABC" DROP COUNT SWAP C@ -> 3 65 }T
+: LS1 S" ABC" ;
+T{ LS1 DROP COUNT SWAP C@ -> 3 65 }T
+
+\ Stack restoration and overlapping memory moves.
+T{ 1 2 3 SP@ 2+ SP! -> 1 2 }T
+HERE 65 C, 66 C, 67 C, 68 C, 69 C, CONSTANT OV-BUF
+T{ OV-BUF OV-BUF 2+ 3 CMOVE> OV-BUF 2+ C@ OV-BUF 3 + C@ OV-BUF 4 + C@ -> 65 66 67 }T
+T{ OV-BUF 2+ OV-BUF 3 CMOVE OV-BUF C@ OV-BUF 1+ C@ OV-BUF 2+ C@ -> 65 66 67 }T
+T{ OV-BUF DUP 0 CMOVE OV-BUF C@ -> 65 }T
+T{ OV-BUF DUP 0 CMOVE> OV-BUF C@ -> 65 }T
+
+\ Dictionary introspection, flags, defining words, and FORGET.
+: FIND-NEXT WORD FIND ;
+T{ FIND-NEXT DUP 0= -> 0 }T
+T{ FIND-NEXT ZZQ -> 0 }T
+T{ FIND-NEXT DUP >CFA ' DUP = -> 1 }T
+T{ FIND-NEXT DUP DUP >CFA CFA> = -> 1 }T
+123 CONSTANT DVC
+T{ FIND-NEXT DVC >DFA CELL+ @ -> 123 }T
+T{ FIND-NEXT ; ?IMMEDIATE -> 1 }T
+T{ FIND-NEXT DUP ?IMMEDIATE -> 0 }T
+: HID-MARK 77 ;
+FIND-NEXT HID-MARK CONSTANT HID-HEADER
+T{ HID-HEADER ?HIDDEN -> 0 }T
+HID-HEADER HIDDEN
+T{ HID-HEADER ?HIDDEN -> 64 }T
+T{ FIND-NEXT HID-MARK -> 0 }T
+HID-HEADER HIDDEN
+T{ FIND-NEXT HID-MARK HID-HEADER = -> 1 }T
+T{ : DC1 CREATE , DOES> @ 2* ; 21 DC1 DC2 DC2 -> 42 }T
+T{ : FG-MARK 99 ; FG-MARK -> 99 }T
+FORGET FG-MARK
+T{ FIND-NEXT FG-MARK -> 0 }T
+
+\ Character classification and number parsing.
+T{ 48 NUM? 57 NUM? 47 NUM? 58 NUM? -> 1 1 0 0 }T
+T{ 47 TO-ASCII 9 TO-ASCII 0 TO-ASCII -> 65 10 0 }T
+HERE 49 C, 50 C, 51 C, 0 C, CONSTANT PN-GOOD
+T{ PN-GOOD PARSE-NUMBER NUM-STATUS @ -> 123 1 }T
+HERE 65 C, 0 C, CONSTANT PN-BAD
+T{ PN-BAD PARSE-NUMBER NUM-STATUS @ -> 0 }T
+
+\ Interrupt state controls preserve the data stack.
+T{ DISABLE-INTERRUPTS ENABLE-INTERRUPTS -> }T
 
 \ Final report: the suite's single interactive point.
 PAGE REPORT-TESTS CR CR
@@ -650,8 +690,8 @@ PAUSE
 
 ." Unloading test suite
 words to save on space" CR CR
-USED ." F1"
-FORGET TEST-SUITE-START ." F2"
-USED - . ." F3" CR
+USED
+FORGET TEST-SUITE-START
+USED - . ." bytes freed." CR
 
 MENU-DEMO

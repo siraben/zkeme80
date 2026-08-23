@@ -6,3 +6,7 @@ result
 zkeme80.8xu
 zkeme80.ram-labelmap.json
 *.sav
+__pycache__/
+*.py[cod]
+/re/macros/*.png
+/re/macros/SUITE_RAM

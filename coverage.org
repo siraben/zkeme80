@@ -1,4 +1,4 @@
-* Test Coverage [134/159]
+* Test Coverage [155/159]
 
 Coverage of kernel Forth words by the boot-time test suite in
 =src/bootstrap-flash4.fs=.  The suite runs from the main menu ("Run
@@ -12,8 +12,9 @@ with:
 
 Excludes words with special semantics used in the forth.scm stage
 only (0BRANCH BRANCH 0JUMP JUMP), interpreter words (QUIT INTERPRET),
-and I/O-hardware-bound words (key input, sprite drawing, EMIT, ...)
-that cannot be unit-tested without keystrokes.
+and I/O-hardware-bound words (key input, sprite drawing, EMIT, ...).
+Those hardware paths need dedicated TilEm macro scenarios rather than
+stack assertions in this tally.
 
 Note: several entries below are Forth-layer words defined in
 bootstrap-flash1.fs rather than kernel words; they are tested by the
@@ -45,7 +46,7 @@ same suite.
 ** DONE RP@
 ** DONE RP!
 ** DONE SP@
-** TODO SP!
+** DONE SP!
 ** Arithmetic and comparisons (unsigned semantics pinned)
 ** DONE +
 ** DONE -
@@ -90,8 +91,8 @@ same suite.
 ** DONE ,
 ** DONE C,
 ** DONE ALLOT
-** TODO CMOVE
-** TODO CMOVE>
+** DONE CMOVE
+** DONE CMOVE>
 ** TODO CMOVE-FLASH
 ** Compiler and dictionary
 ** DONE :
@@ -112,17 +113,17 @@ same suite.
 ** DONE TO
 ** DONE +TO
 ** DONE CREATE
-** TODO DOES>
-** TODO (DOES>)
-** TODO FORGET
-** TODO FIND
-** TODO >CFA
-** TODO CFA>
-** TODO >DFA
-** TODO HIDDEN
-** TODO ?HIDDEN
-** TODO ?IMMEDIATE
-** TODO RECURSE
+** DONE DOES>
+** DONE (DOES>)
+** DONE FORGET
+** DONE FIND
+** DONE >CFA
+** DONE CFA>
+** DONE >DFA
+** DONE HIDDEN
+** DONE ?HIDDEN
+** DONE ?IMMEDIATE
+** DONE RECURSE
 ** DONE HERE
 ** DONE CELL
 ** DONE CELL+
@@ -132,7 +133,7 @@ same suite.
 ** DONE CHARS
 ** DONE COUNT
 ** DONE S"
-** TODO LITSTRING
+** DONE LITSTRING
 ** Control flow
 ** DONE IF
 ** DONE ELSE
@@ -156,10 +157,10 @@ same suite.
 ** DONE CATCH
 ** DONE THROW
 ** Number parsing and output formatting
-** TODO NUM?
-** TODO PARSE-NUMBER
-** TODO TO-ASCII
-** TODO UWIDTH
+** DONE NUM?
+** DONE PARSE-NUMBER
+** DONE TO-ASCII
+** DONE UWIDTH
 ** DONE DECIMAL
 ** DONE HEX
 ** DONE BASE
@@ -182,8 +183,8 @@ same suite.
 ** TODO ERASE-SECTOR
 ** TODO SET-RAM-MEMA
 ** TODO SET-INTERRUPT
-** TODO DISABLE-INTERRUPTS
-** TODO ENABLE-INTERRUPTS
+** DONE DISABLE-INTERRUPTS
+** DONE ENABLE-INTERRUPTS
 ** RC4 known-answer tests (Wikipedia vectors, automated on device)
 ** DONE RC4-INIT
 ** DONE RC4-BYTE
