@@ -1,7 +1,8 @@
 /* Annotate zkeme80 colon definitions in Ghidra.
  *
- * Every Forth colon word starts with `call docol` followed by a thread
- * of 16-bit little-endian code-field addresses terminated by EXIT.
+ * Returning Forth colon words start with `call docol` followed by a
+ * thread of 16-bit little-endian code-field addresses terminated by
+ * EXIT.  Non-returning definitions such as ABORT are skipped.
  * This script resolves each pointer back to its dictionary name (via
  * the labelmap JSON) and writes:
  *   - a plate comment on the word holding the whole thread, e.g.
@@ -102,6 +103,7 @@ public class Zkeme80AnnotateForth extends GhidraScript {
 			StringBuilder sb = new StringBuilder();
 			boolean ok = true;
 			long p = a + 3;
+			boolean terminated = false;
 			for (int i = 0; i < MAX_ENTRIES; i++) {
 				byte[] raw = new byte[2];
 				if (mem.getBytes(toAddr(p), raw) != 2) {
@@ -110,25 +112,45 @@ public class Zkeme80AnnotateForth extends GhidraScript {
 				}
 				long val = (raw[0] & 0xff) | ((raw[1] & 0xff) << 8);
 				String nm = names.get(val);
-				if (val == exitCfa) {
+				if ("EXIT".equals(nm)) {
 					sb.append("EXIT");
 					annotateCell(p, val, "EXIT");
+					terminated = true;
 					break;
 				}
-				if (nm != null) {
-					sb.append(nm).append(' ');
-					annotateCell(p, val, nm);
-				} else {
-					String lit = Long.toString(val);
-					sb.append(lit).append(' ');
-					if (val == 0xFFFF) { // flash padding: ran off the thread
+				if (nm == null) {
+					ok = false;
+					break;
+				}
+
+				sb.append(nm);
+				annotateCell(p, val, nm);
+				p += 2;
+
+				if (isCellOperandWord(nm)) {
+					Long operand = readU16(mem, p);
+					if (operand == null) {
 						ok = false;
 						break;
 					}
+					sb.append("(").append(String.format("0x%04x", operand)).append(")");
+					annotateOperand(p, String.format("operand 0x%04x", operand));
+					p += 2;
+				} else if ("LITSTRING".equals(nm)) {
+					Long length = readU16(mem, p);
+					if (length == null || length > 0x4000) {
+						ok = false;
+						break;
+					}
+					sb.append("(").append(length).append(" bytes)");
+					annotateOperand(p, "string length " + length);
+					// Length cell, payload, and its trailing NUL.  Threads need
+					// not be aligned, so the next CFA may be at an odd address.
+					p += 2 + length + 1;
 				}
-				p += 2;
+				sb.append(' ');
 			}
-			if (!ok || sb.length() == 0) {
+			if (!ok || !terminated || sb.length() == 0) {
 				continue;
 			}
 
@@ -140,6 +162,27 @@ public class Zkeme80AnnotateForth extends GhidraScript {
 			annotated++;
 		}
 		println("Annotated " + annotated + " colon definitions.");
+	}
+
+	private boolean isCellOperandWord(String name) {
+		return "LIT".equals(name) || "(')".equals(name) ||
+			"BRANCH".equals(name) || "0BRANCH".equals(name) ||
+			"JUMP".equals(name) || "0JUMP".equals(name);
+	}
+
+	private Long readU16(Memory mem, long addr) throws Exception {
+		byte[] raw = new byte[2];
+		if (mem.getBytes(toAddr(addr), raw) != 2) {
+			return null;
+		}
+		return (long) ((raw[0] & 0xff) | ((raw[1] & 0xff) << 8));
+	}
+
+	private void annotateOperand(long addr, String text) {
+		CodeUnit cu = listing.getCodeUnitContaining(toAddr(addr));
+		if (cu != null) {
+			cu.setComment(CommentType.EOL, text);
+		}
 	}
 
 	private void annotateCell(long cellAddr, long target, String name) {

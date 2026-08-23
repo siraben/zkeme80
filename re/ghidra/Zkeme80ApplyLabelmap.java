@@ -26,6 +26,7 @@ import ghidra.program.model.address.Address;
 import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.Instruction;
 import ghidra.program.model.symbol.SourceType;
+import ghidra.program.model.symbol.Symbol;
 import ghidra.program.model.symbol.SymbolTable;
 
 public class Zkeme80ApplyLabelmap extends GhidraScript {
@@ -95,8 +96,9 @@ public class Zkeme80ApplyLabelmap extends GhidraScript {
 
 		int nFns = 0;
 		Set<Long> seen = new HashSet<>();
-		// Kernel routine labels first, then Forth words (word names win
-		// because existing functions are never replaced).
+		// Kernel labels and Forth words frequently share an address.  Keep
+		// the assembler label as the function name and create each address
+		// only once.
 		for (JsonElement el : labels) {
 			JsonObject lab = el.getAsJsonObject();
 			if ("ram".equals(lab.has("region") ? lab.get("region").getAsString() : "")) {
@@ -139,8 +141,10 @@ public class Zkeme80ApplyLabelmap extends GhidraScript {
 				return 0; // genuinely data
 			}
 		}
+		Symbol primary = currentProgram.getSymbolTable().getPrimarySymbol(a);
+		String name = primary != null ? primary.getName() : null;
 		CreateFunctionCmd cmd =
-			new CreateFunctionCmd("zk80_tmp", a, null, SourceType.USER_DEFINED);
+			new CreateFunctionCmd(name, a, null, SourceType.USER_DEFINED);
 		return cmd.applyTo(currentProgram, monitor) ? 1 : 0;
 	}
 }

@@ -12,17 +12,20 @@ coordinate space, then attributes execution counts to:
 
   * page-0 flash labels (the whole kernel + every Forth code word,
     image offset == CPU address there)
-  * RAM labels (the $8000-$BFFF window when RAM page 0x81 is banked,
-    where words compiled from .fs sources live)
+  * exact static RAM labels in the $8000-$BFFF window when selector
+    0x81 maps physical RAM page 1 (runtime-compiled words are not in
+    the static labelmap)
 
 Usage:
     analyze_forth_trace.py TRACE LABELMAP [--top N] [--forth-only]
                            [--timeline] [--csv OUT] [--min-count N]
 """
 import argparse
+import csv
 import json
 import struct
 import sys
+from bisect import bisect_right
 from collections import Counter
 
 HEADER_LEN = 20
@@ -34,36 +37,93 @@ REG_ORDER = ("af", "bc", "de", "hl", "ix", "iy", "sp", "pc", "ir", "wz",
              "wz2", "af2", "bc2", "de2", "hl2")
 
 
+class SymbolResolver:
+    """Resolve an address to its nearest preceding symbol."""
+
+    def __init__(self, entries, end=None):
+        by_addr = {}
+        for addr, name in entries:
+            by_addr.setdefault(addr, name)
+        self.names = by_addr
+        self.addresses = sorted(by_addr)
+        self.end = end
+
+    def resolve(self, addr):
+        if self.end is not None and addr >= self.end:
+            return None
+        index = bisect_right(self.addresses, addr) - 1
+        if index < 0:
+            return None
+        return self.names[self.addresses[index]]
+
+
+class ExactSymbolResolver:
+    """Resolve only exact addresses, for non-code RAM symbols."""
+
+    def __init__(self, entries):
+        self.names = {}
+        for addr, name in entries:
+            self.names.setdefault(addr, name)
+
+    def resolve(self, addr):
+        return self.names.get(addr)
+
+
+def _make_page_resolvers(entries, resolver=SymbolResolver):
+    pages = {}
+    for page, addr, name in entries:
+        pages.setdefault(page, []).append((addr, name))
+    return {page: resolver(symbols) for page, symbols in pages.items()}
+
+
 def load_symbols(labelmap_path):
     """Build resolution tables from the labelmap JSON.
 
-    Returns (flash0, ram, forth) where flash0 maps page-0 CPU addresses
-    to names, ram maps RAM addresses to names, and forth maps
-    page-0 addresses to Forth word names.
+    Returns per-page flash and RAM resolvers plus a resolver for the
+    contiguous page-0 Forth dictionary.
     """
     with open(labelmap_path) as f:
         data = json.load(f)
-    flash0 = {}
-    ram = {}
+    flash_entries = []
+    ram_entries = []
     for lab in data.get("labels", []):
         addr, name = lab["addr"], lab["name"]
         if lab.get("region") == "ram":
-            ram[addr] = name
-        elif addr < 0x4000:
-            flash0[addr] = name
-    forth = {}
+            # The ROM's $8000-$BFFF image initializes physical RAM
+            # page 1.  Store offsets within a 16 KiB window.
+            ram_entries.append((1, addr & 0x3FFF, name))
+        else:
+            flash_entries.append((addr >> 14, addr & 0x3FFF, name))
+
+    forth_entries = []
     for w in data.get("forth_words", []):
         if w.get("region") == "flash" and w["addr"] < 0x4000:
-            forth[w["addr"]] = w["name"]
-    return flash0, ram, forth
+            forth_entries.append((w["addr"], w["name"]))
+
+    # Stop ownership at the first non-dictionary label following the
+    # last word; otherwise the last word would absorb interrupt and
+    # driver code placed later on page 0.
+    forth_end = None
+    if forth_entries:
+        last_word = max(addr for addr, _ in forth_entries)
+        following = [addr for page, addr, _ in flash_entries
+                     if page == 0 and addr > last_word]
+        if following:
+            forth_end = min(following)
+
+    return (_make_page_resolvers(flash_entries),
+            _make_page_resolvers(ram_entries, ExactSymbolResolver),
+            SymbolResolver(forth_entries, end=forth_end))
 
 
 class Mapper:
     """Replay zkeme80's memory mapping from OUT instructions.
 
-    TI-84+ windows: port 6 -> $4000-$7FFF, port 7 -> $8000-$BFFF,
-    port 5 -> $C000-$FFFF.  Values >= 0x80 select RAM page (v-0x80);
-    page 0 is hardwired at $0000-$3FFF.
+    Page 0 is hardwired at $0000-$3FFF.  In mode 0 (port 4 bit 0
+    clear), ports 6, 7, and 5 select the other three windows.  In mode
+    1, port 6 selects an even/odd pair for the middle two windows and
+    port 7 selects the top window.  Ports 6/7 use bit 7 to select RAM;
+    port 5 always selects RAM.
     """
 
     def __init__(self):
@@ -93,23 +153,41 @@ class Mapper:
     def space(self, pc):
         if pc < 0x4000:
             return ("flash", 0)
-        if pc < 0x8000:
-            return self._decode(self.port6)
-        if pc < 0xC000:
-            return self._decode(self.port7)
-        return self._decode(self.port5)
+        page_a = self._decode_ab(self.port6)
+        page_b = self._decode_ab(self.port7)
+        page_c = ("ram", self.port5 & 0x07)
+        window = pc >> 14
+        if self.port4 & 1:
+            if page_a[0] == "ram":
+                pair_base = ("ram", page_a[1] & ~1)
+            else:
+                pair_base = ("flash", page_a[1] & ~1)
+            if window == 1:
+                return pair_base
+            if window == 2:
+                return (pair_base[0], pair_base[1] | 1)
+            return page_b
+        if window == 1:
+            return page_a
+        if window == 2:
+            return page_b
+        return page_c
 
     @staticmethod
-    def _decode(sel):
-        if sel >= 0x80:
-            return ("ram", sel - 0x80)
-        return ("flash", sel)
+    def _decode_ab(sel):
+        if sel & 0x80:
+            return ("ram", sel & 0x07)
+        return ("flash", sel & 0x3F)
 
 
 def iter_records(buf, want_instr=True):
     """Yield ('instr', rec_dict) / ('memwrite', addr, val) / ('key', ...)."""
+    if len(buf) < HEADER_LEN:
+        raise ValueError("truncated TLMT header")
     off = HEADER_LEN + struct.unpack_from("<I", buf, 16)[0]
     n = len(buf)
+    if off > n:
+        raise ValueError("truncated TLMT initial-memory snapshot")
     while off < n:
         rtype = buf[off]
         if rtype == 0x01:
@@ -162,7 +240,7 @@ def main(argv=None):
     ap.add_argument("--min-count", type=int, default=1)
     args = ap.parse_args(argv)
 
-    flash0, ram, forth = load_symbols(args.labelmap)
+    flash, ram, forth = load_symbols(args.labelmap)
     mapper = Mapper()
 
     counts = Counter()
@@ -174,6 +252,8 @@ def main(argv=None):
 
     with open(args.trace, "rb") as f:
         buf = f.read()
+    if len(buf) < HEADER_LEN:
+        sys.exit("truncated TLMT header")
     magic = buf[:4]
     if magic != b"TLMT":
         sys.exit("not a TLMT trace (magic %r)" % magic)
@@ -186,16 +266,20 @@ def main(argv=None):
             continue
         r = rec[1]
         ninstr += 1
-        mapper.observe(r["opcode"], r["regs"])
         space, page = mapper.space(r["pc"])
+        local_addr = r["pc"] & 0x3FFF
         sym = None
-        if space == "flash" and page == 0:
-            sym = flash0.get(r["pc"])
-            w = forth.get(r["pc"])
+        if space == "flash":
+            resolver = flash.get(page)
+            if resolver is not None:
+                sym = resolver.resolve(local_addr)
+            w = forth.resolve(local_addr) if page == 0 else None
             if w:
                 word_counts[w] += 1
-        elif space == "ram" and page == 1:
-            sym = ram.get(r["pc"])
+        else:
+            resolver = ram.get(page)
+            if resolver is not None:
+                sym = resolver.resolve(local_addr)
         if sym is None:
             unresolved["%s%02x:%04x" % (space, page, r["pc"])] += 1
             sym = "%s%02x:%04x" % (space, page, r["pc"])
@@ -203,6 +287,9 @@ def main(argv=None):
         if transitions is not None and sym != last_sym:
             transitions.append((r["clock"], sym))
             last_sym = sym
+        # The trace callback runs after each instruction.  Apply an OUT
+        # only after attributing that instruction under the old mapping.
+        mapper.observe(r["opcode"], r["regs"])
 
     print("instructions: %d" % ninstr)
     print("unique symbols hit: %d" % len(counts))
@@ -223,12 +310,15 @@ def main(argv=None):
         print("  %8d  %s" % (c, s))
 
     if args.csv:
-        word_name_set = set(forth.values())
-        with open(args.csv, "w") as f:
-            f.write("symbol,count,is_forth_word\n")
-            for sym, c in counts.most_common():
-                f.write("%s,%d,%s\n" % (
-                    sym, c, "y" if sym in word_name_set else "n"))
+        word_name_set = set(forth.names.values())
+        csv_counts = word_counts if args.forth_only else counts
+        with open(args.csv, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(("symbol", "count", "is_forth_word"))
+            for sym, c in csv_counts.most_common():
+                writer.writerow((sym, c,
+                                 "y" if (args.forth_only or
+                                         sym in word_name_set) else "n"))
         print("wrote %s" % args.csv)
 
     if transitions is not None:
