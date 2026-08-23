@@ -1,5 +1,19 @@
 # Designing a good shell
 
+## Current implementation
+
+Flash page 5 now starts an interactive Forth REPL.  Alphabetic input is
+the default; press `2ND` before a digit or arithmetic symbol.  `DEL`
+backspaces, `HELP` prints the on-device summary, and `BYE` unloads the
+transient shell words and returns to the menu.
+
+The editor is deliberately limited to one display line until
+cursor-addressed editing is implemented.  Command output is preserved
+between prompts, and the framebuffer scrolls by one text row when the
+next prompt would run past the display.
+
+## Roadmap
+
 A good shell is the heart of an operating system.  Let's make
 something that's easy to use and is inspired by the TI operating
 system (TI-OS).  What does TI-OS do well?  I think it comes down to

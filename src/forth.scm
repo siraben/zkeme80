@@ -882,6 +882,38 @@
     (call fast-copy)
     ,@next
 
+    ;; Scroll the framebuffer upward by one six-pixel text row.
+    ,@(defcode "SCROLL" 0 'scroll)
+    (push bc)
+    (push de)
+    (push hl)
+    (push iy)
+    (ld hl screen-buffer-scroll-source)
+    (ld de screen-buffer)
+    (ld bc ,(- 768 72))
+    (ldir)
+    ;; Clear the six rows exposed at the bottom.
+    (xor a)
+    (ld (de) a)
+    (ld h d)
+    (ld l e)
+    (inc de)
+    (ld bc 71)
+    (ldir)
+    (ld a (var-cur-row))
+    (sub 6)
+    (jr nc scroll-save-row)
+    (xor a)
+    (label scroll-save-row)
+    (ld (var-cur-row) a)
+    (ld iy screen-buffer)
+    (call fast-copy)
+    (pop iy)
+    (pop hl)
+    (pop de)
+    (pop bc)
+    ,@next
+
     ,@(defword "PAGE" 0 'page)
     (dw (clear-screen origin exit))
 
@@ -1206,16 +1238,51 @@
     (ld c a)
     ,@next
 
+    ;; Return one raw key event in A.  If a different key appears before
+    ;; the current key is fully released, preserve it for the next call.
+    ;; This handles normal key rollover without repeating a held key.
+    (label akey-read-event)
+    (ld a (akey-pending))
+    (or a)
+    (jr z akey-wait-event)
+    (push af)
+    (xor a)
+    (ld (akey-pending) a)
+    (pop af)
+    (jr akey-wait-release)
+    (label akey-wait-event)
+    (call wait-key)
+    (label akey-wait-release)
+    (ld e a)
+    (label akey-release-loop)
+    (call get-key)
+    (or a)
+    (jr z akey-event-ready)
+    (cp e)
+    (jr z akey-release-loop)
+    (ld (akey-pending) a)
+    (label akey-event-ready)
+    (ld a e)
+    (ret)
+
     ;; Read a key as an ASCII character.
     ,@(defcode "AKEY" 0 'akey)
     (ld (var-temp-cell) de)
     (push bc)
     (label akey-read)
-    (call flush-keys)
-    (call wait-key)
+    (call akey-read-event)
+    ;; Alphabetic input is the default.  2ND selects the numeric/symbol
+    ;; table for the following key.
+    (cp 54)
+    (jr nz akey-alpha)
+    (call akey-read-event)
+    (ld de numeric-char-lookup-table)
+    (jr akey-lookup)
+    (label akey-alpha)
+    (ld de char-lookup-table)
+    (label akey-lookup)
     (ld h 0)
     (ld l a)
-    (ld de char-lookup-table)
     (ld b h)
     (add hl de)
     (ld c (hl))
@@ -1249,16 +1316,38 @@
     (pop de)
     ,@next
 
+    ;; Convert a raw key code using the numeric/symbol table.
+    ,@(defcode "TO-NUMERIC" 0 'to-numeric)
+    (push de)
+    (ld a b)
+    (or a)
+    (jr nz to-numeric-invalid)
+    (ld a c)
+    (cp 128)
+    (jr nc to-numeric-invalid)
+    (ld h 0)
+    (ld l c)
+    (ld b h)
+    (ld de numeric-char-lookup-table)
+    (add hl de)
+    (ld c (hl))
+    (pop de)
+    ,@next
+    (label to-numeric-invalid)
+    (ld bc 0)
+    (pop de)
+    ,@next
+
     ,@(defword "ORIGIN" 0 'origin)
     (dw (lit 0 dup cur-col ! cur-row ! exit))
 
 
     (label cursor)
-    (db (#b11100000))
-    (db (#b11100000))
-    (db (#b11100000))
-    (db (#b11100000))
-    (db (#b11100000))
+    (db (#b11110000))
+    (db (#b10010000))
+    (db (#b10010000))
+    (db (#b10010000))
+    (db (#b11110000))
 
     (label blank)
     (db (0 0 0 0 0))
@@ -1274,17 +1363,20 @@
     (dw (lit expect-count ! dup lit expect-ptr !))
     ;; And the initial pointer.
     (dw (lit expect-ptr-initial !))
+    ;; Remember where this field begins on screen.
+    (dw (lit var-cur-col @ lit expect-col-save !))
+    (dw (lit var-cur-row @ lit expect-row-save !))
     (label expect-loop)
     ;; Reaching the caller's capacity completes the operation immediately.
     (dw (lit expect-count @ 0jump expect-capacity-end))
     (label expect-more)
-    (dw (page lit expect-ptr-initial @ lit expect-ptr @))
+    ;; Clear and redraw only the input field, preserving prior output.
+    (dw (lit expect-col-save @ lit expect-row-save @))
+    (dw (lit 96 lit expect-col-save @ - lit 5 rect-and-forth))
+    (dw (lit expect-col-save @ lit expect-row-save @ at-xy))
+    (dw (lit expect-ptr-initial @ lit expect-ptr @))
     (dw (lit expect-ptr-initial @ - type))
-    (dw (lit 8 cur-row +! lit ,(char->integer #\^) emit))
-    (dw (lit 8 cur-row -!))
-
-    ;; Draw a cursor
-    ;; (dw (lit cursor lit 5 cur-col @ cur-row @ put-sprite-xor-forth plot))
+    (dw (lit cursor lit 5 cur-col @ cur-row @ put-sprite-xor-forth))
 
     (label expect-got-blank)
     (dw (akey))
@@ -1300,8 +1392,9 @@
     (label expect-got-newline)
     (dw (drop))
     (label expect-end)
-    (dw (lit expect-ptr @ lit expect-ptr-initial @ - dup span !))
-    (dw (origin lit expect-ptr-initial @ swap type exit))
+    ;; Remove the cursor and advance without clearing/redrawing the input.
+    (dw (lit cursor lit 5 cur-col @ cur-row @ put-sprite-xor-forth cr))
+    (dw (lit expect-ptr @ lit expect-ptr-initial @ - dup span ! drop exit))
 
     (label expect-capacity-end)
     (dw (jump expect-end))
@@ -2163,6 +2256,9 @@
     (push hl)
     ,@next
 
+    ,@(defword "DEFAULT-EOF" 0 'default-eof)
+    (dw (page lit quit-eof-msg plot-string pause poweroff))
+
     ,@(defword "QUIT" 0 'quit)
     (label try-more)
     ;; QUIT establishes the outer interpreter's clean control state.  In
@@ -2172,6 +2268,7 @@
     (dw (lit 0 state ! lit 0 handler ! lit 0 lit loop-compile-depth !))
     (dw (r0 @ rp!))
     (dw (lit ok-msg plot-string cr))
+    (label refill-more)
     (dw (lbrac refill 0jump quit-eof))
     (dw (interpret))
     (dw (?dup 0= 0jump not-ok))
@@ -2179,11 +2276,16 @@
 
 
     (label quit-eof)
-    (dw (page lit quit-eof-msg plot-string pause poweroff))
+    ;; A transient input device may use EOF to select a new source.  Its
+    ;; handler returns after doing so, and the original interpreter loop
+    ;; consumes that source without nesting QUIT.
+    (dw (lit var-current-eof-handler @ execute interpret))
+    (dw (?dup 0= 0jump not-ok))
+    (dw (jump try-more))
 
     (label not-ok)
-    (dw (lit not-ok-msg plot-string abort))
-    (dw (exit))
+    ;; Error handlers already report and terminate their own line.
+    (dw (lit var-current-error-handler @ execute jump refill-more))
 
     (label ok-msg)
     (db ,(string " ok"))
@@ -2795,6 +2897,10 @@
     ;; Number of characters received by EXPECT.
     ,@(defvar "SPAN" 'span 0)
     ,@(defvar "CURRENT-INPUT-DEVICE" 'current-input-device 0)
+    ;; Consumes the nonzero status returned by INTERPRET.
+    ,@(defvar "CURRENT-ERROR-HANDLER" 'current-error-handler 0)
+    ;; Handles input-device EOF and may arrange the next input source.
+    ,@(defvar "CURRENT-EOF-HANDLER" 'current-eof-handler 0)
     ,@(defconst "H0" 'h0 'dp-start)
     ,@(defconst "OS-END" 'os-end-forth 'os-end)
     ,@(defconst "SCREEN-BUF" 'screen-buf 'screen-buffer)
@@ -2859,9 +2965,44 @@
   ;; Add more characters as you need them.
   )
 
+(define (make-numeric-char-lookup-table)
+  (define res (make-list 128 0))
+  (define (put-char! id char)
+    (list-set! res id (char->integer char))
+    res)
+
+  ;; Keys whose unshifted legends are useful in Forth source.
+  (put-char! 9 #\newline)
+  (put-char! 2 #\backspace)
+  (put-char! 56 #\backspace)
+  (put-char! 3 #\space)
+  (put-char! 33 #\0)
+  (put-char! 34 #\1)
+  (put-char! 26 #\2)
+  (put-char! 18 #\3)
+  (put-char! 35 #\4)
+  (put-char! 27 #\5)
+  (put-char! 19 #\6)
+  (put-char! 36 #\7)
+  (put-char! 28 #\8)
+  (put-char! 20 #\9)
+  (put-char! 10 #\+)
+  (put-char! 11 #\-)
+  (put-char! 12 #\*)
+  (put-char! 13 #\/)
+  (put-char! 17 #\-)
+  (put-char! 21 #\))
+  (put-char! 25 #\.)
+  (put-char! 29 #\()
+  (put-char! 37 #\,)
+
+  res)
+
 (define forth-char-lookup-table
   `((label char-lookup-table)
-    (db ,(make-char-lookup-table))))
+    (db ,(make-char-lookup-table))
+    (label numeric-char-lookup-table)
+    (db ,(make-numeric-char-lookup-table))))
 
 (define forth-input-devices
   `(;; Example of an input device.
@@ -2875,12 +3016,22 @@
 
     ;; An input device that should be a prompt.
     ,@(defword "PROMPT" 0 'prompt)
-    (dw (lit prompt-space lit 128 expect))
+    ;; Reserve one complete output row below the input field.
+    (label prompt-make-room)
+    (dw (lit var-cur-row @ lit 48 > 0jump prompt-has-room))
+    (dw (scroll jump prompt-make-room))
+    (label prompt-has-room)
+    (dw (lit prompt-prefix plot-string))
+    ;; Keep the editor to one display line, then install an exact-length
+    ;; source with a private terminator for diagnostics.
+    (dw (lit prompt-space lit 20 expect))
     (dw (lit prompt-space lit input-buffer span @ cmove))
     (dw (lit 0 lit input-buffer span @ + c!))
     (dw (lit input-buffer span @ source-store))
     (dw (true))
-    (dw (exit))))
+    (dw (exit))
+    (label prompt-prefix)
+    (db ,(string "> "))))
 
 (define forth-main
   `((label main)
@@ -2896,6 +3047,8 @@
     (dw (lit return-stack-start r0 !))
     (dw (lit 1 lit bootstrap-load-bool !))
     (dw (lit string-input-device lit var-current-input-device !))
+    (dw (lit abort lit var-current-error-handler !))
+    (dw (lit default-eof lit var-current-eof-handler !))
     (dw (quit))
 
     (dw (poweroff))

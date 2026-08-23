@@ -1,0 +1,16 @@
+# Minimal shell cleanup/menu-return probe.
+set key_hold 0.25s
+set key_delay 0.06s
+key ON
+wait 10s
+memdump /tmp/zkeme80-shell-before.ram ram-logical
+key RIGHT
+wait 0.3s
+key ENTER
+wait 2s
+scanstring "BYE"
+wait 0.2s
+key ENTER
+wait 0.5s
+screenshot /tmp/zkeme80-shell-exit.png
+memdump /tmp/zkeme80-shell-exit.ram ram-logical

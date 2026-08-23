@@ -1,40 +1,53 @@
-\ This should be the shell.
+\ Interactive Forth shell loaded transiently from flash page 5.
+\ Alphabetic input is the default; press 2ND before a digit or symbol.
 
-\ We should handle modal key input, so that the user can type 0-9, A-Z
-\ etc.  The state transition diagram for this is shown in the file
-\ "key.dot".
-
-\ Dummy word to mark start of word definitions.
+\ Preserve the dictionary state so the shell can reclaim itself on exit.
+CURRENT-INPUT-DEVICE @
+CURRENT-ERROR-HANDLER @
+CURRENT-EOF-HANDLER @
+LATEST @
+HERE
 : SHELL-START ;
+CONSTANT SHELL-BASE-DP
+CONSTANT SHELL-BASE-LATEST
+CONSTANT SHELL-BASE-EOF
+CONSTANT SHELL-BASE-ERROR
+CONSTANT SHELL-BASE-INPUT
 
-54 CONSTANT 2ND-KEY
-48 CONSTANT ALPHA-KEY
+1 VALUE SHELL-RUNNING
 
-: SHELL-KEY RAW-KEY ;
-: SHELL-TITLE
-ORIGIN
-." No REPL yet, but here's
-a key demo.
+: BYE 0 TO SHELL-RUNNING ;
 
-Press ENTER to quit." CR CR
+: HELP
+  PAGE
+  ." Forth shell" CR
+  ." ENTER runs input." CR
+  ." 2ND shifts one key." CR
+  ." DEL backspaces." CR
+  ." BYE opens the menu." CR
 ;
-2 CONSTANT SHELL-ERROR
-1 CONSTANT SHELL-OK
-0 CONSTANT SHELL-EXIT
 
-1 VALUE SHELL-STATUS
+: SHELL-ERROR ( n -- )
+  ." Error " . ." at " WORD-BUF PLOT-STRING CR
+;
 
-: SHELL-OK? SHELL-STATUS 1 = ;
+: SHELL-PROMPT ( -- flag )
+  SHELL-RUNNING IF PROMPT ELSE 0 THEN
+;
 
-: ?EXIT-IF-ENTER DUP 9 = IF SHELL-EXIT TO SHELL-STATUS THEN ;
-
-: SHELL-READ-KEY RAW-KEY ?EXIT-IF-ENTER ." You pressed: " . CR CR ." Stack: " .S ;
-: SHELL-TICK SHELL-TITLE SHELL-READ-KEY ;
-: SHELL-LOOP BEGIN SHELL-OK? WHILE SHELL-TICK REPEAT ;
+: SHELL-EOF
+  SHELL-BASE-INPUT CURRENT-INPUT-DEVICE !
+  SHELL-BASE-ERROR CURRENT-ERROR-HANDLER !
+  SHELL-BASE-EOF CURRENT-EOF-HANDLER !
+  SHELL-BASE-LATEST LATEST !
+  SHELL-BASE-DP DP !
+  MENU-DEMO
+;
 
 PAGE
+." zkeme80 Forth" CR
+." Type HELP for help." CR CR
 
-SHELL-LOOP
-
-FORGET SHELL-START
-MENU-DEMO
+' SHELL-PROMPT CURRENT-INPUT-DEVICE !
+' SHELL-ERROR CURRENT-ERROR-HANDLER !
+' SHELL-EOF CURRENT-EOF-HANDLER !
