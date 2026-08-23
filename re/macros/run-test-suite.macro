@@ -4,9 +4,7 @@
 # unload" pause, which the ENTER below dismisses.  Screenshots land
 # next to this macro: the final tally and the menu it returns to.
 #
-# Menu quirk: the constants UP=3/DOWN=4 in bootstrap-flash1.fs are
-# swapped relative to the physical arrow keys, so the physical DOWN
-# key is what reaches MAYBE-UPDATE-XY's INC-YPOS arm (bottom row).
+# The test suite occupies the bottom-right menu entry.
 set key_hold 0.25s
 set key_delay 0.05s
 key ON
@@ -19,11 +17,11 @@ screenshot MENU_BEFORE.png
 # The first tap can be swallowed by KEY's flush-keys debounce; send a
 # second one for the wait-key loop to catch.
 key ENTER
-wait 25s
+wait 35s
 screenshot TALLY.png
+# The suite is now parked in PAUSE with no key held, so KEY's
+# flush-then-wait sequence observes this tap normally.
 key ENTER
-wait 0.6s
-key ENTER
-wait 8s
+wait 3s
 screenshot BACK_AT_MENU.png
 memdump SUITE_RAM ram-logical
