@@ -76,6 +76,7 @@ public class Zkeme80ForthCallgraph extends GhidraScript {
 
 		Map<Long, String> names = new HashMap<>();
 		Map<String, Integer> edges = new HashMap<>();
+		long codeEnd = 0x4000;
 
 		for (JsonElement el : data.getAsJsonArray("forth_words")) {
 			JsonObject w = el.getAsJsonObject();
@@ -86,8 +87,12 @@ public class Zkeme80ForthCallgraph extends GhidraScript {
 			JsonObject lab = el.getAsJsonObject();
 			String region = lab.has("region") ? lab.get("region").getAsString() : "";
 			if (!"ram".equals(region)) {
+				String labelName = lab.get("name").getAsString();
+				if ("bootstrap-fs".equals(labelName) || "os-end".equals(labelName)) {
+					codeEnd = Math.min(codeEnd, lab.get("addr").getAsLong());
+				}
 				names.putIfAbsent(lab.get("addr").getAsLong(),
-					lab.get("name").getAsString());
+					labelName);
 			}
 		}
 
@@ -96,7 +101,7 @@ public class Zkeme80ForthCallgraph extends GhidraScript {
 		}
 
 		Instruction instr = listing.getInstructionAt(toAddr(0));
-		while (instr != null && instr.getAddress().getOffset() < 0x4000) {
+		while (instr != null && instr.getAddress().getOffset() < codeEnd) {
 			long pc = instr.getAddress().getOffset();
 			String caller = owner(pc);
 			boolean isCall = instr.getFlowType().isCall();
@@ -141,10 +146,19 @@ public class Zkeme80ForthCallgraph extends GhidraScript {
 		try (PrintWriter pw = new PrintWriter(outPath)) {
 			pw.println("caller,callee,kind,count");
 			for (String[] r : rows) {
-				pw.println(r[0] + "," + r[1] + "," + r[2] + "," + r[3]);
+				pw.println(csv(r[0]) + "," + csv(r[1]) + "," +
+					csv(r[2]) + "," + csv(r[3]));
 			}
 		}
 		println("Wrote " + rows.size() + " callgraph edges to " + outPath);
+	}
+
+	private String csv(String value) {
+		if (value.indexOf(',') >= 0 || value.indexOf('"') >= 0 ||
+				value.indexOf('\n') >= 0 || value.indexOf('\r') >= 0) {
+			return "\"" + value.replace("\"", "\"\"") + "\"";
+		}
+		return value;
 	}
 
 	private void merge(Map<String, Integer> edges, String from, String to,

@@ -40,8 +40,10 @@ Two coordinate systems matter, exactly as with TI-OS:
 All Forth code words (`defcode`/`defword` in `src/forth.scm`) live in
 page 0, where image offset equals CPU address, so threaded-code
 pointers compare directly against labelmap addresses.  Words compiled
-from `.fs` sources at boot live in RAM and only exist at runtime;
-catch them with the dynamic tracer.
+from `.fs` sources at boot live in RAM and only exist at runtime.  The
+static JSON can name their backing RAM variables but cannot name those
+runtime-created dictionary entries; use `tilem_trace.py --forth-rom`
+when you need reconstructed RAM-word transitions.
 
 ## Ghidra usage
 
@@ -71,9 +73,10 @@ threads of every colon definition and writes the full word sequence
 (resolving code-field addresses back to word names) as a plate
 comment plus per-cell end-of-line comments and DATA references, so
 threaded Forth reads like source inside Ghidra.
-`Zkeme80ForthCallgraph.java` attributes every page-0 instruction to
-its nearest preceding named routine and emits caller,callee edges
-from CALL flows and threaded-cell references as CSV.  Note: `rst 38h`
+`Zkeme80ForthCallgraph.java` attributes page-0 code (stopping before
+the embedded bootstrap source and flash padding) to its nearest
+preceding named routine and emits caller,callee edges from CALL flows
+and threaded-cell references as properly escaped CSV.  Note: `rst 38h`
 traps show up as calls to `swap-sector` (that symbol is equated to
 `0x38`, the interrupt vector) — filter that edge when summarizing.
 
@@ -93,25 +96,31 @@ python3 re/analyze_forth_trace.py /tmp/zk80.trace \
 ```
 
 The analyzer replays the mapper from the trace's OUT instructions
-(ports 4/5/6/7), so banked-window PCs resolve correctly, then reports
-execution counts per kernel label and per **Forth dictionary word** —
-page-0 labels are image offsets, RAM `$8000–$BFFF` resolves when RAM
-page `81` is banked.  The same fork's `tools/tilem_trace.py` offers
-RAM reconstruction, key timelines, and DROP-underflow detection if you
-need deeper forensics.
+(ports 4/5/6/7), including TI-84+ mode-1 even/odd pairing, so banked
+window PCs resolve correctly.  It reports execution counts per static
+kernel label and per page-0 **Forth dictionary word**; static RAM
+labels in `$8000–$BFFF` resolve when selector `$81` maps physical RAM
+page 1.  Use a full trace here: a ring/backtrace can discard the early
+mapper writes and does not preserve their resulting state in its
+header.  The same fork's `tools/tilem_trace.py` offers runtime Forth
+dictionary reconstruction, key timelines, and DROP-underflow
+detection for deeper forensics.
+
+Run the mapper/resolver regression tests with:
+
+```sh
+python3 re/test_analyze_forth_trace.py -v
+```
 
 `re/macros/boot-only.macro` just boots and screenshots;
 `re/macros/run-test-suite.macro` navigates the main menu to the test
-suite button, captures the final tally (240/240 as of this writing)
+suite button, captures the final tally (265/265 as of this writing)
 and the menu it returns to — handy as a smoke test after any kernel
 change.
 
-Known headless limitation: `PAUSE` (built on kernel `KEY`, i.e.
-flush-keys + wait-key) never observes key events sent by
-tilem-headless in this context, while `KEYC` polling (the menu loop)
-and the shell's key-echo demo both work.  The suite therefore parks at
-its final "press any key to unload" view under headless runs; a
-throwaway build with that one `PAUSE` removed confirms the whole
-lifecycle (tests → unload via `FORGET TEST-SUITE-START` → menu)
-succeeds.  Worth investigating in `src/keyboard.scm`'s debounce cell
-interaction versus tilem's key injection.
+The macro waits for the final tally before sending the unload key.
+`KEY` first flushes held keys, so sending input while the suite is
+still running—or holding a key before it reaches `PAUSE`—will be
+discarded by design.  With the current 35-second normal-speed wait, a
+single ENTER completes the full lifecycle: tests → unload via
+`FORGET TEST-SUITE-START` → menu.
