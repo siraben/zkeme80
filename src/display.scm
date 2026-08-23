@@ -137,7 +137,7 @@
     (ld a h)
     (cp d)
     (jp nc no-swap-x)
-    ((ex de hl))
+    (ex de hl)
 
     (label no-swap-x)
     (ld a h)
@@ -196,7 +196,7 @@
     (ld d (+ 1 ix))
     (push hl)
     (pop ix)
-    ((ex de hl))
+    (ex de hl)
     (pop de)
     (push hl)
     (ld h b)

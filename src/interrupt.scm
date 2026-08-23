@@ -3,7 +3,7 @@
     (di)
     ,@(push* '(af bc de hl ix iy))
     (exx)
-    ((ex af afs))
+    (ex af afs)
     ,@(push* '(af bc de hl))
     (jp usb-interrupt)
     (label interrupt-resume)
@@ -53,7 +53,7 @@
 
     ,@(pop* '(hl de bc af))
     (exx)
-    ((ex af afs))
+    (ex af afs)
     ,@(pop* '(iy ix hl de bc af))
     (ei)
     (ret)

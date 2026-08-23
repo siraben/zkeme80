@@ -250,7 +250,7 @@
 
     ,@(defcode "ROT" 0 'rot)
     (pop hl)
-    ((ex (sp) hl))
+    (ex (sp) hl)
     (push bc)
     ,@hl-to-bc
     ,@next
@@ -259,7 +259,7 @@
     (ld h b)
     (ld l c)
     (pop bc)
-    ((ex (sp) hl))
+    (ex (sp) hl)
     (push hl)
     ,@next
 
@@ -281,7 +281,7 @@
     (ld d b)
     (ld e c)
     (pop bc)
-    ((ex (sp) hl))
+    (ex (sp) hl)
     (push de)
     (push hl)
     (ld de (var-temp-cell))
@@ -566,7 +566,7 @@
     (ld d a)
     (dec bc)
     (xor a)
-    ((ex de hl))
+    (ex de hl)
     (sbc hl de)
 
     (ld a l)
@@ -913,14 +913,14 @@
     ,@next
 
     ,@(defcode "BRANCH" 0 'branch)
-    ((ex de hl))
+    (ex de hl)
     (ld e (hl))
     (inc hl)
     (ld d (hl))
     (dec hl)
 
     (add hl de)
-    ((ex de hl))
+    (ex de hl)
     ,@next
 
     ,@(defcode "0BRANCH" 0 '0branch)
@@ -1228,7 +1228,7 @@
     ,@hl-to-bc
     (add hl de)
     (inc hl)
-    ((ex de hl))
+    (ex de hl)
     ,@next
 
     ,@(defword "S\"" immediate 's-quote)
@@ -1293,7 +1293,7 @@
     (dec de)
     (dec de)
     (pop hl)
-    ((ex de hl))
+    (ex de hl)
     ,@hl-to-bc
     ,@next
 
@@ -1318,7 +1318,7 @@
     (inc hl)
     (inc hl)
     (inc hl)
-    ((ex de hl))
+    (ex de hl)
     (pop hl)
     (jp find-loop)
 
@@ -1384,7 +1384,7 @@
     (ld (hl) b)
     (inc hl)
     (ld de var-dp)
-    ((ex de hl))
+    (ex de hl)
     (ld (hl) e)
     (inc hl)
     (ld (hl) d)
@@ -1402,7 +1402,7 @@
     (ld (hl) c)
     (inc hl)
     (ld de var-dp)
-    ((ex de hl))
+    (ex de hl)
     (ld (hl) e)
     (inc hl)
     (ld (hl) d)
@@ -1476,7 +1476,7 @@
     (ld (hl) a)
     (inc hl)
 
-    ((ex de hl))
+    (ex de hl)
     (pop hl)
     (ld b 0)
     (ldir)
@@ -1897,7 +1897,7 @@
     (dw (lit ddd exit))
 
     (label ddd)
-    ((ex af afs))
+    (ex af afs)
     (exx)
 
     (ld iy #x8100)
@@ -1919,7 +1919,7 @@
     (call rect-xor)
     (call fast-copy)
 
-    ((ex af afs))
+    (ex af afs)
     (exx)
 
 
