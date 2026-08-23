@@ -6,7 +6,7 @@ the test suite"); every =T{ ... }T}= block increments the counters
 that =REPORT-TESTS= paints on screen.  Rebuild and run headlessly
 with:
 
-: nix develop -c sh -c 'cd src && make build'
+: nix develop -c make build
 : tilem2 --headless --rom src/zkeme80.rom \
     --normal-speed \
     --macro debug/macros/run-test-suite.macro
@@ -15,7 +15,8 @@ Excludes words with special semantics used in the forth.scm stage
 only (0BRANCH BRANCH 0JUMP JUMP), interpreter words (QUIT INTERPRET),
 and I/O-hardware-bound words (key input, sprite drawing, EMIT, ...).
 Those hardware paths need dedicated TilEm macro scenarios rather than
-stack assertions in this tally.
+stack assertions in this tally.  =tests/shell-smoke.macro= covers the
+interactive editor, modifier input, scrolling, error recovery, and exit.
 
 Note: several entries below are Forth-layer words defined in
 bootstrap-flash1.fs rather than kernel words; they are tested by the
@@ -162,6 +163,7 @@ same suite.
 ** DONE NUM?
 ** DONE PARSE-NUMBER
 ** DONE TO-ASCII
+** DONE TO-NUMERIC
 ** DONE UWIDTH
 ** DONE DECIMAL
 ** DONE HEX
@@ -199,14 +201,15 @@ same suite.
 - TO and +TO parse the value name themselves (ANS style): write
   "5 TO TV1" / "2 +TO TV1".  Postfix "TV1 TO" executes the VALUE word
   first and silently corrupts the operation.
-- EXPECT is driven by hardware keys.  Its cursor, full-buffer, and
-  repeated-empty-line cases still need a dedicated headless TilEm macro;
-  ACCEPT exposes the standard received-count contract but is not yet
-  exercised by the stack-only suite.
+- EXPECT and ACCEPT are hardware-key-driven.  =tests/shell-smoke.macro=
+  covers normal input, backspace, numeric modifiers, empty submission,
+  scrolling, error recovery, and exit.  Full-capacity and canary checks
+  still need a dedicated scenario.
 - An uncaught THROW now resets the data stack and enters QUIT safely;
   error display remains deliberately minimal on the calculator screen.
 - Interpreter internals excluded by design: QUIT INTERPRET BRANCH
   0BRANCH JUMP 0JUMP LIT (').
-- The flash5 "shell" is a key-echo demo (no REPL yet), so interactive
-  word probing under headless TilEm must go through the test suite or
-  a temporary suite edit.
+- The flash5 shell is now an interactive REPL.  It has append/backspace
+  editing, one-shot 2ND numeric input, error recovery, transcript
+  scrolling, and clean dictionary rollback on BYE.  Cursor movement,
+  history, and persistent definitions remain roadmap work.

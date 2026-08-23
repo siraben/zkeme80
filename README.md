@@ -4,6 +4,12 @@
 ![OS screenshot](screenshot.png)
 ![OS animation](demo.gif)
 
+The interactive Forth shell supports inline editing, shifted numeric and
+symbol input, error recovery, transcript scrolling, and a clean return to the
+menu:
+
+![Interactive Forth shell](docs/shell-demo.gif)
+
 **TLDR:** `assembler.scm` is the assembler, `zkeme80.scm` is the OS.
 To build the rom, run `make build`.  There are no dependencies apart
 from a recent version of Guile, supporting the modules `bytevectors`

@@ -58,6 +58,7 @@
     ,(equ 'flash-executable-ram-size 100)
     ,(equ 'flash-operation-status #x80ff)
     ,(equ 'screen-buffer #x8100)
+    ,(equ 'screen-buffer-scroll-source (+ #x8100 72))
     ,(equ 'swap-sector #x38)
 
     ,@header-asm
@@ -161,6 +162,10 @@
     (dw (0))
     (label loop-compile-contexts)
     (db ,(make-list 64 0))
+
+    ;; Raw key observed while the previous AKEY was being released.
+    (label akey-pending)
+    (db (0))
 
     (label ddd-data)
     (db (0))

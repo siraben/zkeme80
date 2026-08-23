@@ -1,0 +1,15 @@
+# Drive the full boot-time test suite and return to the menu.
+set key_hold 0.25s
+set key_delay 0.05s
+key ON
+wait 10s
+key RIGHT
+wait 0.3s
+key DOWN
+wait 0.3s
+key ENTER
+wait 35s
+screenshot /tmp/zkeme80-suite-tally.png
+key ENTER
+wait 3s
+screenshot /tmp/zkeme80-suite-menu.png
