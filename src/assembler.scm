@@ -918,6 +918,7 @@
 
 (define (expr->summary expr)
   (cond
+   ((procedure? expr) "macro")
    ((and (pair? expr) (symbol? (car expr)))
     (case (car expr)
       ((db) (expr->data-summary "db" (cadr expr)))

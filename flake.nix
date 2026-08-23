@@ -15,7 +15,7 @@
           zkeme80 = runCommand "zkeme80.rom" { buildInputs = [ guile ]; } ''
             cp -r ${./.}/src/* .
             chmod -R +w .
-            echo '(begin (load "zkeme80.scm") (make-rom+map "zkeme80.rom" "zkeme80.ram-labelmap.json"))' | guile
+            guile --no-auto-compile -c '(use-modules (ice-9 format)) (load "zkeme80.scm") (make-rom+map "zkeme80.rom" "zkeme80.ram-labelmap.json")'
             mkdir $out
             cp zkeme80.rom zkeme80.ram-labelmap.json $out/
           '';
