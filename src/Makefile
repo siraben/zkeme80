@@ -3,7 +3,7 @@ GUILE_BUILD = (use-modules (ice-9 format)) (load "zkeme80.scm") ((module-ref (cu
 .PHONY: all build upgrade
 
 all: build
-	tilem2 -r zkeme80.rom
+	sh ../debug/run-tilem.sh ../debug/tilem-keybindings.ini tilem2 -r zkeme80.rom
 
 build:
 	guile --no-auto-compile -c '$(GUILE_BUILD)'

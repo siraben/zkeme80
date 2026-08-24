@@ -103,7 +103,7 @@ need deeper forensics.
 `debug/macros/boot-only.macro` just boots and screenshots;
 `debug/macros/run-test-suite.macro` navigates the main menu to the test
 suite button, captures and acknowledges its introduction, and captures the terminal
-`286/286` tally plus a logical RAM dump while the suite waits for a key.
+`288/288` tally plus a logical RAM dump while the suite waits for a key.
 It then acknowledges the result, verifies the transient suite unloads, and
 captures the restored main menu.
 
@@ -114,6 +114,26 @@ python3 debug/verify_test_ram.py \
   debug/macros/SUITE_RAM zkeme80.ram-labelmap.json \
   --before debug/macros/BEFORE_SUITE_RAM \
   --after debug/macros/AFTER_SUITE_RAM
+```
+
+## Interactive TilEm bindings
+
+TilEm's stock GUI maps lowercase desktop letters to calculator functions:
+for example, `s` presses SIN.  Since zkeme80's shell reads the TI keys by
+their alpha legends, that physical key types `E`.  The repository's `make`
+and Nix launchers instead load `debug/tilem-keybindings.ini`, which maps host
+letters directly to the corresponding alpha-legend keys.  The wrapper uses a
+temporary configuration directory and leaves the user's TilEm configuration
+untouched.  Numbers and punctuation send the necessary `2ND` sequence, and
+the verifier simulates all 129 configured host bindings (95 printable keys,
+editor/keypad aliases, and intentional non-character controls) through the
+assembled ROM tables.  Point it at a TilEm checkout to audit its live
+TI-84+ key-name table too:
+
+```sh
+sh debug/run-tilem.sh debug/tilem-keybindings.ini tilem2 -r zkeme80.rom
+python3 debug/verify_tilem_keybindings.py \
+  --tilem-source /path/to/tilem
 ```
 
 `KEY` returns cooked character input.  The calculator-specific `RAW-KEY`

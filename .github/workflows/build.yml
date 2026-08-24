@@ -12,3 +12,7 @@ jobs:
         nix_path: nixpkgs=channel:nixos-unstable
     - name: Build
       run: nix-build
+    - name: Verify TilEm shell bindings
+      run: |
+        nix --extra-experimental-features 'nix-command flakes' develop -c make build
+        nix --extra-experimental-features 'nix-command flakes' develop -c python3 debug/verify_tilem_keybindings.py

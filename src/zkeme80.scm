@@ -115,6 +115,10 @@
     (label keyboard-last-key)
     (db (0))
 
+    ;; Remaining byte count for the batched native TYPE renderer.
+    (label type-count)
+    (dw (0))
+
     ;; Transient input buffer.
     (label input-buffer)
     ;; PROMPT may receive 128 characters; keep one extra byte for the
@@ -146,8 +150,16 @@
     (dw (0))
     (label expect-ptr)
     (dw (0))
+    (label expect-edit-ptr)
+    (dw (0))
     (label expect-count)
     (dw (0))
+    (label expect-capacity)
+    (dw (0))
+    ;; Nonzero only for the shell editor extension, which keeps accepting
+    ;; navigation/deletion after the input field reaches capacity.
+    (label expect-full-edit)
+    (db (0))
     (label expect-col-save)
     (dw (0))
     (label expect-row-save)
@@ -160,6 +172,13 @@
     (label loop-compile-contexts)
     (db ,(make-list 64 0))
 
+    ;; Transaction boundary for a colon definition.  QUIT restores these
+    ;; values if compilation ends through an error or premature source end.
+    (label compile-start-dp)
+    (dw (0))
+    (label compile-start-latest)
+    (dw (0))
+
     ;; Raw key observed while the previous AKEY was being released.
     (label akey-pending)
     (db (0))
@@ -169,6 +188,9 @@
 
     (label prompt-space)
     (db ,(make-list 128 0))
+    ;; Dedicated guard byte for the public 128-byte PBUF/editor boundary.
+    (label prompt-space-canary)
+    (db (0))
 
     ;; One pending bootstrap source.  main initializes this to 1 and the
     ;; string device clears it after installing the source; later REFILLs

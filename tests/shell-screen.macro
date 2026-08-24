@@ -7,8 +7,21 @@ wait 10s
 key RIGHT
 wait 0.5s
 key ENTER
-wait 2s
+wait 10s
 screenshot /tmp/zkeme80-shell-model-start.png
+
+# Exercise visual wrapping and cursor movement across the display-row edge.
+scanstring "AAAAAAAAAAAAAAAAAAAAAA"
+wait 0.5s
+screenshot /tmp/zkeme80-shell-model-wrap.png
+key LEFT
+wait 0.5s
+screenshot /tmp/zkeme80-shell-model-wrap-left.png
+key DEL
+wait 0.5s
+screenshot /tmp/zkeme80-shell-model-wrap-backspace.png
+key ENTER
+wait 1s
 
 scanstring "HELP"
 wait 0.3s
