@@ -12,7 +12,7 @@ from pathlib import Path
 
 WIDTH = 96
 HEIGHT = 64
-CURSOR_ROWS = (0b11110000, 0b10010000, 0b10010000, 0b10010000, 0b11110000)
+CURSOR_ROWS = (0b11110000,) * 5
 
 
 def load_font(path: Path) -> list[tuple[int, tuple[int, ...]]]:
@@ -69,11 +69,34 @@ def draw_text(
     return x
 
 
+def draw_wrapped_text(
+    pixels: list[list[bool]],
+    font: list[tuple[int, tuple[int, ...]]],
+    x: int,
+    y: int,
+    text: str,
+) -> tuple[int, int]:
+    for character in text:
+        codepoint = ord(character)
+        if not 32 <= codepoint <= 255:
+            raise ValueError(f"unsupported character {character!r}")
+        width, rows = font[codepoint - 32]
+        if x + width >= WIDTH:
+            x = 0
+            y += 6
+        for dy, row in enumerate(rows):
+            for dx in range(8):
+                if row & (0x80 >> dx) and x + dx < WIDTH and y + dy < HEIGHT:
+                    pixels[y + dy][x + dx] = True
+        x += width
+    return x, y
+
+
 def draw_cursor(pixels: list[list[bool]], x: int, y: int) -> None:
     for dy, row in enumerate(CURSOR_ROWS):
         for dx in range(8):
             if row & (0x80 >> dx):
-                pixels[y + dy][x + dx] = True
+                pixels[y + dy][x + dx] = not pixels[y + dy][x + dx]
 
 
 def render_state(
@@ -88,14 +111,15 @@ def render_state(
         lines = (
             "Forth shell",
             "ENTER runs input.",
-            "2ND shifts one key.",
+            "LEFT/RIGHT move.",
+            "UP/DOWN show history.",
             "DEL backspaces.",
-            "BYE opens the menu.",
+            "2ND shifts; BYE exits.",
             " ok",
         )
         for row, line in enumerate(lines):
             draw_text(pixels, font, 0, row * 6, line)
-        input_row = 36
+        input_row = 42
     else:
         draw_text(pixels, font, 0, 0, "zkeme80 Forth")
         draw_text(pixels, font, 0, 6, "Type HELP for help.")
@@ -105,8 +129,11 @@ def render_state(
     cursor_x = draw_text(pixels, font, 0, input_row, f"> {input_text}")
 
     if result:
-        draw_text(pixels, font, 0, input_row + 6, "* ok")
-        input_row += 12
+        # STAR and QUIT share one output row.  The next prompt scrolls the
+        # framebuffer once because CUR-ROW is 54 after the trailing CR.
+        pixels = pixels[6:] + [[False] * WIDTH for _ in range(6)]
+        draw_text(pixels, font, 0, 42, "* ok")
+        input_row = 48
         cursor_x = draw_text(pixels, font, 0, input_row, "> ")
 
     draw_cursor(pixels, cursor_x, input_row)
@@ -118,9 +145,9 @@ def render_error_state(
 ) -> list[list[bool]]:
     pixels = [[False] * WIDTH for _ in range(HEIGHT)]
     lines = (
-        "2ND shifts one key.",
+        "UP/DOWN show history.",
         "DEL backspaces.",
-        "BYE opens the menu.",
+        "2ND shifts; BYE exits.",
         " ok",
         "> STAR",
         "* ok",
@@ -131,6 +158,19 @@ def render_error_state(
         draw_text(pixels, font, 0, row * 6, line)
     cursor_x = draw_text(pixels, font, 0, 48, "> ")
     draw_cursor(pixels, cursor_x, 48)
+    return pixels
+
+
+def render_wrap_state(
+    font: list[tuple[int, tuple[int, ...]]], text: str, edit: int
+) -> list[list[bool]]:
+    pixels = [[False] * WIDTH for _ in range(HEIGHT)]
+    draw_text(pixels, font, 0, 0, "zkeme80 Forth")
+    draw_text(pixels, font, 0, 6, "Type HELP for help.")
+    draw_text(pixels, font, 0, 18, " ok")
+    draw_wrapped_text(pixels, font, 0, 24, f"> {text}")
+    cursor_x, cursor_y = draw_wrapped_text(pixels, font, 0, 24, f"> {text[:edit]}")
+    draw_cursor(pixels, cursor_x, cursor_y)
     return pixels
 
 
@@ -186,6 +226,9 @@ def main() -> None:
         "input": render_state(font, "STAR", False, True),
         "result": render_state(font, "STAR", True, True),
         "error": render_error_state(font),
+        "wrap": render_wrap_state(font, "A" * 22, 22),
+        "wrap-left": render_wrap_state(font, "A" * 22, 21),
+        "wrap-backspace": render_wrap_state(font, "A" * 21, 20),
     }
 
     with tempfile.TemporaryDirectory(prefix="zkeme80-shell-model-") as temporary:

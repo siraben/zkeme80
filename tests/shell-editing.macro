@@ -1,0 +1,313 @@
+# Exercise cursor-addressed overwrite and deletion in the Forth shell.
+set key_hold 0.25s
+set key_delay 0.08s
+
+key ON
+wait 10s
+memdump /tmp/zkeme80-shell-edit-before-shell.ram ram-logical
+key RIGHT
+wait 0.5s
+key ENTER
+wait 10s
+memdump /tmp/zkeme80-shell-edit-shell-loaded.ram ram-logical
+
+# Empty submissions must not leak their newline key onto the data stack.
+key ENTER
+wait 0.2s
+key ENTER
+wait 0.2s
+key ENTER
+wait 0.2s
+scanstring "DEPTH ."
+key ENTER
+wait 1s
+screenshot /tmp/zkeme80-shell-edit-empty-depth.png
+
+# UP recalls the newest submitted command; DOWN restores the draft that was
+# present before navigation.
+scanstring "DRAFT"
+key UP
+wait 0.5s
+screenshot /tmp/zkeme80-shell-edit-history-up.png
+memdump /tmp/zkeme80-shell-edit-history-up.ram ram-logical
+key DOWN
+wait 0.5s
+screenshot /tmp/zkeme80-shell-edit-history-down.png
+memdump /tmp/zkeme80-shell-edit-history-down.ram ram-logical
+key ENTER
+wait 1s
+
+# STXR, two positions left, then A must become STAR by overwrite.
+scanstring "STXR"
+key LEFT
+wait 0.1s
+key LEFT
+wait 0.1s
+scanstring "A"
+wait 0.5s
+screenshot /tmp/zkeme80-shell-edit-overwrite.png
+memdump /tmp/zkeme80-shell-edit-overwrite.ram ram-logical
+key ENTER
+wait 1s
+screenshot /tmp/zkeme80-shell-edit-overwrite-result.png
+
+# DEL in the middle removes the byte before the cursor and shifts the suffix.
+scanstring "STAAR"
+key LEFT
+wait 0.1s
+key LEFT
+wait 0.1s
+key DEL
+wait 0.5s
+screenshot /tmp/zkeme80-shell-edit-delete.png
+memdump /tmp/zkeme80-shell-edit-delete.ram ram-logical
+key ENTER
+wait 1s
+screenshot /tmp/zkeme80-shell-edit-delete-result.png
+
+# Moving/deleting beyond either boundary must clamp without corrupting STAR.
+scanstring "STAR"
+key LEFT
+wait 0.1s
+key LEFT
+wait 0.1s
+key LEFT
+wait 0.1s
+key LEFT
+wait 0.1s
+key LEFT
+wait 0.1s
+key DEL
+wait 0.1s
+key RIGHT
+wait 0.3s
+key RIGHT
+wait 0.3s
+key RIGHT
+wait 0.3s
+key RIGHT
+wait 0.3s
+key RIGHT
+wait 0.3s
+memdump /tmp/zkeme80-shell-edit-rights.ram ram-logical
+key 2ND
+wait 0.1s
+key LEFT
+wait 0.3s
+memdump /tmp/zkeme80-shell-edit-shift-left.ram ram-logical
+key 2ND
+wait 0.1s
+key RIGHT
+wait 0.5s
+memdump /tmp/zkeme80-shell-edit-shift-right.ram ram-logical
+screenshot /tmp/zkeme80-shell-edit-boundaries.png
+memdump /tmp/zkeme80-shell-edit-boundaries.ram ram-logical
+key ENTER
+wait 1s
+screenshot /tmp/zkeme80-shell-edit-boundaries-result.png
+
+# The 22nd four-pixel glyph wraps after the prompt.  LEFT crosses back to the
+# first display row, then DEL removes the preceding byte without losing the
+# wrapped suffix.
+scanstring "AAAAAAAAAAAAAAAAAAAAAA"
+wait 0.5s
+screenshot /tmp/zkeme80-shell-edit-wrap.png
+memdump /tmp/zkeme80-shell-edit-wrap.ram ram-logical
+key LEFT
+wait 0.5s
+screenshot /tmp/zkeme80-shell-edit-wrap-left.png
+memdump /tmp/zkeme80-shell-edit-wrap-left.ram ram-logical
+key DEL
+wait 0.5s
+screenshot /tmp/zkeme80-shell-edit-wrap-backspace.png
+memdump /tmp/zkeme80-shell-edit-wrap-backspace.ram ram-logical
+key ENTER
+wait 1s
+
+# At capacity: reject append, allow overwrite, then delete and reappend.
+# Seed the byte immediately after the field so the RAM verifier can prove the
+# editor never writes outside its 128-byte region.
+scanstring "PBUF "
+key 2ND
+wait 0.2s
+key 1
+wait 0.4s
+key 2ND
+wait 0.2s
+key 2
+wait 0.4s
+key 2ND
+wait 0.2s
+key 8
+wait 0.4s
+scanstring " "
+key 2ND
+wait 0.2s
+key ADD
+wait 0.4s
+scanstring " "
+key 2ND
+wait 0.2s
+key 1
+wait 0.4s
+scanstring " "
+key 2ND
+wait 0.2s
+key 7
+wait 0.4s
+scanstring " FILL"
+key ENTER
+wait 1s
+memdump /tmp/zkeme80-shell-edit-canary.ram ram-logical
+scanstring "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+wait 0.5s
+scanstring "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+wait 0.5s
+scanstring "X"
+key LEFT
+wait 0.3s
+scanstring "B"
+key DEL
+wait 0.3s
+scanstring "A"
+wait 0.5s
+memdump /tmp/zkeme80-shell-edit-full.ram ram-logical
+key ENTER
+wait 1s
+key UP
+wait 0.5s
+memdump /tmp/zkeme80-shell-edit-full-recall.ram ram-logical
+key DOWN
+wait 0.5s
+key ENTER
+wait 1s
+
+# Drive both history limits through the real transient Forth words.  HS fills
+# all 512 metadata slots with one-byte entries.  HG then resets the ring and
+# fills all 4096 text bytes with 32 full-width entries; one more command must
+# evict exactly the oldest 128-byte entry before wrapping and appending.
+set key_hold 0.12s
+set key_delay 0.04s
+# Short aliases keep the stress definitions readable; headless scanstring has
+# no '-' token, so send each physical minus key explicitly.
+scanstring ": HH SHELL"
+key 2ND
+key SUB
+scanstring "HISTORY"
+key 2ND
+key SUB
+scanstring "HEAD ;"
+key ENTER
+scanstring ": HC SHELL"
+key 2ND
+key SUB
+scanstring "HISTORY"
+key 2ND
+key SUB
+scanstring "COUNT ;"
+key ENTER
+scanstring ": HD SHELL"
+key 2ND
+key SUB
+scanstring "HISTORY"
+key 2ND
+key SUB
+scanstring "DATA"
+key 2ND
+key SUB
+scanstring "HEAD ;"
+key ENTER
+scanstring ": HU SHELL"
+key 2ND
+key SUB
+scanstring "HISTORY"
+key 2ND
+key SUB
+scanstring "DATA"
+key 2ND
+key SUB
+scanstring "USED ;"
+key ENTER
+scanstring ": HB SHELL"
+key 2ND
+key SUB
+scanstring "HISTORY"
+key 2ND
+key SUB
+scanstring "DATA ;"
+key ENTER
+scanstring ": HA SHELL"
+key 2ND
+key SUB
+scanstring "HISTORY"
+key 2ND
+key SUB
+scanstring "ADD ;"
+key ENTER
+wait 1s
+
+scanstring ": HS HH TRUE NEGATE CELLS FALSE FILL HC TRUE NEGATE CELLS FALSE FILL"
+key ENTER
+wait 0.5s
+scanstring " HD TRUE NEGATE CELLS FALSE FILL HU TRUE NEGATE CELLS FALSE FILL"
+key ENTER
+wait 0.5s
+scanstring " BL CELLS CELLS CELLS CELLS FALSE DO HB TRUE NEGATE HA LOOP ;"
+key ENTER
+wait 0.5s
+scanstring "HS"
+key ENTER
+wait 1s
+memdump /tmp/zkeme80-shell-edit-history-512.ram ram-logical
+
+scanstring ": HG HH TRUE NEGATE CELLS FALSE FILL HC TRUE NEGATE CELLS FALSE FILL"
+key ENTER
+wait 0.5s
+scanstring " HD TRUE NEGATE CELLS FALSE FILL HU TRUE NEGATE CELLS FALSE FILL"
+key ENTER
+wait 0.5s
+scanstring " BL FALSE DO HB BL CELLS CELLS HA LOOP ;"
+key ENTER
+wait 0.5s
+scanstring "HG"
+key ENTER
+wait 1s
+memdump /tmp/zkeme80-shell-edit-history-4096.ram ram-logical
+scanstring "X"
+key ENTER
+wait 1s
+memdump /tmp/zkeme80-shell-edit-history-evict.ram ram-logical
+set key_hold 0.25s
+set key_delay 0.08s
+
+# A compile-time error must roll back the partial header/body and leave the
+# next line in interpretation state.
+memdump /tmp/zkeme80-shell-edit-before-compile-error.ram ram-logical
+scanstring ": BROKEN NOPE"
+key ENTER
+wait 1s
+memdump /tmp/zkeme80-shell-edit-after-compile-error.ram ram-logical
+scanstring "STAR"
+key ENTER
+wait 1s
+screenshot /tmp/zkeme80-shell-edit-compile-recovery.png
+
+# A successful unfinished colon definition must continue across REFILLs.
+memdump /tmp/zkeme80-shell-edit-before-multiline.ram ram-logical
+scanstring ": ML STAR"
+key ENTER
+wait 1s
+memdump /tmp/zkeme80-shell-edit-mid-multiline.ram ram-logical
+scanstring " ;"
+key ENTER
+wait 1s
+memdump /tmp/zkeme80-shell-edit-after-multiline.ram ram-logical
+scanstring "ML"
+key ENTER
+wait 1s
+screenshot /tmp/zkeme80-shell-edit-multiline-result.png
+
+scanstring "BYE"
+key ENTER
+wait 2s
+memdump /tmp/zkeme80-shell-edit-after-shell.ram ram-logical

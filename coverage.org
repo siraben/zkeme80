@@ -1,4 +1,4 @@
-* Legacy Test Coverage [156/160]
+* Legacy Test Coverage [157/161]
 
 Coverage of kernel Forth words by the on-demand test suite in
 =src/bootstrap-flash4.fs=.  The suite runs from the main menu ("Run
@@ -201,15 +201,17 @@ same suite.
 - TO and +TO parse the value name themselves (ANS style): write
   "5 TO TV1" / "2 +TO TV1".  Postfix "TV1 TO" executes the VALUE word
   first and silently corrupts the operation.
-- EXPECT and ACCEPT are hardware-key-driven.  =tests/shell-smoke.macro=
-  covers normal input, backspace, numeric modifiers, empty submission,
-  scrolling, error recovery, and exit.  Full-capacity and canary checks
-  still need a dedicated scenario.
+- EXPECT, ACCEPT, and the shell's EDIT-LINE extension are hardware-key-driven.
+  =tests/shell-smoke.macro=
+  covers normal input, numeric modifiers, empty submission, scrolling,
+  error recovery, and exit; =tests/shell-editing.macro= adds cursor clamps,
+  overwrite/delete, shifted arrows, compile-error rollback, multiline colon
+  definitions, and a guarded full-capacity EDIT-LINE scenario.
 - An uncaught THROW now resets the data stack and enters QUIT safely;
   error display remains deliberately minimal on the calculator screen.
 - Interpreter internals excluded by design: QUIT INTERPRET BRANCH
   0BRANCH JUMP 0JUMP LIT (').
-- The flash5 shell is now an interactive REPL.  It has append/backspace
-  editing, one-shot 2ND numeric input, error recovery, transcript
-  scrolling, and clean dictionary rollback on BYE.  Cursor movement,
-  history, and persistent definitions remain roadmap work.
+- The flash5 shell is now an interactive REPL.  It has cursor-addressed
+  overwrite/backspace editing, one-shot 2ND numeric input, error recovery,
+  transcript scrolling, and clean dictionary rollback on BYE.  History and
+  persistent definitions remain roadmap work.

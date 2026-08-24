@@ -16,3 +16,8 @@ jobs:
       run: nix-build
     - name: Test
       run: nix develop -c make test
+
+    - name: Verify TilEm shell bindings
+      run: |
+        nix --extra-experimental-features 'nix-command flakes' develop -c make build
+        nix --extra-experimental-features 'nix-command flakes' develop -c python3 debug/verify_tilem_keybindings.py

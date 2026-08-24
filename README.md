@@ -4,9 +4,9 @@
 ![OS screenshot](screenshot.png)
 ![OS animation](demo.gif)
 
-The interactive Forth shell supports inline editing, shifted numeric and
-symbol input, error recovery, transcript scrolling, and a clean return to the
-menu:
+The interactive Forth shell supports wrapped 128-byte editing, a filled block
+cursor, 512-slot command history, shifted numeric and symbol input, error
+recovery, transcript scrolling, and a clean return to the menu:
 
 ![Interactive Forth shell](docs/shell-demo.gif)
 
@@ -127,6 +127,19 @@ post-bootstrap dictionary, then writes it to Flash page `06` in
 before execution; an absent or invalid image falls back to the text bootstrap.
 The [precompiled-bootstrap guide](docs/precompiled-bootstrap.md) documents the
 format, smoke test, and upgrade target.
+
+The project launcher gives TilEm isolated typewriter-style bindings for
+the interactive shell.  In particular, host `a`, `s`, and `t` type `A`, `S`,
+and `T` instead of using TilEm's stock calculator-function shortcuts.  All
+printable ASCII keyboard keys are mapped; letters normalize to uppercase.
+To launch a built ROM manually with the same mappings, run:
+
+```shell
+sh debug/run-tilem.sh debug/tilem-keybindings.ini tilem2 -r zkeme80.rom
+```
+
+This does not replace your personal TilEm configuration.  Invoking `tilem2`
+directly continues to use TilEm's stock calculator-function shortcuts.
 
 ### Using the Nix package manager (macOS or Linux)
 If you're using the Nix package manager, just clone the repository and

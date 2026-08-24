@@ -7,7 +7,7 @@ wait 10s
 key RIGHT
 wait 0.3s
 key ENTER
-wait 2s
+wait 10s
 screenshot /tmp/zkeme80-shell-start.png
 
 scanstring "HELP"

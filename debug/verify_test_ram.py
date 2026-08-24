@@ -14,7 +14,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("ram", type=Path)
     parser.add_argument("labelmap", type=Path)
-    parser.add_argument("--expected", type=int, default=286)
+    parser.add_argument("--expected", type=int, default=288)
     parser.add_argument("--before", type=Path)
     parser.add_argument("--after", type=Path)
     args = parser.parse_args()
