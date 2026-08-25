@@ -28,9 +28,11 @@ C compiler.  But maybe that's not what you want.  You want a minimal
 operating system that allows you to extend it in any way you wish,
 bonus points if you don't need to know Z80 assembly to do so.
 
-**zkeme80** is that operating system, a minimal core with a mostly
-[ANS standard](https://forth-standard.org/standard/words) conforming
-Forth interpreter/compiler.  From words covering sprites and graphics,
+**zkeme80** is that operating system, a minimal core with the complete
+[ANS Forth 94 CORE](https://forth-standard.org/standard/core) word-name
+surface and a Forth interpreter/compiler tested against the semantics
+listed in [the conformance audit](docs/ans94-conformance.md).  From words
+covering sprites and graphics,
 to text and memory access, everything you need to make the next hit
 Snake clone or RPN-based math layer is already there.  **zkeme80**
 lowers the barrier of entry for customizing an operating system and
@@ -57,17 +59,20 @@ Want garbage collection and memory safety?  Roll your own!  See
 familiar with Forth, I highly recommend *Starting Forth* by Leo
 Brodie.  Get it [here](https://www.forth.com/starting-forth/).
 
-### Notes on standard-compliance
-Some words are not standard.  This is because I copied them from my
-other [Forth/Z80 project](https://github.com/siraben/ti84-forth),
-which itself is based on jonesforth.  However, I did consult the ANS
-standard to incorporate some of their good ideas.  For instance, the
-test suite currently found in `bootstrap-flash4.fs` is only a very
-slight (sans the floating point stuff) adaptation of the [offical test
-suite](www.forth200x.org/tests/ttester.fs).  The current version of
-the operating system runs a series of tests to check the correctness
-of the word environment.  As time goes on I may consider making more
-words standard-conforming.
+### Notes on standard compliance
+
+All 133 required ANS Forth 94 CORE names are present in the normal
+persistent dictionary.  The implementation also includes calculator,
+graphics, flash, debugging, and compiler-internal extensions, plus parts
+of several optional word sets.  Those extra words are not a claim that
+each optional word set is complete.
+
+`src/bootstrap-flash4.fs` contains the on-device regression suite,
+adapted in part from the standard Forth test material and extended for
+zkeme80's kernel and hardware.  Passing it is not by itself a standards
+certification.  The exact environmental dependencies, audited behavior,
+and remaining portability limits are documented in
+[docs/ans94-conformance.md](docs/ans94-conformance.md).
 
 ### Did you write all of this?
 Most of the assembly code outside of `forth.scm` was taken from
@@ -117,6 +122,10 @@ $ nix-build && ./result/bin/runit
 * `zkeme80.scm` is the Forth-based operating system.  Load
   `zkeme80.scm` then run `(make-rom "zkeme80.rom")` to output binary
   to a file `zkeme80.rom`.
+* `coverage.org` tracks which Forth words are covered by the on-demand
+  test suite; `src/bootstrap-flash4.fs` runs it, and
+  `debug/macros/run-test-suite.macro` drives it headlessly under TilEm,
+  including the automated RC4 known-answer tests (Wikipedia vectors).
 
 ## Design of the assembler
 The assembler's core uses pattern matching.  The program counter is

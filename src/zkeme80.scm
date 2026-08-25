@@ -109,15 +109,34 @@
     ;; Forth system variables.  Put here because it's writable when
     ;; loaded into RAM.
 
+    ;; Edge-filter state must not alias the display/flash trampoline at
+    ;; 0x8000, which is routinely overwritten between keypad scans.
+    (label keyboard-last-key)
+    (db (0))
 
     ;; Transient input buffer.
     (label input-buffer)
-    (db ,(make-list 128 0))
+    ;; PROMPT may receive 128 characters; keep one extra byte for the
+    ;; interpreter's private zero terminator.
+    (db ,(make-list 129 0))
 
-    ;; Transient word buffer.
+    ;; Transient counted-string buffer used by WORD.  ANS Forth requires
+    ;; counted strings to support at least 255 characters; the extra byte is
+    ;; a private trailing NUL used by the kernel's internal token lookup.
     (label word-buffer)
-    (db ,(make-list 32 0))
-    (label word-ptr)
+    (db (0))
+    (label word-buffer-data)
+    (db ,(make-list 255 0))
+    (label word-buffer-terminator)
+    (db (0))
+
+    ;; Interpreter tokens cannot share WORD's transient region: executing the
+    ;; next token must not invalidate a counted string returned by WORD.
+    (label token-buffer-data)
+    (db ,(make-list 255 0))
+    (label token-buffer-terminator)
+    (db (0))
+    (label token-ptr)
     (dw (0))
 
     ;; Example input device; the Forth word "EXPECT".
@@ -133,14 +152,22 @@
     (label expect-row-save)
     (dw (0))
 
+    ;; Compiler bookkeeping for DO/+LOOP/LEAVE.  Each of the sixteen
+    ;; contexts is { loop-start, linked-LEAVE-head }.
+    (label loop-compile-depth)
+    (dw (0))
+    (label loop-compile-contexts)
+    (db ,(make-list 64 0))
+
     (label ddd-data)
     (db (0))
 
     (label prompt-space)
     (db ,(make-list 128 0))
 
-    ;; This value, when incremented, becomes 0.  This causes REFILL to
-    ;; detect that this "device" no longer has input, and thus will stop.
+    ;; One pending bootstrap source.  main initializes this to 1 and the
+    ;; string device clears it after installing the source; later REFILLs
+    ;; therefore report end of input.
     (label bootstrap-load-bool)
     (dw (65535))
 

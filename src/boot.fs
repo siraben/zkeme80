@@ -6,7 +6,7 @@ CLEAR-SCREEN ORIGIN
   1 SET-RAM-MEMA
   IF
     \ We set the input pointer to point to memory bank A.
-    MEMA INPUT-PTR !
+    MEMA CSTRING-SOURCE
   ELSE
     \ Something went wrong.  Shutdown.
     \ Print "ERR"

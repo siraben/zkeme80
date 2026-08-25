@@ -104,14 +104,15 @@
 
 
 ;; We must relocate these variables elsewhere, where RAM is writable.
-(define (defvar name label default)
+(define (defvar name label default . flags-arg)
   ;; Store the list of variable default values.
 
   (let ((var-label (string->symbol (format #f "var-~a" label)))
-        (var-addr (next-var-addr!)))
+        (var-addr (next-var-addr!))
+        (flags (if (null? flags-arg) 0 (car flags-arg))))
     (set! *var-list* `((,var-label . ,default) .  ,*var-list*))
 
-    `(,@(defcode name 0 label)
+    `(,@(defcode name flags label)
       (push bc)
       (ld bc ,var-addr)
       ,@next)))
@@ -138,6 +139,15 @@
   `((label docol)
     ,@push-de-rs
     (pop de)
+    ,@next))
+
+;; Runtime for definitions made by CREATE.  CALL leaves the data-field
+;; address on the machine stack; make it the new Forth data-stack top.
+(define dovar-sub
+  `((label dovar)
+    (pop hl)
+    (push bc)
+    ,@hl-to-bc
     ,@next))
 
 
@@ -367,8 +377,41 @@
     ,@next
 
     ,@(defcode "2/" 0 '2/)
+    ;; Sign-extend the high byte while preserving its low bit in carry for C.
+    (bit 7 b)
+    (jr z two-divide-positive)
     (srl b)
+    (set 7 b)
+    (jr two-divide-high-done)
+    (label two-divide-positive)
+    (srl b)
+    (label two-divide-high-done)
     (rr c)
+    ,@next
+
+    ;; Logical right shift.  Counts at or above the 16-bit cell width yield
+    ;; zero, while 2/ above remains the required arithmetic operation.
+    ,@(defcode "RSHIFT" 0 'rshift)
+    (ld a b)
+    (or a)
+    (jr nz rshift-zero)
+    (ld a c)
+    (cp 16)
+    (jr nc rshift-zero)
+    (pop hl)
+    (or a)
+    (jr z rshift-done)
+    (label rshift-loop)
+    (srl h)
+    (rr l)
+    (dec a)
+    (jr nz rshift-loop)
+    (label rshift-done)
+    ,@hl-to-bc
+    ,@next
+    (label rshift-zero)
+    (pop hl)
+    (ld bc 0)
     ,@next
 
     ,@(defcode "INVERT" 0 'invert)
@@ -388,38 +431,122 @@
     (ld de (var-temp-cell))
     ,@next
 
-    ,@(defcode "/MOD" 0 '/mod)
+    ;; Unsigned double-cell by single-cell division.  The high cell must be
+    ;; smaller than the divisor; ANS makes other cases ambiguous.
+    ,@(defcode "UM/MOD" 0 'um/mod)
     (ld (var-temp-cell) de)
     (ld d b)
     (ld e c)
+    (pop hl)
     (pop bc)
     (ld a b)
-    ;;  ac by de and places the quotient in ac and the remainder in hl
-    (label div-ac-by-de)
-    (ld	hl 0)
     (ld	b 16)
 
-    (label div-ac-de-loop)
-    (db (#xcb #x31)) ;; sll c
+    (label um-div-loop)
+    ;; SLL C is equivalent to the supported SLA C followed by INC C; INC
+    ;; preserves the carry containing the shifted-out quotient bit.
+    (sla c)
+    (inc c)
     (rla)
     (adc hl hl)
+    ;; A carry here is the seventeenth remainder bit.  Such a trial is
+    ;; necessarily at least the divisor, but SBC must not consume that carry
+    ;; as an extra borrow-in.
+    (jr c um-div-overflow)
+    (or a)
     (sbc hl de)
-    (jr	nc div-ac-de-local)
+    (jr	nc um-div-accepted)
     (add hl de)
     (dec c)
-    (label div-ac-de-local)
+    (jr um-div-accepted)
+    (label um-div-overflow)
+    (or a)
+    (sbc hl de)
+    (label um-div-accepted)
 
-    (djnz div-ac-de-loop)
+    (djnz um-div-loop)
     (ld b a)
     (push hl)
     (ld de (var-temp-cell))
     ,@next
+
+    ;; Internal single-cell unsigned division.
+    ,@(defword "U/MOD16" hidden 'u-divmod)
+    (dw (lit 0 swap um/mod exit))
+
+    ,@(defcode "UM*" 0 'um*)
+    (ld (var-temp-cell) de)
+    (pop de)
+    (call mul-16-by-16)
+    (push hl)
+    (ld b d)
+    (ld c e)
+    (ld de (var-temp-cell))
+    ,@next
+
+    ,@(defcode "NEGATE" 0 'negate)
+    (ld hl 0)
+    (or a)
+    (sbc hl bc)
+    ,@hl-to-bc
+    ,@next
+
+    ,@(defword "ABS" 0 'abs)
+    (dw (dup 0< 0jump abs-done negate))
+    (label abs-done)
+    (dw (exit))
+
+    ,@(defword "S>D" 0 's>d)
+    (dw (dup 0< exit))
+
+    ,@(defword "DNEGATE" hidden 'dnegate)
+    (dw (invert swap negate tuck 0= - exit))
+
+    ,@(defword "DABS" hidden 'dabs)
+    (dw (dup 0< 0jump dabs-done dnegate))
+    (label dabs-done)
+    (dw (exit))
+
+    ,@(defword "M*" 0 'm*)
+    (dw (2dup xor >r abs swap abs swap um* r> 0<))
+    (dw (0jump m-star-done dnegate))
+    (label m-star-done)
+    (dw (exit))
+
+    ;; Symmetric signed division.  The unsigned primitive yields remainder
+    ;; then quotient; restore the double dividend sign on the remainder and
+    ;; the XOR of operand signs on the quotient.
+    ,@(defword "SM/REM" 0 'sm/rem)
+    (dw (dup 0< swap abs 2>r dup 0< >r dabs))
+    (dw (r> r> swap >r um/mod))
+    ;; Preserve the dividend sign for the remainder before combining it with
+    ;; the divisor sign for the quotient.
+    (dw (r> r> over >r xor 0jump sm-rem-quotient-positive negate))
+    (label sm-rem-quotient-positive)
+    (dw (r> 0jump sm-rem-done swap negate swap))
+    (label sm-rem-done)
+    (dw (exit))
+
+    ,@(defword "FM/MOD" 0 'fm/mod)
+    (dw (dup >r sm/rem over ?dup 0jump fm-mod-no-adjust))
+    (dw (r@ xor 0< 0jump fm-mod-no-adjust 1- swap r> + swap exit))
+    (label fm-mod-no-adjust)
+    (dw (rdrop exit))
+
+    ,@(defword "/MOD" 0 '/mod)
+    (dw (>r s>d r> sm/rem exit))
 
     ,@(defword "MOD" 0 'mod)
     (dw (/mod drop exit))
 
     ,@(defword "/" 0 '/)
     (dw (/mod nip exit))
+
+    ,@(defword "*/MOD" 0 '*/mod)
+    (dw (>r m* r> sm/rem exit))
+
+    ,@(defword "*/" 0 '*/)
+    (dw (*/mod nip exit))
 
     ,@(defcode "1+" 0 '1+)
     (inc bc)
@@ -449,7 +576,7 @@
     ,@next
 
     ,@(defword "TRUE" 0 'true)
-    (dw (lit 1 exit))
+    (dw (lit 65535 exit))
 
     ,@(defword "FALSE" 0 'false)
     (dw (lit 0 exit))
@@ -465,45 +592,55 @@
     ,@next
 
     ,@(defword "WITHIN" 0 'within)
-    (dw (over - >r - r> <= exit))
+    (dw (over - >r - r> u< exit))
+
+    ;; Convert one ASCII digit to its value.  Uppercase digits through Z are
+    ;; accepted so the interpreter follows BASE for the usual range 2..36.
+    ;; ( char -- digit flag )
+    ,@(defword "DIGIT?" 0 'digit?)
+    (dw (dup lit 48 lit 58 within 0jump digit-check-alpha))
+    (dw (lit 48 - true exit))
+    (label digit-check-alpha)
+    (dw (dup lit 65 lit 91 within 0jump digit-fail))
+    (dw (lit 65 - lit 10 + true exit))
+    (label digit-fail)
+    (dw (drop lit 0 false exit))
 
     ,@(defword "NUM?" 0 'num?)
-    (dw (zeroc))
-    (dw (ninec))
-    (dw (within exit))
+    (dw (digit? nip exit))
 
     ;; Parse a number starting at an address.
     ;; ( addr -- num | nothing)
     ;; The caller of PARSE-NUMBER should check the variable NUM-STATUS
     ;; to see if the parsing suceeded.
 
-    ;; Currently only parses base 10.
     ,@(defword "PARSE-NUMBER" 0 'parse-number)
-    ;; Check if the first character is numeric.
-    (dw (dup c@ dup num? 0jump parse-num-fail))
-    ;; Convert the first digit.
-    (dw (zeroc -))
-    ;; It is. Continue until end of string.
-    ;; Stack right now: ( addr n -- )
+    (dw (lit 0 num-status !))
+    ;; Remember a leading minus on the return stack.
+    (dw (dup c@ lit 45 = 0jump parse-num-positive))
+    (dw (1+ true jump parse-num-sign-ready))
+    (label parse-num-positive)
+    (dw (false))
+    (label parse-num-sign-ready)
+    (dw (>r dup c@ digit? 0jump parse-num-fail-two))
+    (dw (dup base @ u< 0jump parse-num-fail-two))
     (label parse-num-continue)
     (dw (swap 1+ swap)) ;; ( addr+1 n -- )
     (label parse-num-loop)
-    ;; Check if we reached the end of string already.
     (dw (over c@ 0jump parse-num-done))
-    ;; Nope. ( addr+1 n -- )
-    ;; Still check if it's numeric.  Since the string shouldn't
-    ;; contain spaces, we can just check for the null byte.
-    (dw (over c@ num? 0jump parse-num-fail))
-    ;; Continue.
-    (dw (over c@ zeroc - swap lit 10 * +))
-    ;; ( addr+1 nm -- )
+    (dw (over c@ digit? 0jump parse-num-fail-three))
+    (dw (dup base @ u< 0jump parse-num-fail-three))
+    (dw (swap base @ * +))
     (dw (jump parse-num-continue))
 
     (label parse-num-done)
-    (dw (swap drop))
-    (dw (lit 1 num-status ! exit))
-    (label parse-num-fail)
-    (dw (2drop lit 0 num-status ! exit))
+    (dw (swap drop r> 0jump parse-num-store negate))
+    (label parse-num-store)
+    (dw (true num-status ! exit))
+    (label parse-num-fail-three)
+    (dw (drop))
+    (label parse-num-fail-two)
+    (dw (2drop r> drop false num-status ! exit))
 
     ,@(defword "MAX" 0 'max)
     (dw (2dup > 0branch 8 drop branch 4 nip exit))
@@ -520,7 +657,15 @@
     ))
 
 (define forth-memory-words
-  `(,@(defcode "!" 0 '!)
+  `(;; The Z80 permits cell access at every byte address, so every address is
+    ;; already aligned in this implementation.
+    ,@(defcode "ALIGNED" 0 'forth-aligned)
+    ,@next
+
+    ,@(defcode "ALIGN" 0 'align)
+    ,@next
+
+    ,@(defcode "!" 0 '!)
     (pop hl)
     (ld a l)
     (ld (bc) a)
@@ -629,6 +774,39 @@
     (ld de (var-temp-cell))
     (pop bc)
     ,@next
+
+    ;; ( c-addr u char -- )
+    ,@(defcode "FILL" 0 'fill)
+    (ld (var-temp-cell) de)
+    (ld a c)
+    (pop bc)
+    (pop hl)
+    (ld d a)
+    (ld a b)
+    (or c)
+    (jr z fill-done)
+    (ld (hl) d)
+    (dec bc)
+    (ld a b)
+    (or c)
+    (jr z fill-done)
+    (ld d h)
+    (ld e l)
+    (inc de)
+    (ldir)
+    (label fill-done)
+    (ld de (var-temp-cell))
+    (pop bc)
+    ,@next
+
+    ;; Copy safely for either overlap direction.
+    ;; ( addr1 addr2 u -- )
+    ,@(defword "MOVE" 0 'move)
+    ;; Addresses are unsigned on the Z80; signed < chooses the wrong direction
+    ;; whenever the two buffers straddle $8000.
+    (dw (>r 2dup u< r> swap 0jump move-forward cmove> exit))
+    (label move-forward)
+    (dw (cmove exit))
 
     ,@(defword "USED" 0 'used)
     (dw (here h0 - exit))
@@ -968,36 +1146,35 @@
 
     ,@(defcode "<" 0 '<)
     (pop hl)
+    ;; Bias both signed cells into unsigned order, then compare normally.
+    (ld a h)
+    (xor #x80)
+    (ld h a)
+    (ld a b)
+    (xor #x80)
+    (ld b a)
     (call cp-hl-bc)
     (jp c tru)
     (jp fal)
 
-    ,@(defcode ">" 0 '>)
-    (pop hl)
-    (push hl)
-    (push bc)
-    (call cp-hl-bc)
-    (pop bc)
-    (pop hl)
-    (jp nc gt-check-neq)
-    (jp fal)
-    (label gt-check-neq)
-    (call cp-hl-bc)
-    (jp z fal)
-    (jp tru)
+    ,@(defword ">" 0 '>)
+    (dw (swap < exit))
 
+    ,@(defword "<=" 0 '<=)
+    (dw (> 0= exit))
 
-    ,@(defcode "<=" 0 '<=)
-    ,@bc-to-hl
-    (pop bc)
+    ,@(defword ">=" 0 '>=)
+    (dw (< 0= exit))
+
+    ,@(defcode "U<" 0 'u<)
+    (pop hl)
     (call cp-hl-bc)
-    (jp nc tru)
+    (jp c tru)
     (jp fal)
 
-    ,@(defcode ">=" 0 '>=)
-    (pop hl)
-    (call cp-hl-bc)
-    (jp nc tru)
+    ,@(defcode "0<" 0 '0<)
+    (bit 7 b)
+    (jp nz tru)
     (jp fal)
 
     ,@(defcode "0=" 0 '0=)
@@ -1017,7 +1194,9 @@
     (ld c a)
     ,@next
 
-    ,@(defcode "KEY" 0 'key)
+    ;; Blocking raw keypad scan.  ANS KEY is the character-oriented word
+    ;; below; calculator UI code that needs scan codes uses RAW-KEY/KEYC.
+    ,@(defcode "RAW-KEY" 0 'raw-key)
     (call flush-keys)
     (call wait-key)
     (push bc)
@@ -1028,26 +1207,43 @@
     ;; Read a key as an ASCII character.
     ,@(defcode "AKEY" 0 'akey)
     (ld (var-temp-cell) de)
+    (push bc)
+    (label akey-read)
     (call flush-keys)
     (call wait-key)
     (ld h 0)
     (ld l a)
     (ld de char-lookup-table)
-    (push bc)
     (ld b h)
     (add hl de)
     (ld c (hl))
+    (ld a c)
+    (or a)
+    (jr z akey-read)
     (ld de (var-temp-cell))
     ,@next
 
+    ,@(defword "KEY" 0 'key)
+    (dw (akey exit))
+
     ,@(defcode "TO-ASCII" 0 'to-ascii)
     (push de)
+    (ld a b)
+    (or a)
+    (jr nz to-ascii-invalid)
+    (ld a c)
+    (cp 128)
+    (jr nc to-ascii-invalid)
     (ld h 0)
     (ld l c)
     (ld b h)
     (ld de char-lookup-table)
     (add hl de)
     (ld c (hl))
+    (pop de)
+    ,@next
+    (label to-ascii-invalid)
+    (ld bc 0)
     (pop de)
     ,@next
 
@@ -1066,8 +1262,9 @@
     (db (0 0 0 0 0))
 
     ;; ( addr u -- )
-    ;; Expect u characters (or a newline, whichever comes first) and
-    ;; store them at address addr.
+    ;; Expect at most u characters (or a newline, whichever comes first),
+    ;; store them at addr, and record the received count in SPAN.  EXPECT
+    ;; never writes beyond the caller's u-byte region.
     ;; Written in Forth because it's easier.
     ;; Still somewhat buggy.
     ,@(defword "EXPECT" 0 'expect)
@@ -1076,11 +1273,11 @@
     ;; And the initial pointer.
     (dw (lit expect-ptr-initial !))
     (label expect-loop)
-    ;; Check if we have no characters left.
-    (dw (lit expect-count @ not 0jump expect-more))
-    (dw (jump expect-full))
+    ;; Reaching the caller's capacity completes the operation immediately.
+    (dw (lit expect-count @ 0jump expect-capacity-end))
     (label expect-more)
-    (dw (page lit expect-ptr-initial @ plot-string))
+    (dw (page lit expect-ptr-initial @ lit expect-ptr @))
+    (dw (lit expect-ptr-initial @ - type))
     (dw (lit 8 cur-row +! lit ,(char->integer #\^) emit))
     (dw (lit 8 cur-row -!))
 
@@ -1099,31 +1296,32 @@
     (dw (jump expect-loop))
 
     (label expect-got-newline)
-    (dw (lit expect-ptr-initial @ lit expect-ptr @))
-    (dw (<> 0jump expect-got-blank))
+    (dw (drop))
     (label expect-end)
-    (dw (origin lit expect-ptr-initial @ plot-string))
-    (dw (drop lit 0 lit expect-ptr @ c! exit))
+    (dw (lit expect-ptr @ lit expect-ptr-initial @ - dup span !))
+    (dw (origin lit expect-ptr-initial @ swap type exit))
+
+    (label expect-capacity-end)
+    (dw (jump expect-end))
 
     (label expect-got-backspace)
     (dw (drop))
     (dw (lit expect-ptr-initial @ lit expect-ptr @))
     (dw (<> 0jump expect-backspace-to-loop))
     (dw (lit 1 lit expect-ptr -!))
-    (dw (lit 0 lit expect-ptr @ c!))
     (dw (lit 1 lit expect-count +!))
     (label expect-backspace-to-loop)
     (dw (jump expect-loop))
 
-    ;; Buffer full: consume keys until newline or backspace.
-    (label expect-full)
-    (dw (akey))
-    (dw (?dup 0jump expect-full))
-    (dw (dup lit ,(char->integer #\newline) <> 0jump expect-got-newline))
-    (dw (dup lit ,(char->integer #\backspace) <> 0jump expect-got-backspace))
-    (dw (drop jump expect-full))
+    ,@(defword "ACCEPT" 0 'accept)
+    (dw (expect span @ exit))
 
     ,@(defword "REFILL" 0 'refill)
+    ;; An evaluated string is already a complete input source and cannot be
+    ;; replenished.  In particular, REFILL must not replace it with the
+    ;; calculator's current interactive/bootstrap device.
+    (dw (lit var-evaluation-depth @ 0jump refill-device false exit))
+    (label refill-device)
     (dw (lit var-current-input-device @ execute))
     (dw (0jump refill-fail))
     ;; (dw (lit input-buffer lit var-input-ptr ! ))
@@ -1131,78 +1329,193 @@
     (label refill-fail)
     (dw (false exit))
 
+    ;; Install an input source and reset its parse offset.  SOURCE! is a
+    ;; system extension used by the built-in devices; SOURCE and >IN retain
+    ;; their standard interfaces.
+    ;; ( c-addr u -- )
+    ,@(defword "SOURCE!" 0 'source-store)
+    (dw (lit var-source-length ! dup lit var-source-address !))
+    (dw (lit var-input-ptr ! lit 0 lit var-to-in ! exit))
+
+    ;; Install a private NUL-terminated bootstrap source.  This is kept
+    ;; separate from SOURCE! so EVALUATE strings may use their exact length.
+    ;; ( c-addr -- )
+    ,@(defword "CSTRING-SOURCE" 0 'cstring-source)
+    (dw (dup))
+    (label cstring-source-scan)
+    (dw (dup c@ 0jump cstring-source-ready 1+ jump cstring-source-scan))
+    (label cstring-source-ready)
+    (dw (over - source-store exit))
+
+    ;; Return the current input buffer without exposing its private cursor.
+    ;; ( -- c-addr u )
+    ,@(defword "SOURCE" 0 'source)
+    (dw (lit var-source-address @ lit var-source-length @ exit))
+
+    ;; Read one byte at SOURCE + >IN.  BC is scratch, while HL and DE are
+    ;; preserved so the native WORD parser can share this routine.  A zero
+    ;; result is the kernel's private end-of-source sentinel.
+    (label source-getc-sub)
+    (push hl)
+    (ld hl (var-source-length))
+    (ld bc (var-to-in))
+    (xor a)
+    (sbc hl bc)
+    (jr z source-getc-eof)
+    (jr c source-getc-eof)
+    (ld hl (var-source-address))
+    (add hl bc)
+    (ld a (hl))
+    (inc hl)
+    (ld (var-input-ptr) hl)
+    (ld hl (var-to-in))
+    (inc hl)
+    (ld (var-to-in) hl)
+    (pop hl)
+    (ret)
+    (label source-getc-eof)
+    (pop hl)
+    (xor a)
+    (ret)
+
     ;; Get the next character from the input source.
-    ,@(defword "GETC" 0 'getc)
-    (dw (lit var-input-ptr @ c@))
-    (dw (lit 1 lit var-input-ptr +!))
-    (dw (exit))
+    ,@(defcode "GETC" 0 'getc)
+    (push bc)
+    (call source-getc-sub)
+    (ld c a)
+    (ld b 0)
+    ,@next
 
     ,@(defword "UNGETC" 0 'ungetc)
-    (dw (lit 1 lit var-input-ptr -!))
+    (dw (lit var-to-in @ ?dup 0jump ungetc-done 1- dup lit var-to-in !))
+    (dw (lit var-source-address @ + lit var-input-ptr !))
+    (label ungetc-done)
     (dw (exit))
 
-    ;; Parse the next word.
+    ;; Parse a delimiter-separated word into the standard counted-string
+    ;; transient region.  The private trailing NUL lets internal clients use
+    ;; the same buffer without imposing a NUL requirement on FIND callers.
+    ;; ( char -- c-addr )
+    ,@(defcode "WORD" 0 'word)
+    (ld (var-temp-cell) de)
+    (ld d c)                         ; delimiter
+    (ld e 0)                         ; stored character count
+    (ld hl word-buffer-data)
+    (label word-skip-delimiters)
+    (call source-getc-sub)
+    (or a)
+    (jr z word-finish)
+    (cp d)
+    (jr z word-skip-delimiters)
+    (label word-character)
+    (cp d)
+    (jr z word-finish)
+    (or a)
+    (jr z word-finish)
+    (ld c a)
+    (ld a e)
+    (cp 255)
+    (jr z word-discard-overflow)
+    (ld a c)
+    (ld (hl) a)
+    (inc hl)
+    (inc e)
+    (label word-read-next)
+    (call source-getc-sub)
+    (jr word-character)
+    ;; More than 255 characters is an ambiguous condition, but it must never
+    ;; write past the transient region.  Consume the rest of the field and
+    ;; return the safely truncated counted string.
+    (label word-discard-overflow)
+    (call source-getc-sub)
+    (or a)
+    (jr z word-finish)
+    (cp d)
+    (jr nz word-discard-overflow)
+    (label word-finish)
+    (ld (hl) 0)
+    (ld a e)
+    (ld (word-buffer) a)
+    (ld bc word-buffer)
+    (ld de (var-temp-cell))
+    ,@next
 
-    ;; We're going off the standard here and will skip whitespace
-    ;; (instead of what the stack passed to it), and comments.
-    ;; Whitespace includes #\space #\newline
-    ;; Comments are #\\ until #\newline
-    ;; ( -- addr len )
-    ,@(defword "WORD" 0 'word)
-    (dw (lit word-buffer lit word-ptr !))
-    (label skip-space)
+    ;; Internal source token parser.  Unlike standard WORD it treats all
+    ;; input whitespace as a delimiter and skips backslash comments.  It
+    ;; returns the address of the characters plus their length, retaining the
+    ;; old kernel contract while keeping WORD available to applications.
+    ;; ( -- addr len | 0 )
+    ,@(defword "TOKEN" hidden 'token)
+    (dw (lit token-buffer-data lit token-ptr !))
+    (label token-skip-space)
     (dw (getc))
-    (dw (?dup 0jump empty-word))
+    (dw (?dup 0jump empty-token))
     (dw (dup lit ,(char->integer #\space) <>))
-    (dw (0jump skip-space-consume))
+    (dw (0jump token-skip-space-consume))
     (dw (dup lit ,(char->integer #\newline) <>))
-    (dw (0jump skip-space-consume))
+    (dw (0jump token-skip-space-consume))
     (dw (dup lit ,(char->integer #\tab) <>))
-    (dw (0jump skip-space-consume))
+    (dw (0jump token-skip-space-consume))
     (dw (dup lit ,(char->integer #\\) <>))
-    (dw (0jump skip-comment-start))
+    (dw (0jump token-skip-comment-start))
 
-    (dw (jump actual-word))
+    (dw (jump token-store-character))
 
-    (label skip-space-consume)
+    (label token-skip-space-consume)
     (dw (drop))
-    (dw (jump skip-space))
+    (dw (jump token-skip-space))
 
-    (label skip-comment-start)
+    (label token-skip-comment-start)
     (dw (drop))
-    (label skip-comment)
-    (dw (getc ?dup 0jump empty-word))
-    (dw (dup lit ,(char->integer #\newline) <> 0jump skip-space-consume))
+    (label token-skip-comment)
+    (dw (getc ?dup 0jump empty-token))
+    (dw (dup lit ,(char->integer #\newline) <> 0jump token-skip-space-consume))
     (dw (drop))
-    (dw (jump skip-comment))
+    (dw (jump token-skip-comment))
 
-    (label actual-word)
-    (dw (lit word-ptr @ c!))
-    (dw (lit 1 lit word-ptr +!))
+    (label token-store-character)
+    ;; Keep accepting source text through the full counted-string capacity.
+    ;; Dictionary creation separately rejects names longer than 31 bytes;
+    ;; lookup cannot mistake this 255-byte result for a dictionary name.
+    (dw (lit token-ptr @ lit token-buffer-terminator =
+             0jump token-store-character-safe))
+    (dw (drop jump token-discard-overflow))
+    (label token-store-character-safe)
+    (dw (lit token-ptr @ c!))
+    (dw (lit 1 lit token-ptr +!))
 
-    (label actual-word-loop)
+    (label token-character-loop)
     (dw (getc))
-    (dw (dup 0jump word-done))
-    (dw (dup lit ,(char->integer #\space)   <> 0jump word-done))
-    (dw (dup lit ,(char->integer #\newline) <> 0jump word-done))
-    (dw (dup lit ,(char->integer #\tab) <> 0jump word-done))
+    (dw (dup 0jump token-done))
+    (dw (dup lit ,(char->integer #\space)   <> 0jump token-done))
+    (dw (dup lit ,(char->integer #\newline) <> 0jump token-done))
+    (dw (dup lit ,(char->integer #\tab) <> 0jump token-done))
 
-    (dw (jump actual-word))
+    (dw (jump token-store-character))
 
-    (label word-done)
+    (label token-discard-overflow)
+    (dw (getc dup 0jump token-overflow-done))
+    (dw (dup lit ,(char->integer #\space)   <> 0jump token-overflow-done))
+    (dw (dup lit ,(char->integer #\newline) <> 0jump token-overflow-done))
+    (dw (dup lit ,(char->integer #\tab) <> 0jump token-overflow-done))
+    (dw (drop jump token-discard-overflow))
+    (label token-overflow-done)
+    (dw (drop jump token-done))
+
+    (label token-done)
     (dw (drop))
-    ;; Write a 0 and reset the word buffer pointer.
-    (dw (lit 0 lit word-ptr @ c!))
-    ;; Push the word length on the stack.
-    (dw (lit word-ptr @ lit word-buffer -))
-    (dw (lit word-buffer dup lit word-ptr !))
+    (dw (lit 0 lit token-ptr @ c!))
+    (dw (lit token-ptr @ lit token-buffer-data -))
+    (dw (lit token-buffer-data dup lit token-ptr !))
     (dw (swap exit))
-    ;; Couldn't get a word, return 0.
-    (label empty-word)
+    ;; Couldn't get a token, return 0.
+    (label empty-token)
     (dw (lit 0 exit))
 
     ,@(defword "CHAR" 0 'char)
-    (dw (word drop c@ exit))
+    (dw (token ?dup 0jump char-no-name drop c@ exit))
+    (label char-no-name)
+    (dw (lit #xfff0 throw))
 
     ,@(defword "[CHAR]" immediate 'char-brac)
     (dw (tick lit comma char comma exit))
@@ -1222,8 +1535,22 @@
     ,@(defword "LITERAL" immediate 'literal)
     (dw (tick lit comma comma exit))
 
+    ;; Parse a dictionary name or raise the standard undefined-word exception.
+    ,@(defword "(PARSE-HEADER)" hidden 'parse-header)
+    (dw (token ?dup 0jump parse-header-undefined))
+    (dw (find-header ?dup 0jump parse-header-undefined exit))
+    (label parse-header-undefined)
+    (dw (lit #xfff3 throw))
+
     ,@(defword "POSTPONE" immediate 'postpone)
-    (dw (word find >cfa comma exit))
+    (dw (parse-header dup ?immediate 0jump postpone-non-immediate))
+    ;; An immediate word's compilation semantics are performed by compiling
+    ;; its execution token directly into the current definition.
+    (dw (>cfa comma exit))
+    (label postpone-non-immediate)
+    ;; A non-immediate word's compilation semantics append its xt later,
+    ;; when the definition containing POSTPONE executes.
+    (dw (>cfa tick lit comma comma tick comma comma exit))
 
     ,@(defword "[']" immediate 'tick-brac)
     (dw (run-tick tick tick comma comma exit))
@@ -1244,16 +1571,47 @@
     ,@next
 
     ,@(defword "S\"" immediate 's-quote)
-    (dw (state @ 0branch 66 tick litstring comma here lit 0 comma))
-    (dw (getc dup lit 34 <> 0branch 8 c-comma branch 65518 drop))
-    (dw (lit 0 c-comma dup here swap - lit 3 - swap ! branch 38))
-    (dw (here getc dup lit 34 <> 0branch 12 over c! 1+ branch 65514))
+    (dw (state @ 0jump s-quote-interpret))
+    (dw (tick litstring comma here lit 0 comma))
+    (label s-quote-compile-loop)
+    (dw (getc dup 0jump s-quote-compile-eof))
+    (dw (dup lit 34 <> 0jump s-quote-compile-done))
+    (dw (c-comma jump s-quote-compile-loop))
+    (label s-quote-compile-done)
+    (dw (drop lit 0 c-comma dup here swap - lit 3 - swap ! exit))
+    (label s-quote-compile-eof)
+    (dw (drop lit #xffee throw))
+
+    (label s-quote-interpret)
+    (dw (here))
+    (label s-quote-interpret-loop)
+    (dw (getc dup 0jump s-quote-interpret-eof))
+    (dw (dup lit 34 <> 0jump s-quote-interpret-done))
+    (dw (over c! 1+ jump s-quote-interpret-loop))
+    (label s-quote-interpret-done)
     (dw (drop here - here swap exit))
+    (label s-quote-interpret-eof)
+    (dw (2drop lit #xffee throw))
 
     ,@(defword ".\"" immediate 'dot-quote)
-    (dw (state @ 0branch 14 s-quote tick tell comma branch 26))
-    (dw (getc dup lit 34 = 0branch 6 drop exit emit branch 65514))
-    (dw (exit))
+    (dw (state @ 0jump dot-quote-interpret))
+    (dw (s-quote tick type comma exit))
+    (label dot-quote-interpret)
+    (dw (getc dup 0jump dot-quote-eof))
+    (dw (dup lit 34 <> 0jump dot-quote-done emit jump dot-quote-interpret))
+    (label dot-quote-done)
+    (dw (drop exit))
+    (label dot-quote-eof)
+    (dw (drop lit #xffee throw))
+
+    ;; Run-time and compilation semantics for the standard ABORT" word.
+    ,@(defword "(ABORT\")" hidden 'abort-quote-runtime)
+    (dw (rot 0jump abort-quote-false type lit #xfffe throw))
+    (label abort-quote-false)
+    (dw (2drop exit))
+
+    ,@(defword "ABORT\"" immediate 'abort-quote)
+    (dw (s-quote tick abort-quote-runtime comma exit))
 
     ;; ( -- )
     ;; Exit from the current word.
@@ -1277,14 +1635,21 @@
     (dw (lit 0 exit))
 
     ,@(defword "THROW" 0 'throw)
-    (dw (?dup 0branch 26 handler @ rp! r> handler ! r> swap >r sp! drop))
-    (dw (r> exit))
+    (dw (?dup 0jump throw-zero))
+    (dw (handler @ ?dup 0jump throw-uncaught))
+    (dw (rp! r> handler ! r> swap >r sp! drop r> exit))
+    (label throw-uncaught)
+    ;; ANS leaves an uncaught exception's implementation-defined reporting to
+    ;; the system, but it must not restore a return stack through address zero.
+    (dw (sp0 @ sp! quit))
+    (label throw-zero)
+    (dw (exit))
 
-    ;; Find a word.
-    ;; ( addr -- xt | 0 )
-    ;; Going off standard.  We're returning 0 for a word that is not
-    ;; found, and let other words check if it's immediate or not.
-    ,@(defcode "FIND" 0 'find)
+    ;; Internal dictionary lookup for a private NUL-terminated token.
+    ;; Return its header address rather than its execution token so compiler
+    ;; internals can inspect the header flags.
+    ;; ( c-addr -- header | 0 )
+    ,@(defcode "FIND-HEADER" hidden 'find-header)
     (pop bc)
     (push de)
     ,@bc-to-hl
@@ -1367,6 +1732,87 @@
     (pop hl)
     (ret)
 
+    ;; Standard counted-string dictionary lookup.
+    ;; ( c-addr -- c-addr 0 | xt 1 | xt -1 )
+    ,@(defcode "FIND" 0 'find)
+    (ld (var-temp-cell) de)
+    ;; Retain the original counted-string address for the failure result.
+    (push bc)
+    (ld de (var-latest))
+    (label find-counted-loop)
+    (ld a d)
+    (or e)
+    (jr z find-counted-fail)
+    (push de)                        ; candidate header
+    (inc de)
+    (inc de)
+    (ld a (de))                     ; length and flags
+    (bit 6 a)
+    (jr nz find-counted-retry)
+    (and 31)
+    ;; Fetch the original input address without removing it from the data
+    ;; stack, then retain the candidate header for retry/success handling.
+    (pop de)
+    (pop hl)
+    (push hl)
+    (push de)
+    (cp (hl))
+    (jr nz find-counted-retry)
+    (ld b a)
+    (inc hl)                         ; input characters
+    (inc de)
+    (inc de)
+    (inc de)                         ; dictionary characters
+    (ld a b)
+    (or a)
+    (jr z find-counted-succeed)
+    (label find-counted-compare)
+    (ld a (de))
+    (cp (hl))
+    (jr nz find-counted-retry)
+    (inc de)
+    (inc hl)
+    (djnz find-counted-compare)
+    (label find-counted-succeed)
+    (pop hl)                         ; header
+    (pop bc)                         ; discard original c-addr
+    (inc hl)
+    (inc hl)
+    (ld a (hl))                     ; retain flags in C
+    (ld c a)
+    (and 31)
+    (ld e a)
+    (ld d 0)
+    (inc hl)                         ; first name character
+    (add hl de)
+    (inc hl)                         ; skip private name terminator
+    (push hl)                        ; xt is below the flag result
+    (bit 7 c)
+    (jr nz find-counted-immediate)
+    (ld bc 65535)
+    (jr find-counted-done)
+    (label find-counted-immediate)
+    (ld bc 1)
+    (label find-counted-done)
+    (ld de (var-temp-cell))
+    ,@next
+
+    (label find-counted-retry)
+    (pop de)                         ; candidate header
+    (ld a (de))
+    (ld l a)
+    (inc de)
+    (ld a (de))
+    (ld h a)
+    (ex de hl)                       ; previous header link
+    (jr find-counted-loop)
+
+    (label find-counted-fail)
+    ;; The original c-addr is already below the zero result.
+    (ld bc 0)
+    (ld de (var-temp-cell))
+    ,@next
+
     ;; Not standard compilant.  Doesn't conform to run-time behavior.
     ;; Exactly the same as LIT
     ,@(defcode "(')" 0 'tick)
@@ -1381,7 +1827,7 @@
 
     ;; Correct implementation of tick.
     ,@(defword "'" 0 'run-tick)
-    (dw (word find >cfa exit))
+    (dw (parse-header >cfa exit))
 
     ,@(defcode "," 0 'comma)
     (call _comma)
@@ -1434,11 +1880,14 @@
     (inc hl)
     (inc hl)
     (ld a 128)
-    (xor (hl))
+    (or (hl))
     (ld (hl) a)
     ,@next
 
     ,@(defcode ">CFA" 0 '>cfa)
+    ;; DE is the threaded instruction pointer.  Preserve it while using a
+    ;; temporary DE pair for the name-length offset.
+    (push de)
     (inc bc)
     (inc bc)
     (ld a (bc))
@@ -1450,10 +1899,16 @@
     (add hl bc)
     (inc hl)
     ,@hl-to-bc
+    (pop de)
     ,@next
 
     ,@(defword ">DFA" 0 '>dfa)
     (dw (>cfa lit 3 + exit))
+
+    ;; Standard >BODY consumes an execution token, not an internal header.
+    ;; Created definitions use a three-byte CALL code field.
+    ,@(defword ">BODY" 0 '>body)
+    (dw (lit 3 + exit))
 
     ,@(defword "CFA>" 0 'cfa>)
     (dw (latest @ ?dup 0branch 22 2dup swap))
@@ -1467,6 +1922,14 @@
     ;; Parse a name and create a definition header for it.
 
     ,@(defcode "CREATE_" hidden 'create_)
+    ;; Header flags reserve only five bits for the name length.  TOKEN already
+    ;; enforces this, but keep the primitive safe for internal direct callers.
+    (ld a b)
+    (or a)
+    (jr nz create-name-too-long)
+    (ld a c)
+    (cp 32)
+    (jr nc create-name-too-long)
     (ld hl (var-dp))
     (ld (var-temp-cell) de)
     (ld de (var-latest))
@@ -1524,8 +1987,43 @@
     (pop de)
     ,@next
 
+    (label create-name-too-long)
+    (pop hl)                         ; name address
+    (pop bc)                         ; previous data-stack item
+    ,@next
+
+    ;; Replace the CALL DOCOL code field made by CREATE_ with CALL DOVAR.
+    ;; ( header -- )
+    ,@(defcode "MAKE-DOVAR" hidden 'make-dovar)
+    (ld (var-temp-cell) de)
+    ,@bc-to-hl
+    (inc hl)
+    (inc hl)
+    (ld a (hl))
+    (and 31)
+    (ld e a)
+    (ld d 0)
+    (inc hl)
+    (add hl de)
+    (inc hl)
+    (ld (hl) #xcd)
+    (inc hl)
+    (ld de dovar)
+    (ld (hl) e)
+    (inc hl)
+    (ld (hl) d)
+    (ld de (var-temp-cell))
+    (pop bc)
+    ,@next
+
     ,@(defword "CREATE" 0 'create)
-    (dw (word create_ exit))
+    (dw (token ?dup 0jump create-no-name))
+    (dw (dup lit 32 u< 0jump create-name-too-long-forth))
+    (dw (create_ latest @ make-dovar exit))
+    (label create-name-too-long-forth)
+    (dw (2drop exit))
+    (label create-no-name)
+    (dw (exit))
 
     ,@(defcode "HIDDEN" 0 'hidden)
     ,@bc-to-hl
@@ -1541,11 +2039,9 @@
     ,@bc-to-hl
     (inc hl)
     (inc hl)
-    (ld a 64)
-    (and (hl))
-    (ld b 0)
-    (ld c a)
-    ,@next
+    (bit 6 (hl))
+    (jp nz tru)
+    (jp fal)
 
     ;; STATE is 0 while interpreting.
     ,@(defcode "[" immediate 'lbrac)
@@ -1564,8 +2060,16 @@
     ,@next
 
     ,@(defword ":" 0 'colon)
-    (dw (create latest @))
+    ;; A fresh definition cannot inherit loop fixups from an abandoned
+    ;; compilation (for example, one terminated by ABORT).
+    (dw (lit 0 lit loop-compile-depth ! token ?dup 0jump colon-no-name))
+    (dw (dup lit 32 u< 0jump colon-name-too-long))
+    (dw (create_ latest @))
     (dw (hidden rbrac exit))
+    (label colon-name-too-long)
+    (dw (2drop lbrac exit))
+    (label colon-no-name)
+    (dw (lbrac exit))
 
     ,@(defword ";" immediate 'semicolon)
     (dw (lit exit comma))
@@ -1573,17 +2077,31 @@
     (dw (lbrac exit))
 
     ,@(defword "CONSTANT" 0 'constant)
-    (dw (create tick lit comma comma tick exit comma exit))
+    (dw (token ?dup 0jump constant-no-name))
+    (dw (dup lit 32 u< 0jump constant-name-too-long))
+    (dw (create_))
+    (dw (tick lit comma comma tick exit comma exit))
+    (label constant-name-too-long)
+    (dw (2drop drop exit))
+    (label constant-no-name)
+    (dw (drop exit))
 
     ,@(defword "VALUE" 0 'value)
-    (dw (create tick lit comma comma tick exit comma exit))
+    (dw (token ?dup 0jump value-no-name))
+    (dw (dup lit 32 u< 0jump value-name-too-long))
+    (dw (create_))
+    (dw (tick lit comma comma tick exit comma exit))
+    (label value-name-too-long)
+    (dw (2drop drop exit))
+    (label value-no-name)
+    (dw (drop exit))
 
     ,@(defword "TO" immediate 'to)
-    (dw (word find >dfa cell+ state @ 0branch 20 tick lit comma comma))
+    (dw (parse-header >dfa cell+ state @ 0branch 20 tick lit comma comma))
     (dw (tick ! comma branch 4 ! exit))
 
     ,@(defword "+TO" immediate '+to)
-    (dw (word find >dfa cell+ state @ 0branch 20 tick lit comma comma))
+    (dw (parse-header >dfa cell+ state @ 0branch 20 tick lit comma comma))
     (dw (tick +! comma branch 4 +! exit))
 
     ,@(defcode "(DOES>)" 0 'does-brac)
@@ -1645,6 +2163,12 @@
 
     ,@(defword "QUIT" 0 'quit)
     (label try-more)
+    ;; QUIT establishes the outer interpreter's clean control state.  In
+    ;; particular, no CATCH frame or compiler context may survive a return to
+    ;; the command loop.  The cleanup belongs at the shared loop head so it is
+    ;; also applied after each completed input source.
+    (dw (lit 0 state ! lit 0 handler ! lit 0 lit loop-compile-depth !))
+    (dw (r0 @ rp!))
     (dw (lit ok-msg plot-string cr))
     (dw (lbrac refill 0jump quit-eof))
     (dw (interpret))
@@ -1666,31 +2190,16 @@
     (label quit-eof-msg)
     (db ,(string "Received EOF from input device."))
 
-    (label abort-msg1)
-    (db ,(string "Error "))
-    (label abort-msg2)
-    (db ,(string "occured at "))
-    (label abort-msg3)
-    (db ,(string ">>>"))
-    (label abort-msg4)
-    (db ,(string "<<<"))
-    (label abort-msg5)
-    (db ,(string "Unconsumed input: "))
-
     ,@(defword "ABORT" 0 'abort)
-    (dw (page lit abort-msg1 plot-string))
-    ;; Print error number and rest of error message.
-    (dw (u. lit abort-msg2 plot-string cr lit abort-msg3 plot-string))
-    (dw (lit word-buffer plot-string lit abort-msg4 plot-string cr))
-    (dw (lit abort-msg5 plot-string cr))
-    (dw (lit var-input-ptr @ lit 24 type))
-    (dw (pause poweroff))
+    ;; ABORT is the standard -1 exception when caught; an uncaught THROW
+    ;; below performs the required data-stack reset and outer QUIT.
+    (dw (lit #xffff throw exit))
 
     ,@(defword "INTERPRET" 0 'interpret)
 
     (label interpret-loop)
-    (dw (word ?dup 0jump try-more))
-    (dw (find ?dup 0jump maybe-number))
+    (dw (token ?dup 0jump interpret-done))
+    (dw (find-header ?dup 0jump maybe-number))
     (dw (state @ 0jump interpret-word))
 
     (label compiling-word)
@@ -1704,7 +2213,7 @@
 
 
     (label maybe-number)
-    (dw (lit word-buffer parse-number))
+    (dw (lit token-buffer-data parse-number))
     (dw (num-status @ 0jump num-fail))
     ;; Read a number.
     ;; If we're interpreting, just keep the number on the satck.
@@ -1717,8 +2226,27 @@
     (label num-fail)
     (dw (jump undefined-word))
 
+    (label interpret-done)
+    (dw (lit 0 exit))
+
     (label undefined-word)
     (dw (lit 1 exit))
+
+    ;; Interpret a bounded string while preserving and restoring the complete
+    ;; caller input source, even if the evaluated text throws.
+    ,@(defword "(EVALUATE)" hidden 'evaluate-inner)
+    (dw (source-store interpret ?dup 0jump evaluate-inner-done))
+    (dw (drop lit #xfff3 throw))
+    (label evaluate-inner-done)
+    (dw (exit))
+
+    ,@(defword "EVALUATE" 0 'evaluate)
+    (dw (lit 1 lit var-evaluation-depth +!))
+    (dw (source lit var-to-in @ >r 2>r tick evaluate-inner catch))
+    (dw (lit #xffff lit var-evaluation-depth +!))
+    ;; CATCH left the exception code on the data stack.  Recover the old
+    ;; { address, length, >IN }, reinstall it, then rethrow (zero is a no-op).
+    (dw (2r> r> >r rot >r source-store r> r> lit var-to-in ! throw exit))
 
     ,@(defword "ID." 0 'id.)
     (dw (lit 3 + plot-string exit))
@@ -1728,7 +2256,75 @@
     ))
 
 (define forth-control-words
-  `(,@(defword "IF" immediate 'if)
+  `(;; Runtime setup for DO.  The return stack layout remains
+    ;; { limit, index }, so I and J keep their existing offsets.
+    ,@(defcode "(DO)" hidden 'do-runtime)
+    (pop hl)
+    ,@push-bc-rs
+    ,@push-hl-rs
+    (pop bc)
+    ,@next
+
+    ;; Add the signed increment to the loop index and report whether it
+    ;; crossed the limit.  For a positive step, (new-limit) < step; for a
+    ;; negative step, (limit-new) < -step.  These unsigned modular tests also
+    ;; preserve DO's equal-bounds wrap behavior.
+    ,@(defcode "(+LOOP)" hidden 'plus-loop-runtime)
+    (push de)
+    (ld l (+ ix 2))
+    (ld h (+ ix 3))
+    (add hl bc)
+    (ld (+ ix 2) l)
+    (ld (+ ix 3) h)
+    (bit 7 b)
+    (jr nz plus-loop-negative)
+
+    (ld e (+ ix 0))
+    (ld d (+ ix 1))
+    (or a)
+    (sbc hl de)
+    (call cp-hl-bc)
+    (jr c plus-loop-crossed)
+    (jr plus-loop-continue)
+
+    (label plus-loop-negative)
+    (ld e (+ ix 0))
+    (ld d (+ ix 1))
+    (ex de hl)
+    (or a)
+    (sbc hl de)
+    (ld d b)
+    (ld e c)
+    (ld a e)
+    (cpl)
+    (ld e a)
+    (ld a d)
+    (cpl)
+    (ld d a)
+    (inc de)
+    (call cp-hl-de)
+    (jr nc plus-loop-continue)
+
+    (label plus-loop-crossed)
+    (inc ix)
+    (inc ix)
+    (inc ix)
+    (inc ix)
+    (pop de)
+    (jp tru)
+
+    (label plus-loop-continue)
+    (pop de)
+    (jp fal)
+
+    ,@(defcode "(UNLOOP)" hidden 'loop-cleanup)
+    (inc ix)
+    (inc ix)
+    (inc ix)
+    (inc ix)
+    ,@next
+
+    ,@(defword "IF" immediate 'if)
     (dw (tick 0branch comma here lit 0 comma exit))
 
     ,@(defword "THEN" immediate 'then)
@@ -1754,24 +2350,59 @@
     (dw (dp +! exit))
 
     ,@(defword "VARIABLE" 0 'variable)
-    (dw (here lit 2 allot create tick lit comma comma))
-    (dw (tick exit comma exit))
+    (dw (token ?dup 0jump variable-no-name))
+    (dw (dup lit 32 u< 0jump variable-name-too-long))
+    (dw (create_ latest @ make-dovar))
+    (dw (lit 0 comma exit))
+    (label variable-name-too-long)
+    (dw (2drop exit))
+    (label variable-no-name)
+    (dw (exit))
 
     ,@(defword "REPEAT" immediate 'repeat)
     (dw (tick branch comma swap here - comma))
     (dw (dup here swap - swap ! exit))
 
+    ;; Loop compiler contexts live outside the data-stack control-flow
+    ;; entries used by IF/THEN.  That lets LEAVE appear inside conditionals
+    ;; and supports nested loops.  A context is
+    ;; { loop-start, leave-head }.
     ,@(defword "DO" immediate 'do)
-    (dw (here tick >r comma tick >r comma exit))
+    (dw (lit loop-compile-depth @ lit 16 u< 0jump do-too-deep))
+    (dw (lit loop-compile-depth @ lit 4 * lit loop-compile-contexts +))
+    (dw (tick do-runtime comma))
+    (dw (here over ! lit 0 over lit 2 + ! drop))
+    (dw (lit 1 lit loop-compile-depth +! exit))
+    (label do-too-deep)
+    (dw (abort))
+
+    ;; Complete the current loop and patch its linked list of LEAVEs.
+    ,@(defword "(END-LOOP)" hidden 'end-loop)
+    (dw (lit loop-compile-depth @ ?dup 0jump end-loop-no-loop))
+    (dw (1- lit 4 * lit loop-compile-contexts +))
+    (dw (tick plus-loop-runtime comma tick 0branch comma dup @ here - comma))
+    (dw (dup lit 2 + @))
+    (label end-loop-patch-leaves)
+    (dw (?dup 0jump end-loop-patches-done))
+    (dw (dup @ swap dup here swap - swap ! jump end-loop-patch-leaves))
+    (label end-loop-patches-done)
+    (dw (drop lit 1 lit loop-compile-depth -! exit))
+    (label end-loop-no-loop)
+    (dw (abort))
 
     ,@(defword "LOOP" immediate 'loop)
-    (dw (tick r> comma tick r> comma tick 1+ comma tick 2dup comma))
-    (dw (tick = comma tick 0branch comma here - comma tick 2drop comma exit))
+    (dw (tick lit comma lit 1 comma end-loop exit))
 
     ,@(defword "+LOOP" immediate '+loop)
-    (dw (tick r> comma tick r> comma tick rot comma tick + comma))
-    (dw (tick 2dup comma tick = comma tick 0branch comma here))
-    (dw (- comma tick 2drop comma exit))
+    (dw (end-loop exit))
+
+    ,@(defword "LEAVE" immediate 'leave)
+    (dw (lit loop-compile-depth @ ?dup 0jump leave-no-loop))
+    (dw (1- lit 4 * lit loop-compile-contexts +))
+    (dw (tick loop-cleanup comma tick branch comma here over lit 2 + @ comma))
+    (dw (swap lit 2 + ! exit))
+    (label leave-no-loop)
+    (dw (abort))
 
     ,@(defword "CASE" immediate 'case)
     (dw (lit 0 exit))
@@ -1786,7 +2417,7 @@
     (dw (tick drop comma ?dup 0branch 8 then branch ,(- 65536 10) exit))
 
     ,@(defword "FORGET" 0 'forget)
-    (dw (word find dup @ latest ! dp ! exit))
+    (dw (parse-header dup @ latest ! dp ! exit))
 
     ,@(defcode "I" 0 'curr-loop-index)
     (push bc)
@@ -1811,9 +2442,10 @@
     ,@next-sub
 
     ,@docol-sub
+    ,@dovar-sub
 
     (label tru)
-    (ld bc 1)
+    (ld bc 65535)
     ,@next
 
     (label fal)
@@ -1826,28 +2458,88 @@
   `(,@(defword "PAUSE" 0 'pause)
     (dw (key drop exit))
 
+    ;; Pictured numeric output uses a private descending buffer at the end of
+    ;; PROMPT-SPACE.  HLD is separate from TEMP-CELL because UM/MOD uses the
+    ;; latter while # is formatting a digit.
+    ,@(defword "<#" 0 'less-hash)
+    (dw (lit prompt-space lit 128 + hld ! exit))
+
+    ,@(defword "HOLD" 0 'hold)
+    (dw (lit prompt-space hld @ u< 0jump hold-overflow))
+    (dw (lit 1 hld -! hld @ c! exit))
+    (label hold-overflow)
+    (dw (lit #xffef throw))
+
+    ,@(defword "SIGN" 0 'sign)
+    (dw (0< 0jump sign-done lit 45 hold))
+    (label sign-done)
+    (dw (exit))
+
+    ,@(defword "DIGIT>CHAR" hidden 'digit>char)
+    (dw (dup lit 10 u< 0jump digit-to-letter lit 48 + exit))
+    (label digit-to-letter)
+    (dw (lit 10 - lit 65 + exit))
+
+    ,@(defword "#" 0 'hash)
+    ;; Divide the high cell first, then use its remainder as the high half of
+    ;; the low-cell division.  This produces one base digit and a new double.
+    (dw (lit 0 swap base @ um/mod -rot base @ um/mod))
+    (dw (swap digit>char hold swap exit))
+
+    ,@(defword "#S" 0 'hashes)
+    (label hashes-loop)
+    (dw (hash 2dup or 0jump hashes-done jump hashes-loop))
+    (label hashes-done)
+    (dw (exit))
+
+    ,@(defword "#>" 0 'hash-greater)
+    (dw (2drop hld @ lit prompt-space lit 128 + over - exit))
+
+    ;; Add one digit to an unsigned double after multiplying it by BASE.
+    ;; ( ud digit -- ud' )
+    ,@(defword "D*BASE+" hidden 'd*base+)
+    (dw (>r swap base @ um* rot base @ * + r> >r swap r@ +))
+    (dw (dup r@ u< negate rot + rdrop exit))
+
+    ,@(defword ">NUMBER" 0 '>number)
+    (label to-number-loop)
+    (dw (dup 0jump to-number-done over c@ digit?))
+    (dw (0jump to-number-invalid dup base @ u< 0jump to-number-invalid))
+    (dw (-rot 2>r d*base+ 2r> 1- swap 1+ swap jump to-number-loop))
+    (label to-number-invalid)
+    (dw (drop))
+    (label to-number-done)
+    (dw (exit))
+
     ;; ( num -- )
-    ,@(defword "U." 0 'u._)
-    (dw (base @ /mod ?dup 0branch 4 u._ dup lit 10))
-    (dw (< 0branch 10 lit 48 branch 12 lit 10))
-    (dw (- lit 65 + emit exit))
+    ,@(defword "(U.)" hidden 'u._)
+    (dw (lit 0 less-hash hashes hash-greater type exit))
 
     ,@(defword "U." 0 'u.)
     (dw (u._ space exit))
 
     ,@(defword "." 0 '.)
+    (dw (dup 0< 0jump dot-positive lit 45 emit negate))
+    (label dot-positive)
     (dw (u._ space exit))
 
     ,@(defword "UWIDTH" 0 'uwidth)
-    (dw (base @ / ?dup 0branch 10 uwidth 1+ branch 6))
+    (dw (base @ u-divmod nip ?dup 0branch 10 uwidth 1+ branch 6))
     (dw (lit 1 exit))
 
     ,@(defword "SPACE" 0 'space)
     (dw (lit ,(char->integer #\space) emit exit))
 
     ,@(defword "SPACES" 0 'spaces)
-    (dw (lit 0 >r >r space r> r> 1+ 2dup = 0branch 65518))
-    (dw (2drop exit))
+    ;; A negative count and zero both emit no characters.  Testing the sign
+    ;; bit directly avoids depending on the current signed-comparison words.
+    (dw (dup 0= 0jump spaces-check-sign drop exit))
+    (label spaces-check-sign)
+    (dw (dup lit #x8000 and 0jump spaces-loop drop exit))
+    (label spaces-loop)
+    (dw (space 1- ?dup 0jump spaces-done jump spaces-loop))
+    (label spaces-done)
+    (dw (exit))
 
     ,@(defword "U.R" 0 'u.r)
     (dw (swap dup uwidth rot swap - spaces u._ exit))
@@ -1869,6 +2561,13 @@
 
 
     ))
+
+;; ANS permits a system to report every environmental attribute as
+;; unknown.  Keep this minimal implementation independent of the normal
+;; dictionary search order; individual stable queries can be added later.
+(define forth-environment-words
+  `(,@(defword "ENVIRONMENT?" 0 'environment-query)
+    (dw (2drop false exit))))
 
 (define forth-misc-words
   `(;; Shut down the calculator.
@@ -2018,38 +2717,33 @@
     (add a c)
     (out (6) a)
     (ei)
-    (ld bc 1)
+    (ld bc 65535)
     ,@next
 
     (label invalid-bank-selected)
     (ld bc 0)
     ,@next
 
-    ;; Find the length of a string.
+    ;; Advance past a counted-string length byte and return its count.
+    ;; ( c-addr1 -- c-addr2 u )
     ,@(defcode "COUNT" 0 'count)
-    (push bc)
     ,@bc-to-hl
-    (push af)
+    (ld c (hl))
+    (ld b 0)
+    (inc hl)
     (push hl)
-    (xor a)
-    (ld b a)
-    (ld c a)
-    (cpir)
-    (ld a c)
-    (cpl)
-    (ld c a)
-    (ld a b)
-    (cpl)
-    (ld b a)
-    (pop hl)
-    (pop af)
     ,@next
 
     ,@(defword "SHUTDOWN" 0 'shutdown-forth)
     (dw (pause poweroff exit))
 
     ,@(defword "(" immediate 'comment)
-    (dw (getc lit 41 = 0branch 4 exit branch 65520))
+    (label comment-loop)
+    (dw (getc dup 0jump comment-eof lit 41 <> 0jump comment-done jump comment-loop))
+    (label comment-eof)
+    (dw (drop exit))
+    (label comment-done)
+    (dw (exit))
     ))
 
 (define (defconst name label val)
@@ -2076,7 +2770,9 @@
     ,@(defvar "BASE" 'base 10)
     ;; A temporary cell for making things faster.
     ,@(defvar "TEMP-CELL" 'temp-cell 0)
-    ;; Check if reading a number has failed, since we can't return -1.
+    ;; Pictured numeric output pointer.
+    ,@(defvar "HLD" 'hld 0 hidden)
+    ;; Canonical flag reporting whether PARSE-NUMBER succeeded.
     ,@(defvar "NUM-STATUS" 'num-status 0)
     ;; Start of the data stack.
     ,@(defvar "SP0" 'sp0 0)
@@ -2084,8 +2780,18 @@
     ,@(defvar "R0" 'r0 0)
     ;; Input pointer (used by GETC and UNGETC).
     ,@(defvar "INPUT-PTR" 'input-ptr 0)
+    ;; Standard input source state.  >IN is deliberately writable; every
+    ;; parser read is derived from SOURCE-ADDRESS + >IN.
+    ,@(defvar ">IN" 'to-in 0)
+    ,@(defvar "SOURCE-ADDRESS" 'source-address 0 hidden)
+    ,@(defvar "SOURCE-LENGTH" 'source-length 0 hidden)
+    ;; Nesting depth of EVALUATE, used to give REFILL its required false result
+    ;; for string input sources.
+    ,@(defvar "EVALUATION-DEPTH" 'evaluation-depth 0 hidden)
     ;; Exception handler.
     ,@(defvar "HANDLER" 'handler 0)
+    ;; Number of characters received by EXPECT.
+    ,@(defvar "SPAN" 'span 0)
     ,@(defvar "CURRENT-INPUT-DEVICE" 'current-input-device 0)
     ,@(defconst "H0" 'h0 'dp-start)
     ,@(defconst "OS-END" 'os-end-forth 'os-end)
@@ -2159,14 +2865,18 @@
   `(;; Example of an input device.
     (label string-input-device)
     (call docol)
-    (dw (lit bootstrap-fs lit var-input-ptr !))
-    (dw (lit 1 lit bootstrap-load-bool +! lit bootstrap-load-bool @))
-    (dw (exit))
+    (dw (lit bootstrap-load-bool @ 0jump string-input-eof))
+    (dw (lit bootstrap-fs cstring-source))
+    (dw (lit 0 lit bootstrap-load-bool ! true exit))
+    (label string-input-eof)
+    (dw (false exit))
 
     ;; An input device that should be a prompt.
     ,@(defword "PROMPT" 0 'prompt)
     (dw (lit prompt-space lit 128 expect))
-    (dw (lit prompt-space lit input-buffer lit 128 cmove))
+    (dw (lit prompt-space lit input-buffer span @ cmove))
+    (dw (lit 0 lit input-buffer span @ + c!))
+    (dw (lit input-buffer span @ source-store))
     (dw (true))
     (dw (exit))))
 
@@ -2182,6 +2892,7 @@
     ;; TODO: Fix pre-assigned variable values.
     (dw (lit 65530 sp0 !))
     (dw (lit return-stack-start r0 !))
+    (dw (lit 1 lit bootstrap-load-bool !))
     (dw (lit string-input-device lit var-current-input-device !))
     (dw (quit))
 
@@ -2204,6 +2915,7 @@
     ,@forth-misc-words
     ,@forth-vars
     ,@forth-meta-words
+    ,@forth-environment-words
     ,@forth-input-devices
 
     ,@forth-main
