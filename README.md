@@ -5,10 +5,9 @@
 ![OS animation](demo.gif)
 
 **TLDR:** `assembler.scm` is the assembler, `zkeme80.scm` is the OS.
-To build the rom, run `make build`.  There are no dependencies apart
-from a recent version of Guile, supporting the modules `bytevectors`
-and `srfi-9` records.  Other Scheme implementations have not been
-tested.
+To build the rom, run `make build`.  It requires a recent version of
+Guile plus [Guile-JSON](https://github.com/aconchillo/guile-json).
+Other Scheme implementations have not been tested.
 
 Alternatively, if you're using the Nix package manager on macOS or
 Linux, running `nix-build && ./result/bin/runit` in the root of this repository
@@ -122,6 +121,15 @@ $ nix-build && ./result/bin/runit
 * `zkeme80.scm` is the Forth-based operating system.  Load
   `zkeme80.scm` then run `(make-rom "zkeme80.rom")` to output binary
   to a file `zkeme80.rom`.
+* `debug/` contains reverse-engineering and tracing tools adapted from
+  the TI-84+ OS RE project: Ghidra scripts that apply the build's
+  labelmap (symbols, threaded-code annotations, Forth call graphs)
+  and headless-TilEm macros plus a trace analyzer for dynamic Forth
+  word tracing.  See `debug/README.md`.
+* `docs/boot-process.md` documents how the TI-84+ boots and how
+  zkeme80 satisfies (and where it deviates from) the retail boot
+  process, including the installed-OS handshake at page-0 offset
+  `0x56`.
 * `coverage.org` tracks which Forth words are covered by the on-demand
   test suite; `src/bootstrap-flash4.fs` runs it, and
   `debug/macros/run-test-suite.macro` drives it headlessly under TilEm,

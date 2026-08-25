@@ -1,4 +1,8 @@
-(use-modules (ice-9 match) (rnrs io ports) (rnrs bytevectors) (srfi srfi-9))
+(use-modules (ice-9 match)
+             (json)
+             (rnrs io ports)
+             (rnrs bytevectors)
+             (srfi srfi-9))
 
 ;; set! this to #t to see debugging information.  Note that `lookup`
 ;; will complain a lot but generally it's fine.
@@ -769,6 +773,10 @@
 (define *ram-end*            #f)
 (define *debug-output-file*  #f)
 (define *debug-records*      '())
+;; Forth dictionary metadata collected by DEFWORD/DEFCODE at load time:
+;; each entry is (name flags label-symbol).  Addresses are resolved at
+;; debug-output time because labels only exist after assembly.
+(define *forth-words*        '())
 (define (reset-pc!)          (set! *pc* 0))
 (define (reset-labels!)      (set! *labels* '()))
 (define (reset-debug!)       (set! *debug-records* '()))
@@ -922,40 +930,6 @@
       (else (format #f "~s" expr))))
    (else (format #f "~s" expr))))
 
-(define (write-json-string port s)
-  (display "\"" port)
-  (let loop ((chars (string->list s)))
-    (if (null? chars)
-        (display "\"" port)
-        (let* ((c (car chars))
-               (code (char->integer c)))
-          (cond
-           ((char=? c #\") (display "\\\"" port))
-           ((char=? c #\\) (display "\\\\" port))
-           ((char=? c #\newline) (display "\\n" port))
-           ((char=? c #\tab) (display "\\t" port))
-           ((char=? c #\return) (display "\\r" port))
-           ((char=? c #\backspace) (display "\\b" port))
-           ((char=? c #\page) (display "\\f" port))
-           ((or (< code 32) (> code 126))
-            (format port "\\u~4,'0x" code))
-           (else (display c port)))
-          (loop (cdr chars))))))
-
-(define (write-json-array port items indent write-item)
-  (display "[\n" port)
-  (let loop ((rest items) (first? #t))
-    (if (null? rest)
-        (begin
-          (display indent port)
-          (display "]" port))
-        (begin
-          (if (not first?) (display ",\n" port))
-          (display indent port)
-          (display "  " port)
-          (write-item port (car rest))
-          (loop (cdr rest) #f)))))
-
 (define (label-in-ram? entry)
   (pc-in-ram? (cdr entry)))
 
@@ -971,59 +945,103 @@
         sorted
         (loop (cdr rest) (insert-label (car rest) sorted)))))
 
-(define (write-label-entry port label)
+(define (label-region addr)
+  (if (pc-in-ram? addr) "ram" "flash"))
+
+(define (hex-address addr)
+  (format #f "0x~x" addr))
+
+(define (label->json label)
   (let ((name (symbol->string (car label)))
         (addr (cdr label)))
-    (display "{\"name\": " port)
-    (write-json-string port name)
-    (display ", \"addr\": " port)
-    (display addr port)
-    (display ", \"addr_hex\": " port)
-    (write-json-string port (format #f "0x~x" addr))
-    (display "}" port)))
+    `((name . ,name)
+      (addr . ,addr)
+      (addr_hex . ,(hex-address addr))
+      (region . ,(label-region addr)))))
 
-(define (write-layout-entry port entry)
+;; Keep only the last definition for each (name . label) pair, so
+;; reloading the sources in one Guile session doesn't duplicate entries.
+(define (collect-forth-words)
+  (let loop ((rest (reverse *forth-words*)) (seen '()) (out '()))
+    (if (null? rest)
+        out
+        (let* ((w (car rest))
+               (key (cons (car w) (caddr w))))
+          (loop (cdr rest)
+                (cons key seen)
+                (if (member key seen)
+                    out
+                    (cons w out)))))))
+
+(define (resolve-forth-word w)
+  (let* ((name (car w))
+         (flags (cadr w))
+         (sym (caddr w))
+         (addr (assq-ref *labels* sym)))
+    (and addr
+         (list name flags (symbol->string sym) addr))))
+
+(define (insert-forth-word-desc w sorted)
+  ;; Sort by address descending: latest dictionary definition first.
+  (cond
+   ((null? sorted) (list w))
+   ((>= (list-ref w 3) (list-ref (car sorted) 3)) (cons w sorted))
+   (else (cons (car sorted) (insert-forth-word-desc w (cdr sorted))))))
+
+(define (sorted-forth-words)
+  (let loop ((rest (collect-forth-words))
+             (resolved '()))
+    (if (null? rest)
+        (let loop ((rest resolved) (sorted '()))
+          (if (null? rest)
+              sorted
+              (loop (cdr rest)
+                    (insert-forth-word-desc (car rest) sorted))))
+        (loop (cdr rest)
+              (let ((w (resolve-forth-word (car rest))))
+                (if w (cons w resolved) resolved))))))
+
+(define (forth-word->json w)
+  (match w
+    ((name flags label-sym addr)
+     `((name . ,name)
+       (flags . ,flags)
+       (label . ,label-sym)
+       (addr . ,addr)
+       (addr_hex . ,(hex-address addr))
+       (region . ,(label-region addr))))))
+
+(define (layout-entry->json entry)
   (match entry
     ((addr len op summary)
-     (display "{\"addr\": " port)
-     (display addr port)
-     (display ", \"addr_hex\": " port)
-     (write-json-string port (format #f "0x~x" addr))
-     (display ", \"len\": " port)
-     (display len port)
-     (display ", \"op\": " port)
-     (write-json-string port op)
-     (display ", \"summary\": " port)
-     (write-json-string port summary)
-     (display "}" port))))
+     `((addr . ,addr)
+       (addr_hex . ,(hex-address addr))
+       (len . ,len)
+       (op . ,op)
+       (summary . ,summary)))))
+
+(define (ram-range->json)
+  (if (ram-range-set?)
+      `((start . ,*ram-start*)
+        (start_hex . ,(hex-address *ram-start*))
+        (end . ,*ram-end*)
+        (end_hex . ,(hex-address *ram-end*)))
+      'null))
 
 (define (write-debug-json filename)
-  (let* ((labels (if (ram-range-set?)
-                     (filter label-in-ram? *labels*)
-                     *labels*))
-         (sorted-labels (sort-labels labels))
-         (layout (reverse *debug-records*))
-         (port (open-output-file filename)))
-    (display "{\n" port)
-    (display "  \"ram_range\": " port)
-    (if (ram-range-set?)
-        (begin
-          (display "{\"start\": " port)
-          (display *ram-start* port)
-          (display ", \"start_hex\": " port)
-          (write-json-string port (format #f "0x~x" *ram-start*))
-          (display ", \"end\": " port)
-          (display *ram-end* port)
-          (display ", \"end_hex\": " port)
-          (write-json-string port (format #f "0x~x" *ram-end*))
-          (display "}" port))
-        (display "null" port))
-    (display ",\n  \"labels\": " port)
-    (write-json-array port sorted-labels "  " write-label-entry)
-    (display ",\n  \"layout\": " port)
-    (write-json-array port layout "  " write-layout-entry)
-    (display "\n}\n" port)
-    (close-port port)))
+  (let* ((sorted-labels (sort-labels *labels*))
+         (layout (reverse *debug-records*)))
+    (call-with-output-file filename
+      (lambda (port)
+        (scm->json
+         `((ram_range . ,(ram-range->json))
+           (labels . ,(list->vector (map label->json sorted-labels)))
+           (forth_words . ,(list->vector
+                            (map forth-word->json (sorted-forth-words))))
+           (layout . ,(list->vector (map layout-entry->json layout))))
+         port
+         #:pretty #t)
+        (newline port)))))
 
 (define (assemble-to-file+debug prog filename debug-filename)
   (set! *debug-output-file* debug-filename)
