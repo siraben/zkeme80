@@ -1,7 +1,7 @@
 : LOAD-STAGE3
   3 SET-RAM-MEMA
   IF
-    MEMA INPUT-PTR ! PAGE
+    MEMA CSTRING-SOURCE PAGE
   ELSE
     ." Couldn't load stage 4.  Shutting down." CR
     PAUSE POWEROFF

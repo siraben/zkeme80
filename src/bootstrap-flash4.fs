@@ -1,6 +1,11 @@
+LATEST @
+HERE
+CONSTANT TEST-SUITE-BASE-DP
+CONSTANT TEST-SUITE-BASE-LATEST
+
 : TEST-SUITE-START
 ." The test suite is
-running, please wait..." CR
+ready to run." CR
 ;
 
 : GREETING
@@ -8,14 +13,11 @@ running, please wait..." CR
 suite"
 ;
 
-: PRESS-TO-CONTINUE
-." Press any key to
-continue..." PAUSE CR
-;
-
 \ end of bootstrap definitions
 
-PAGE GREETING CR CR TEST-SUITE-START PAGE
+PAGE GREETING CR CR TEST-SUITE-START CR
+." Press any key to start." CR
+PAUSE PAGE
 
 \ Any word defined from this point on to the end of this stage.  will
 \ be forgotten.
@@ -28,6 +30,10 @@ VARIABLE START-DEPTH
 VARIABLE XCURSOR      \ for ...}T
 
 VARIABLE TEST-FAILED
+
+HERE 1024 CELLS ALLOT CONSTANT FAILED-TESTS
+VARIABLE FAILED-COUNT
+: FAIL-SLOT FAILED-COUNT @ 3 * CELLS FAILED-TESTS + ;
 
 VARIABLE ERROR-XT
 
@@ -48,6 +54,7 @@ VARIABLE ERROR-XT
   \ Need this, why?
   2-
   BEGIN
+    DUP SOURCE DROP U< IF DROP SOURCE DROP EXIT THEN
     DUP C@ 10 =
     IF
       1+ EXIT
@@ -59,6 +66,7 @@ VARIABLE ERROR-XT
 
 : EMIT-UNTIL-NEWLINE
   BEGIN
+    DUP SOURCE + U< 0= IF DROP EXIT THEN
     DUP C@ 10 =
     IF
       DROP EXIT
@@ -86,7 +94,21 @@ VARIABLE SUCCESS-TEST-COUNT
 : ADD-TEST 1 TEST-COUNT +! ;
 : ADD-SUCCESS-TEST 1 SUCCESS-TEST-COUNT +! ;
 
-: REPORT-TESTS PAGE SUCCESS-TEST-COUNT @ . ." / " TEST-COUNT @ . ;
+: REPORT-TESTS
+  BASE @ >R DECIMAL
+  PAGE SUCCESS-TEST-COUNT @ . ." / " TEST-COUNT @ .
+  R> BASE !
+;
+
+: HOLD-RESULTS
+  REPORT-TESTS CR CR
+  ." Press any key to return." CR
+  PAUSE
+  SP0 @ SP!
+  TEST-SUITE-BASE-LATEST LATEST !
+  TEST-SUITE-BASE-DP DP !
+  MENU-DEMO
+;
 
 : T{		\ ( -- ) syntactic sugar.
    ADD-TEST DEPTH START-DEPTH ! 0 XCURSOR ! 0 TEST-FAILED !
@@ -94,9 +116,14 @@ VARIABLE SUCCESS-TEST-COUNT
 
 : ->		\ ( ... -- ) record depth and contents of stack.
    DEPTH DUP ACTUAL-DEPTH !		\ record depth
-   START-DEPTH @ > IF		\ if there is something on the stack
-       DEPTH START-DEPTH @ - 0 DO ACTUAL-RESULTS I CELLS + ! LOOP \ save them
+   DUP START-DEPTH @ < IF
+      DROP 1 TEST-FAILED ! S" STACK UNDERFLOW: " ERROR EXIT
    THEN
+   START-DEPTH @ - DUP 32 > IF
+      DROP 1 TEST-FAILED ! S" TOO MANY RESULTS: " ERROR EXIT
+   THEN
+   DUP 0= IF DROP EXIT THEN
+   0 DO ACTUAL-RESULTS I CELLS + ! LOOP
 ;
 : CLEAR-TITLE 0 0 MAX-COL 5 RECT-AND ;
 
@@ -104,13 +131,16 @@ VARIABLE SUCCESS-TEST-COUNT
 
 : }T		\ ( ... -- ) compare stack (expected) contents with saved
                 \ (actual) contents.
+   TEST-FAILED @ IF EXIT THEN
    DEPTH ACTUAL-DEPTH @ = IF		\ if depths match
       DEPTH START-DEPTH @ > IF		\ if there is something on the stack
          DEPTH START-DEPTH @ - 0 DO	\ for each stack item
             ACTUAL-RESULTS I CELLS + @	\ compare actual with expected
             2DUP <> IF
+               TEST-COUNT @ FAIL-SLOT !
+               2DUP FAIL-SLOT 2 CELLS + ! FAIL-SLOT CELL+ !
                ." E/A: " SWAP . . CR
-               1 TEST-FAILED ! S" INCORRECT RESULT: " ERROR
+               1 FAILED-COUNT +! 1 TEST-FAILED ! S" INCORRECT RESULT: " ERROR
                UPDATE-TEST-STATUS LEAVE
             ELSE
                2DROP
@@ -118,6 +148,7 @@ VARIABLE SUCCESS-TEST-COUNT
          LOOP
       THEN
    ELSE					\ depth mismatch
+      TEST-COUNT @ FAIL-SLOT ! 1 FAILED-COUNT +!
       S" WRONG NUMBER OF RESULTS: " ERROR UPDATE-TEST-STATUS EXIT
    THEN
    TEST-FAILED @ IF EXIT THEN
@@ -166,8 +197,15 @@ T{ 0S 1S XOR -> 1S }T
 T{ 1S 0S XOR -> 1S }T
 T{ 1S 1S XOR -> 0S }T
 
+: POST-DUP POSTPONE DUP ; IMMEDIATE IMMEDIATE
+: POST-DUP-USER 7 POST-DUP + ;
+T{ POST-DUP-USER -> 14 }T
+: POST-LIT POSTPONE LITERAL ; IMMEDIATE
+: POST-LIT-USER [ 9 ] POST-LIT ;
+T{ POST-LIT-USER -> 9 }T
+
 0S CONSTANT <FALSE>
-1 CONSTANT <TRUE>
+1S CONSTANT <TRUE>
 
 T{ TRUE -> <TRUE> }T
 
@@ -230,8 +268,7 @@ T{ 7 3 / -> 7 3 T/ }T
 T{ 0 1 MOD -> 0 1 TMOD }T
 T{ 1 1 MOD -> 1 1 TMOD }T
 T{ 2 1 MOD -> 2 1 TMOD }T
-
-T{ 0 0= -> 1 }T
+T{ 0 0= -> <TRUE> }T
 T{ 1 0= -> 0 }T
 T{ 2 0= -> 0 }T
 
@@ -254,7 +291,7 @@ T{ 1 1 <= -> <TRUE>  }T
 T{   0 1 10 WITHIN -> <FALSE> }T
 T{   1 1 10 WITHIN -> <TRUE> }T
 T{   4 0 10 WITHIN -> <TRUE> }T
-T{  10 0 10 WITHIN -> <TRUE> }T
+T{  10 0 10 WITHIN -> <FALSE> }T
 T{  11 0 10 WITHIN -> <FALSE> }T
 
 T{ 0 1 DEPTH -> 0 1 2 }T
@@ -305,10 +342,10 @@ T{ 4 1 GD3 -> 1 2 3 }T
 
 T{ : GD5 123 SWAP 0 DO
      I 4 > IF DROP 234 LEAVE THEN
-   LOOP ; -> }T
-T{ 1 GD5 -> 123 }T
-T{ 5 GD5 -> 123 }T
-T{ 6 GD5 -> 234 }T
+   LOOP 345 ; -> }T
+T{ 1 GD5 -> 123 345 }T
+T{ 5 GD5 -> 123 345 }T
+T{ 6 GD5 -> 234 345 }T
 
 T{ : GD6 ( PAT: {0 0},{0 0}{1 0}{1 1},{0 0}{1 0}{1 1}{2 0}{2 1}{2 2} )
       0 SWAP 0 DO
@@ -381,7 +418,7 @@ HERE 2 ,
 CONSTANT 2ND
 CONSTANT 1ST
 
-T{       1ST 2ND < -> 1    }T \ HERE MUST GROW WITH ALLOT
+T{       1ST 2ND < -> <TRUE> }T \ HERE MUST GROW WITH ALLOT
 T{       1ST CELL+  -> 2ND }T \ ... BY ONE CELL
 T{   1ST 1 CELLS +  -> 2ND }T
 T{     1ST @ 2ND @  -> 1 2 }T
@@ -414,7 +451,7 @@ HERE 1 ALLOT
 HERE
 CONSTANT 2NDA
 CONSTANT 1STA
-T{ 1STA 2NDA <  ->      1 }T         \ HERE MUST GROW WITH ALLOT
+T{ 1STA 2NDA <  -> <TRUE> }T         \ HERE MUST GROW WITH ALLOT
 T{      1STA 1+ ->   2NDA }T    \ ... BY ONE ADDRESS UNIT
 
 
@@ -423,7 +460,7 @@ HERE 2 C,
 CONSTANT 2NDC
 CONSTANT 1STC
 
-T{    1STC 2NDC < ->   1 }T	\ HERE MUST GROW WITH ALLOT
+T{    1STC 2NDC < -> <TRUE> }T	\ HERE MUST GROW WITH ALLOT
 T{      1STC CHAR+ ->  2NDC  }T	\ ... BY ONE CHAR
 T{  1STC 1 CHARS + ->  2NDC  }T
 T{ 1STC C@ 2NDC C@ ->   1 2  }T
@@ -452,35 +489,8 @@ T{        V1 @ -> 234 }T
 T{   111 V1 -! ->     }T
 T{        V1 @ -> 123 }T
 
-: GS3 WORD DROP COUNT SWAP C@ ;
+: GS3 BL WORD COUNT SWAP C@ ;
 T{ GS3 HELLO -> 5 CHAR H }T
-
-\ : OUTPUT-TEST
-\    PAGE
-\    ." YOU SHOULD SEE THE STANDARD GRAPHIC CHARACTERS:" CR
-\    65 BL DO I EMIT LOOP CR
-\    97 65 DO I EMIT LOOP CR
-\    127 97 DO I EMIT LOOP CR
-\    PAGE
-\    ." YOU SHOULD SEE 0-9 SEPARATED BY A SPACE:" CR
-\    9 1+ 0 DO I . LOOP CR
-\    PAGE
-\    ." YOU SHOULD SEE 0-9 (WITH NO SPACES):" CR
-\    [ CHAR 9 ] LITERAL 1+ [ CHAR 0 ] LITERAL DO I EMIT LOOP CR
-\    PAGE
-\    ." YOU SHOULD SEE A-G SEPARATED BY A SPACE:" CR
-\    [ CHAR G ] LITERAL 1+ [ CHAR A ] LITERAL DO I EMIT SPACE LOOP CR
-\    PAGE
-\    ." YOU SHOULD SEE 0-5 SEPARATED BY TWO SPACES:" CR
-\    5 1+ 0 DO I [ CHAR 0 ] LITERAL + EMIT 2 SPACES LOOP CR
-\    PAGE
-\    ." YOU SHOULD SEE TWO SEPARATE LINES:" CR
-\    S" LINE 1" TYPE CR S" LINE 2" TYPE CR
-\    PAGE
-\ ;
-
-\ Optional output test, may dizzy the user.
-\ T{ OUTPUT-TEST -> }T
 
 \ Test exceptions.
 : T1 9 ;
@@ -544,154 +554,143 @@ HERE 256 CELLS ALLOT CONSTANT SARRAY
 
 DECIMAL
 
-\ RC4 known-answer tests; bytes stay decimal because NUM? is digit-only.
-
-\ Vector 1: key "Wiki" encrypting "pedia" gives 10 21 BF 04 20.
 HERE 87 C, 105 C, 107 C, 105 C, CONSTANT WIKI-KEY
 T{ WIKI-KEY 4 RC4-INIT
    112 RC4-BYTE 101 RC4-BYTE 100 RC4-BYTE 105 RC4-BYTE 97 RC4-BYTE
    -> 16 33 191 4 32 }T
 
-\ Vector 2: key "Key" encrypting "Plaintext" gives
-\ 187 243 22 232 217 64 175 10 211.
 HERE 75 C, 101 C, 121 C, CONSTANT KEY3-KEY
 T{ KEY3-KEY 3 RC4-INIT
    80 RC4-BYTE 108 RC4-BYTE 97 RC4-BYTE 105 RC4-BYTE 110 RC4-BYTE
    116 RC4-BYTE 101 RC4-BYTE 120 RC4-BYTE 116 RC4-BYTE
    -> 187 243 22 232 217 64 175 10 211 }T
 
-\ Extended kernel regression coverage.
-\ <> and FALSE.
-T{ 0 0 <> -> 0 }T
-T{ 1 2 <> -> 1 }T
-T{ 1 65535 <> -> 1 }T
+T{ 0 0 <> -> <FALSE> }T
+T{ 1 2 <> -> <TRUE> }T
+T{ 1 65535 <> -> <TRUE> }T
 T{ FALSE -> 0 }T
 
-\ Low-16-bit multiplication.
-T{ 255 257 * -> 65535 }T
-T{ 300 300 * -> 24464 }T
-T{ 65535 DUP * -> 1 }T
+T{ -2 3 M* -> -6 -1 }T
+T{ 65535 2 UM* -> 65534 1 }T
+T{ 0 1 65535 UM/MOD -> 1 1 }T
+T{ 0 32768 65535 UM/MOD -> 32768 32768 }T
+T{ 30000 7 /MOD -> 5 4285 }T
+T{ -7 S>D 3 SM/REM -> -1 -2 }T
+T{ -7 S>D 3 FM/MOD -> 2 -3 }T
+T{ 7 8 3 */MOD -> 2 18 }T
+T{ -7 3 /MOD -> -1 -2 }T
+T{ -1 1 < -> <TRUE> }T
+T{ -1 1 > -> <FALSE> }T
+T{ -1 1 U< -> <FALSE> }T
+T{ -3 2/ -> -2 }T
 
-\ /MOD and MOD results.
-T{ 40000 7 /MOD -> 2 5714 }T
-T{ 65535 DUP /MOD -> 0 1 }T
-T{ 7 9 MOD -> 7 }T
-T{ 0 7 - 3 /MOD -> 0 21843 }T
-
-\ Unsigned comparisons and logical 2/.
-T{ 0 1- 1 < -> 0 }T
-T{ 0 1- 1 > -> 1 }T
-T{ 0 4 - 2/ -> 32766 }T
-
-\ Number parsing wraps at 16 bits and accepts digits only.
 T{ 65536 -> 0 }T
-T{ 99999 -> 34463 }T
 T{ 00042 -> 42 }T
+T{ -123 -> 0 123 - }T
+T{ 0 0 S" 12Z" >NUMBER 2DROP -> 12 0 }T
+10 CONSTANT DECIMAL-TEN
+HEX
+T{ A -> DECIMAL-TEN }T
+T{ -8000 -> 8000 }T
+DECIMAL
 
-\ NOT, RECURSE, AGAIN.
-T{ 0 NOT -> 1 }T
+T{ 0 NOT -> <TRUE> }T
 T{ 5 NOT -> 0 }T
 T{ : RSUM DUP 0 <> IF DUP 1- RECURSE + THEN ; -> }T
 T{ 5 RSUM -> 15 }T
 T{ : AG1 BEGIN 1+ DUP 3 = IF EXIT THEN AGAIN ; -> }T
 T{ 0 AG1 -> 3 }T
 
-\ DO +LOOP in both directions.
-T{ : PL1 10 0 DO I 2 +LOOP ; -> }T
-T{ PL1 -> 0 2 4 6 8 }T
-T{ : PL2 0 10 DO I 0 1- +LOOP ; -> }T
-T{ PL2 -> 10 9 8 7 6 5 4 3 2 1 }T
-
-\ Unsigned MAX and MIN.
+T{ : PL1 10 0 DO I 3 +LOOP ; -> }T
+T{ PL1 -> 0 3 6 9 }T
+T{ : PL2 0 10 DO I -3 +LOOP ; -> }T
+T{ PL2 -> 10 7 4 1 }T
 T{ 1 2 MAX -> 2 }T
 T{ 1 2 MIN -> 1 }T
-T{ 0 1- 1 MAX -> 65535 }T
-T{ 0 1- 1 MIN -> 1 }T
+T{ -1 1 MAX -> 1 }T
+T{ -1 1 MIN -> -1 }T
 
-\ UWIDTH in decimal.
 T{ 0 UWIDTH -> 1 }T
-T{ 9999 UWIDTH -> 4 }T
-T{ 65535 UWIDTH -> 5 }T
+T{ 123 0 <# #S #> NIP -> 3 }T
+T{ 0 0 <# 65 HOLD #> DROP C@ -> 65 }T
+T{ 0 0 <# -1 SIGN #> DROP C@ -> 45 }T
 
-\ VALUE with ANS-style TO and +TO.
 T{ 0 VALUE TV1 -> }T
 T{ 5 TO TV1 TV1 -> 5 }T
 T{ 2 +TO TV1 TV1 -> 7 }T
 
-\ Compiler primitives.
-T{ HERE 1 , HERE 2- = -> 1 }T
-T{ HERE 65 C, HERE 1- = -> 1 }T
-T{ HERE 4 ALLOT HERE SWAP - 4 = -> 1 }T
+T{ HERE 1 , HERE 2- = -> <TRUE> }T
+T{ HERE 65 C, HERE 1- = -> <TRUE> }T
+T{ HERE 4 ALLOT HERE SWAP - 4 = -> <TRUE> }T
 
-\ Bracket interpretation during compilation.
 VARIABLE BRACK-VISITS
 T{ : BRACKET-TEST [ 1 BRACK-VISITS ! ] ; -> }T
 T{ BRACKET-TEST BRACK-VISITS @ -> 1 }T
 
-\ Stack pointer introspection.
-T{ SP@ SP@ SWAP 2 - = -> 1 }T
-T{ : RW1 RP@ ; RP@ RW1 > -> 1 }T
+T{ SP@ SP@ SWAP 2 - = -> <TRUE> }T
+T{ : RW1 RP@ ; RP@ RW1 > -> <TRUE> }T
 
-\ Dictionary-space accounting.
-T{ USED UNUSED + H0 + 49152 = -> 1 }T
+T{ USED UNUSED + H0 + 49152 = -> <TRUE> }T
 
-\ S" and COUNT.
-T{ S" ABC" DROP COUNT SWAP C@ -> 3 65 }T
+T{ S" ABC" SWAP C@ -> 3 65 }T
 : LS1 S" ABC" ;
-T{ LS1 DROP COUNT SWAP C@ -> 3 65 }T
+T{ LS1 SWAP C@ -> 3 65 }T
 
-\ Stack restoration and overlapping memory moves.
 T{ 1 2 3 SP@ 2+ SP! -> 1 2 }T
 HERE 65 C, 66 C, 67 C, 68 C, 69 C, CONSTANT OV-BUF
-T{ OV-BUF OV-BUF 2+ 3 CMOVE> OV-BUF 2+ C@ OV-BUF 3 + C@ OV-BUF 4 + C@ -> 65 66 67 }T
-T{ OV-BUF 2+ OV-BUF 3 CMOVE OV-BUF C@ OV-BUF 1+ C@ OV-BUF 2+ C@ -> 65 66 67 }T
-T{ OV-BUF DUP 0 CMOVE OV-BUF C@ -> 65 }T
-T{ OV-BUF DUP 0 CMOVE> OV-BUF C@ -> 65 }T
+T{ HERE ALIGNED HERE = -> <TRUE> }T
+T{ HERE ALIGN HERE = -> <TRUE> }T
+T{ OV-BUF OV-BUF 2+ 3 MOVE OV-BUF 2+ C@ OV-BUF 3 + C@ OV-BUF 4 + C@ -> 65 66 67 }T
+T{ OV-BUF 5 88 FILL OV-BUF C@ OV-BUF 4 + C@ -> 88 88 }T
+T{ OV-BUF 0 89 FILL OV-BUF DUP 0 MOVE OV-BUF C@ -> 88 }T
+T{ OV-BUF 0 TYPE -> }T
+T{ 0 SPACES -> }T
+T{ 123 1 U.R -> }T
+T{ SP@ 282 U. SP@ SWAP 2- = -> <TRUE> }T
 
-\ Dictionary introspection, flags, defining words, and FORGET.
-: FIND-NEXT WORD FIND ;
-T{ FIND-NEXT DUP 0= -> 0 }T
-T{ FIND-NEXT ZZQ -> 0 }T
-T{ FIND-NEXT DUP >CFA ' DUP = -> 1 }T
-T{ FIND-NEXT DUP DUP >CFA CFA> = -> 1 }T
-123 CONSTANT DVC
-T{ FIND-NEXT DVC >DFA CELL+ @ -> 123 }T
-T{ FIND-NEXT ; ?IMMEDIATE -> 1 }T
-T{ FIND-NEXT DUP ?IMMEDIATE -> 0 }T
-: HID-MARK 77 ;
-FIND-NEXT HID-MARK CONSTANT HID-HEADER
-T{ HID-HEADER ?HIDDEN -> 0 }T
-HID-HEADER HIDDEN
-T{ HID-HEADER ?HIDDEN -> 64 }T
-T{ FIND-NEXT HID-MARK -> 0 }T
-HID-HEADER HIDDEN
-T{ FIND-NEXT HID-MARK HID-HEADER = -> 1 }T
+: WORD-NEXT BL WORD ;
+: FIND-NEXT WORD-NEXT FIND ;
+T{ WORD-NEXT ABC COUNT SWAP C@ -> 3 65 }T
+T{ FIND-NEXT ZZQ SWAP WORD-BUF = -> 0 <TRUE> }T
+T{ FIND-NEXT DUP NIP -> -1 }T
+T{ FIND-NEXT ; NIP -> 1 }T
+T{ V1 ' V1 >BODY = -> <TRUE> }T
+CREATE CREATE-BUF 2 ALLOT
+T{ CREATE-BUF ' CREATE-BUF >BODY = -> <TRUE> }T
+T{ 321 CREATE-BUF ! CREATE-BUF @ -> 321 }T
+T{ FIND-NEXT POST-DUP NIP -> 1 }T
 T{ : DC1 CREATE , DOES> @ 2* ; 21 DC1 DC2 DC2 -> 42 }T
 T{ : FG-MARK 99 ; FG-MARK -> 99 }T
 FORGET FG-MARK
-T{ FIND-NEXT FG-MARK -> 0 }T
+T{ FIND-NEXT FG-MARK SWAP WORD-BUF = -> 0 <TRUE> }T
 
-\ Character classification and number parsing.
-T{ 48 NUM? 57 NUM? 47 NUM? 58 NUM? -> 1 1 0 0 }T
+T{ 48 NUM? 57 NUM? 47 NUM? 58 NUM? -> <TRUE> <TRUE> 0 0 }T
 T{ 47 TO-ASCII 9 TO-ASCII 0 TO-ASCII -> 65 10 0 }T
+T{ 128 TO-ASCII 65535 TO-ASCII -> 0 0 }T
 HERE 49 C, 50 C, 51 C, 0 C, CONSTANT PN-GOOD
-T{ PN-GOOD PARSE-NUMBER NUM-STATUS @ -> 123 1 }T
+T{ PN-GOOD PARSE-NUMBER NUM-STATUS @ -> 123 <TRUE> }T
 HERE 65 C, 0 C, CONSTANT PN-BAD
 T{ PN-BAD PARSE-NUMBER NUM-STATUS @ -> 0 }T
 
-\ Interrupt state controls preserve the data stack.
 T{ DISABLE-INTERRUPTS ENABLE-INTERRUPTS -> }T
 
-\ Final report: the suite's single interactive point.
-PAGE REPORT-TESTS CR CR
-." Press any key to unload
-test words"
-PAUSE
+HERE 1 C, 88 C, CONSTANT ENQ
+T{ ENQ 1 ENVIRONMENT? -> 0 }T
 
-." Unloading test suite
-words to save on space" CR CR
-USED
-FORGET TEST-SUITE-START
-USED - . ." bytes freed." CR
+VARIABLE EV
+T{ S" 123 EV !" EVALUATE EV @ -> 123 }T
+: EV2 S" 5 6 +" EVALUATE ;
+T{ EV2 -> 11 }T
+: EVSRC SOURCE NIP >IN @ = ;
+T{ S" EVSRC" EVALUATE -> <TRUE> }T
+T{ S" REFILL" EVALUATE -> <FALSE> }T
+: EVBAD S" ABORT" EVALUATE ;
+T{ ' EVBAD CATCH -> -1 }T
+: AB1 ABORT ;
+T{ ' AB1 CATCH -> -1 }T
+: ABQ1 1 ABORT" Q" ;
+: ABQ0 0 ABORT" Q" ;
+T{ ' ABQ1 CATCH -> -2 }T
+T{ ' ABQ0 CATCH -> 0 }T
 
-MENU-DEMO
+HOLD-RESULTS

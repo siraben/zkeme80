@@ -100,7 +100,7 @@ DRAW-LOADING-DOT
 : LOAD-TEST-SUITE
   4 SET-RAM-MEMA
   IF
-    MEMA INPUT-PTR !
+    MEMA CSTRING-SOURCE
   ELSE
     ." Couldn't load the test
 suite.  Shutting down." CR
@@ -111,7 +111,7 @@ suite.  Shutting down." CR
 : LOAD-SHELL
   5 SET-RAM-MEMA
   IF
-    MEMA INPUT-PTR !
+    MEMA CSTRING-SOURCE
   ELSE
     ." Couldn't load the test
 suite.  Shutting down." CR
@@ -121,10 +121,11 @@ suite.  Shutting down." CR
 
 \ Bit shifts are not fast!
 
-: RSHIFT ?DUP IF 0 DO 2/ LOOP THEN ;
 : LSHIFT ?DUP IF 0 DO 2* LOOP THEN ;
 
-: TYPE 0 DO DUP C@ EMIT 1+ LOOP DROP ;
+: TYPE ( c-addr u -- )
+  ?DUP IF 0 DO DUP C@ EMIT 1+ LOOP THEN DROP
+;
 
 : UNLOOP    ( -- , r: i limit -- : remove limit and i from  )
         R>           ( save our return address )
@@ -132,16 +133,6 @@ suite.  Shutting down." CR
         RDROP        ( pop off limit )
         >R
 ;
-
-\ This is not correct.  It should break out to the words following the
-\ DO ... LOOP construct, rather than existing the currently running
-\ word entirely.
-
-: LEAVE ( -- , r: i limit return -- : break out of a do-loop construct )
-  UNLOOP
-  RDROP
-; ( return to the caller's caller routine )
-
 
 : BEGIN-STRUCTURE  \ -- addr 0 ; -- size
    CREATE
@@ -240,8 +231,7 @@ END-STRUCTURE
 
 : NEW-MENU-ENTRY ( x y [parse: "name"] -- )
   MENU-ENTRIES \ addr to write to
-  HERE DUP MENU-ENTRY ALLOT CREATE
-  ['] LIT , , ['] EXIT ,
+  HERE DUP MENU-ENTRY ALLOT CONSTANT
   SWAP !
 ;
 
@@ -410,7 +400,7 @@ VARIABLE CURRENT-TITLE
 DRAW-LOADING-DOT
 
 \ Is n an arrow key?
-: ARROW-KEY?    ( n -- b ) DUP 1 4 WITHIN SWAP 9 = OR ;
+: ARROW-KEY?    ( n -- b ) DUP 1 5 WITHIN SWAP 9 = OR ;
 \ Block until an arrow key is read.
 : GET-ARROW-KEY ( -- k ) BEGIN KEYC DUP ARROW-KEY? IF EXIT THEN DROP AGAIN ;
 \ Set the click flag iff the xt is not null.

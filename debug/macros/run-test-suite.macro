@@ -1,0 +1,28 @@
+# Drive the full on-demand test suite headlessly.
+#
+# The suite waits at its introduction and final tally.  The screenshot and
+# RAM dump land next to this macro, then the final key returns to the menu.
+#
+# The physical DOWN key reaches MAYBE-UPDATE-XY's INC-YPOS arm and selects
+# the bottom row.
+set key_hold 0.25s
+set key_delay 0.05s
+key ON
+wait 10s
+key RIGHT
+wait 0.3s
+key DOWN
+wait 0.3s
+screenshot debug/macros/MENU_BEFORE.png
+memdump debug/macros/BEFORE_SUITE_RAM ram-logical
+key ENTER
+wait 2s
+screenshot debug/macros/TEST_INTRO.png
+key ENTER
+wait 45s
+screenshot debug/macros/TALLY.png
+memdump debug/macros/SUITE_RAM ram-logical
+key ENTER
+wait 2s
+screenshot debug/macros/BACK_AT_MENU.png
+memdump debug/macros/AFTER_SUITE_RAM ram-logical

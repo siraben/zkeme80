@@ -8,5 +8,7 @@ zkeme80.ram-labelmap.json
 *.sav
 __pycache__/
 *.py[cod]
-/re/macros/*.png
-/re/macros/SUITE_RAM
+/debug/macros/*.png
+/debug/macros/SUITE_RAM
+/debug/macros/BEFORE_SUITE_RAM
+/debug/macros/AFTER_SUITE_RAM
