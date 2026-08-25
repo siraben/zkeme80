@@ -1,16 +1,41 @@
 # Designing a good shell
 
+## Current implementation
+
+Flash page 5 now starts an interactive Forth REPL.  Alphabetic input is
+the default; press `2ND` before a digit or arithmetic symbol.  `DEL`
+backspaces, `HELP` prints the on-device summary, and `BYE` unloads the
+transient shell words and returns to the menu.
+
+The editor accepts up to 128 bytes and wraps across display rows.  Left and
+right move through the complete buffer, including across visual row
+boundaries; typed characters overwrite at the cursor, and `DEL` removes the
+character before it.  The filled block cursor follows the edited byte.
+Command output is preserved between prompts, and the framebuffer scrolls by
+one text row whenever the wrapped field reaches the bottom.
+
+Up and down navigate a circular command history.  It has 512 entry slots and
+a 4096-byte shared text ring: all 512 one-character commands fit, while long
+commands evict the oldest entries once their combined text fills the ring.
+Moving down past the newest entry restores the draft that was present before
+history navigation.
+
+On the calculator, alphabetic legends are direct and `2ND` selects numbers
+and punctuation.  The project TilEm launcher maps every printable desktop
+ASCII key into those physical key sequences; desktop letters normalize to
+uppercase because the Forth shell is uppercase-oriented.
+
+## Roadmap
+
 A good shell is the heart of an operating system.  Let's make
 something that's easy to use and is inspired by the TI operating
 system (TI-OS).  What does TI-OS do well?  I think it comes down to
 the following things.
     
 - Cursor movement
-  - Ability to see cursor and scroll back and forth using left/right
-    arrow keys.
-    - Fast cursor movement.
-      - Go to the beginning of the line with `2ND <-`.
-      - Go to the end of the line with `2ND ->`.
+  - Fast cursor movement.
+    - Go to the beginning of the line with `2ND <-`.
+    - Go to the end of the line with `2ND ->`.
   - `ALPHA` locking (by pressing `2ND ALPHA`).
 - Modal editing
   - Pressing `CLEAR` clears the current input line.
@@ -21,11 +46,9 @@ the following things.
     changes to an underscore and point (an Emacs terminology) is
     placed just before it.
     - On input, the field shifts to the right by 1.
-  - Pressing `DEL` shifts the field to the left by 1 and deletes the
-    character just after point.
+  - Insert mode changes `DEL` to delete the character just after point;
+    overwrite mode keeps its current backspace behavior.
 - Command history
-  - Pressing the up/down arrow keys allows you to scroll back to
-    previous history entries results.
   - Pressing `ENTER` allows you to paste into the current input the
     currently highlighted expression, either entry or result.
 

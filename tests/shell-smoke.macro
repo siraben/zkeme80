@@ -1,0 +1,74 @@
+# Boot, enter the top-right shell, exercise its editor/REPL, then exit.
+set key_hold 0.25s
+set key_delay 0.06s
+
+key ON
+wait 10s
+key RIGHT
+wait 0.3s
+key ENTER
+wait 10s
+screenshot /tmp/zkeme80-shell-start.png
+
+scanstring "HELP"
+wait 0.2s
+key ENTER
+wait 0.3s
+key ENTER
+wait 0.8s
+screenshot /tmp/zkeme80-shell-help.png
+
+# DEL must turn STAX into STAR before evaluation.
+scanstring "STAX"
+wait 0.2s
+key DEL
+wait 0.2s
+scanstring "R"
+wait 0.2s
+key ENTER
+wait 0.3s
+key ENTER
+wait 0.8s
+screenshot /tmp/zkeme80-shell-backspace.png
+
+# Alphabetic mode is default.  2ND selects a numeric/symbol key once.
+key 2ND
+wait 0.5s
+key 2
+wait 0.5s
+scanstring " "
+key 2ND
+wait 0.5s
+key 3
+wait 0.5s
+scanstring " "
+key 2ND
+wait 0.5s
+key ADD
+wait 0.5s
+scanstring " ."
+wait 0.2s
+screenshot /tmp/zkeme80-shell-arithmetic-input.png
+memdump /tmp/zkeme80-shell-arithmetic-input.ram ram-logical
+key ENTER
+wait 0.5s
+screenshot /tmp/zkeme80-shell-arithmetic.png
+
+# An unknown word must report an error and leave the REPL usable.
+scanstring "NOPE"
+wait 0.2s
+key ENTER
+wait 0.8s
+screenshot /tmp/zkeme80-shell-error.png
+
+scanstring "STAR"
+wait 0.2s
+key ENTER
+wait 0.8s
+screenshot /tmp/zkeme80-shell-recovery.png
+
+scanstring "BYE"
+wait 0.2s
+key ENTER
+wait 2s
+screenshot /tmp/zkeme80-shell-menu.png

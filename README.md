@@ -4,6 +4,12 @@
 ![OS screenshot](screenshot.png)
 ![OS animation](demo.gif)
 
+The interactive Forth shell supports wrapped 128-byte editing, a filled block
+cursor, 512-slot command history, shifted numeric and symbol input, error
+recovery, transcript scrolling, and a clean return to the menu:
+
+![Interactive Forth shell](docs/shell-demo.gif)
+
 **TLDR:** `assembler.scm` is the assembler, `zkeme80.scm` is the OS.
 To build the rom, run `make build`.  It requires a recent version of
 Guile plus [Guile-JSON](https://github.com/aconchillo/guile-json).
@@ -92,12 +98,25 @@ in the same directory.  Simply pass that file to an emulator such as
 [jsTIfied](https://www.cemetech.net/projects/jstified/) (works in the
 browser) and start playing around!
 
-Running just `make` builds and runs the project, but assumes that you
+Running `make all` builds and runs the project, but assumes that you
 have already properly built `tilem` and can run it with `tilem2` on
 the shell, and have Guile installed.  Be warned, though, `tilem` is
 tricky to build and you have to enable all sorts of flags and install
 dependencies.  If anyone knows a good emulator for macOS, please let
 me know.
+
+The project launcher gives TilEm isolated typewriter-style bindings for
+the interactive shell.  In particular, host `a`, `s`, and `t` type `A`, `S`,
+and `T` instead of using TilEm's stock calculator-function shortcuts.  All
+printable ASCII keyboard keys are mapped; letters normalize to uppercase.
+To launch a built ROM manually with the same mappings, run:
+
+```shell
+sh debug/run-tilem.sh debug/tilem-keybindings.ini tilem2 -r zkeme80.rom
+```
+
+This does not replace your personal TilEm configuration.  Invoking `tilem2`
+directly continues to use TilEm's stock calculator-function shortcuts.
 
 ### Using the Nix package manager (macOS or Linux)
 If you're using the Nix package manager, just clone the repository and

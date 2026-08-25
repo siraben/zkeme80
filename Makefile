@@ -3,7 +3,7 @@ build:
 
 all:
 	cd src && make build && cp zkeme80.rom zkeme80.ram-labelmap.json ../
-	tilem2 -r zkeme80.rom
+	sh debug/run-tilem.sh debug/tilem-keybindings.ini tilem2 -r zkeme80.rom
 
 upgrade:
 	cd src && make build

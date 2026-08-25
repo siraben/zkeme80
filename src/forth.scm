@@ -882,6 +882,38 @@
     (call fast-copy)
     ,@next
 
+    ;; Scroll the framebuffer upward by one six-pixel text row.
+    ,@(defcode "SCROLL" 0 'scroll)
+    (push bc)
+    (push de)
+    (push hl)
+    (push iy)
+    (ld hl screen-buffer-scroll-source)
+    (ld de screen-buffer)
+    (ld bc ,(- 768 72))
+    (ldir)
+    ;; Clear the six rows exposed at the bottom.
+    (xor a)
+    (ld (de) a)
+    (ld h d)
+    (ld l e)
+    (inc de)
+    (ld bc 71)
+    (ldir)
+    (ld a (var-cur-row))
+    (sub 6)
+    (jr nc scroll-save-row)
+    (xor a)
+    (label scroll-save-row)
+    (ld (var-cur-row) a)
+    (ld iy screen-buffer)
+    (call fast-copy)
+    (pop iy)
+    (pop hl)
+    (pop de)
+    (pop bc)
+    ,@next
+
     ,@(defword "PAGE" 0 'page)
     (dw (clear-screen origin exit))
 
@@ -1054,14 +1086,53 @@
     (pop bc)
     ,@next
 
-    ;; Type n characters starting at addr.
+    ;; Type exactly n characters starting at addr.  Rendering the complete
+    ;; span in the framebuffer before one fast-copy keeps wrapped editing
+    ;; responsive; the old threaded EMIT loop copied all 768 bytes per glyph.
     ;; ( addr n -- )
-    ,@(defword "TYPE" 0 'type)
-    (label type-loop)
-    (dw (?dup 0jump type-done))
-    (dw (1- swap dup c@ emit 1+ swap jump type-loop))
-    (label type-done)
-    (dw (drop exit))
+    ,@(defcode "TYPE" 0 'type)
+    (ld (var-temp-cell) de)
+    (pop hl)
+    (ld (type-count) bc)
+    (ld a b)
+    (or c)
+    (jr z type-native-done)
+    (push ix)
+    (db (#xdd))
+    (ld h 0)
+    (db (#xdd))
+    (ld l 0)
+    (ld a (var-cur-col))
+    (ld d a)
+    (ld a (var-cur-row))
+    (ld e a)
+    (ld iy screen-buffer)
+    ;; TYPE is the exact-length renderer used by the line editor.  Its right
+    ;; edge is the physical 96-pixel display boundary, so a following cursor
+    ;; can never be positioned off-screen.
+    (ld bc 24640)
+    (label type-native-loop)
+    (ld a (hl))
+    (call wrap-char-shared)
+    (inc hl)
+    (push hl)
+    (ld hl (type-count))
+    (dec hl)
+    (ld (type-count) hl)
+    (ld a h)
+    (or l)
+    (pop hl)
+    (jr nz type-native-loop)
+    (call fast-copy)
+    (ld a d)
+    (ld (var-cur-col) a)
+    (ld a e)
+    (ld (var-cur-row) a)
+    (pop ix)
+    (label type-native-done)
+    (ld de (var-temp-cell))
+    (pop bc)
+    ,@next
 
     ,@(defword "TELL" 0 'tell)
     (dw (drop plot-string exit))
@@ -1206,16 +1277,51 @@
     (ld c a)
     ,@next
 
+    ;; Return one raw key event in A.  If a different key appears before
+    ;; the current key is fully released, preserve it for the next call.
+    ;; This handles normal key rollover without repeating a held key.
+    (label akey-read-event)
+    (ld a (akey-pending))
+    (or a)
+    (jr z akey-wait-event)
+    (push af)
+    (xor a)
+    (ld (akey-pending) a)
+    (pop af)
+    (jr akey-wait-release)
+    (label akey-wait-event)
+    (call wait-key)
+    (label akey-wait-release)
+    (ld e a)
+    (label akey-release-loop)
+    (call scan-key)
+    (or a)
+    (jr z akey-event-ready)
+    (cp e)
+    (jr z akey-release-loop)
+    (ld (akey-pending) a)
+    (label akey-event-ready)
+    (ld a e)
+    (ret)
+
     ;; Read a key as an ASCII character.
     ,@(defcode "AKEY" 0 'akey)
     (ld (var-temp-cell) de)
     (push bc)
     (label akey-read)
-    (call flush-keys)
-    (call wait-key)
+    (call akey-read-event)
+    ;; Alphabetic input is the default.  2ND selects the numeric/symbol
+    ;; table for the following key.
+    (cp 54)
+    (jr nz akey-alpha)
+    (call akey-read-event)
+    (ld de numeric-char-lookup-table)
+    (jr akey-lookup)
+    (label akey-alpha)
+    (ld de char-lookup-table)
+    (label akey-lookup)
     (ld h 0)
     (ld l a)
-    (ld de char-lookup-table)
     (ld b h)
     (add hl de)
     (ld c (hl))
@@ -1249,16 +1355,38 @@
     (pop de)
     ,@next
 
+    ;; Convert a raw key code using the numeric/symbol table.
+    ,@(defcode "TO-NUMERIC" 0 'to-numeric)
+    (push de)
+    (ld a b)
+    (or a)
+    (jr nz to-numeric-invalid)
+    (ld a c)
+    (cp 128)
+    (jr nc to-numeric-invalid)
+    (ld h 0)
+    (ld l c)
+    (ld b h)
+    (ld de numeric-char-lookup-table)
+    (add hl de)
+    (ld c (hl))
+    (pop de)
+    ,@next
+    (label to-numeric-invalid)
+    (ld bc 0)
+    (pop de)
+    ,@next
+
     ,@(defword "ORIGIN" 0 'origin)
     (dw (lit 0 dup cur-col ! cur-row ! exit))
 
 
     (label cursor)
-    (db (#b11100000))
-    (db (#b11100000))
-    (db (#b11100000))
-    (db (#b11100000))
-    (db (#b11100000))
+    (db (#b11110000))
+    (db (#b11110000))
+    (db (#b11110000))
+    (db (#b11110000))
+    (db (#b11110000))
 
     (label blank)
     (db (0 0 0 0 0))
@@ -1269,51 +1397,141 @@
     ;; never writes beyond the caller's u-byte region.
     ;; Written in Forth because it's easier.
     ;; Still somewhat buggy.
-    ,@(defword "EXPECT" 0 'expect)
+    ,@(defword "(EXPECT)" hidden 'expect-internal)
+    (dw (lit expect-full-edit c!))
     ;; Store the address and count so we can do various checks.
-    (dw (lit expect-count ! dup lit expect-ptr !))
-    ;; And the initial pointer.
-    (dw (lit expect-ptr-initial !))
+    (dw (dup lit expect-capacity ! lit expect-count ! dup lit expect-ptr !))
+    ;; Rollover belongs to one input session; never inherit a stale key from
+    ;; the menu, a prior prompt, or a transient shell teardown.
+    (dw (lit 0 lit akey-pending c!))
+    ;; And the initial/edit pointers.
+    (dw (dup lit expect-edit-ptr ! lit expect-ptr-initial !))
+    ;; Remember where this field begins on screen.
+    (dw (lit var-cur-col @ lit expect-col-save !))
+    (dw (lit var-cur-row @ lit expect-row-save !))
     (label expect-loop)
-    ;; Reaching the caller's capacity completes the operation immediately.
-    (dw (lit expect-count @ 0jump expect-capacity-end))
-    (label expect-more)
-    (dw (page lit expect-ptr-initial @ lit expect-ptr @))
+    ;; Clear the complete wrapped input region, preserving output above it.
+    (dw (lit expect-col-save @ lit expect-row-save @))
+    (dw (lit 96 lit expect-col-save @ - lit 5 rect-and-forth))
+    (dw (lit 0 lit expect-row-save @ lit 6 + lit 96))
+    (dw (lit 58 lit expect-row-save @ - rect-and-forth))
+    (dw (lit expect-col-save @ lit expect-row-save @ at-xy))
+    (dw (lit expect-ptr-initial @ lit expect-ptr @))
     (dw (lit expect-ptr-initial @ - type))
-    (dw (lit 8 cur-row +! lit ,(char->integer #\^) emit))
-    (dw (lit 8 cur-row -!))
-
-    ;; Draw a cursor
-    ;; (dw (lit cursor lit 5 cur-col @ cur-row @ put-sprite-xor-forth plot))
+    ;; If wrapping reached the bottom, scroll one text row, move the saved
+    ;; field origin with the framebuffer, and redraw.  A 128-byte field fits
+    ;; once its origin reaches row zero even with the widest font glyphs.
+    ;; Keep one complete text row below the field for evaluation output.
+    (dw (lit var-cur-row @ lit 49 < 0jump expect-scroll-field))
+    ;; Position the cursor by rendering only the exact-length prefix.
+    (dw (lit expect-col-save @ lit expect-row-save @ at-xy))
+    (dw (lit expect-ptr-initial @ lit expect-edit-ptr @))
+    (dw (lit expect-ptr-initial @ - type))
+    (dw (lit cursor lit 5 cur-col @ cur-row @ put-sprite-xor-forth))
+    ;; Standard EXPECT completes as soon as u characters have been received.
+    ;; The shell editor extension stays active so a full field can still be
+    ;; navigated, overwritten, shortened, and appended again.
+    (dw (lit expect-count @ 0jump expect-at-capacity jump expect-got-blank))
+    (label expect-at-capacity)
+    (dw (lit expect-full-edit c@ 0jump expect-end jump expect-got-blank))
 
     (label expect-got-blank)
     (dw (akey))
     (dw (?dup 0jump expect-got-blank))
     (dw (dup lit ,(char->integer #\newline) <> 0jump expect-got-newline))
     (dw (dup lit ,(char->integer #\backspace) <> 0jump expect-got-backspace))
+    (dw (dup lit 2 <> 0jump expect-got-left))
+    (dw (dup lit 6 <> 0jump expect-got-right))
+    (dw (dup lit 16 <> 0jump expect-got-up))
+    (dw (dup lit 14 <> 0jump expect-got-down))
     ;; General case
-    (dw (lit expect-ptr @ c!))
+    (dw (lit expect-edit-ptr @ lit expect-ptr @ <> 0jump expect-append))
+    (dw (lit expect-edit-ptr @ c!))
+    (dw (lit 1 lit expect-edit-ptr +! jump expect-loop))
+    (label expect-append)
+    (dw (lit expect-count @ 0jump expect-drop-full))
+    (dw (lit expect-edit-ptr @ c!))
+    (dw (lit 1 lit expect-edit-ptr +!))
     (dw (lit 1 lit expect-ptr +!))
     (dw (lit 1 lit expect-count -!))
     (dw (jump expect-loop))
+    (label expect-drop-full)
+    (dw (drop jump expect-got-blank))
 
     (label expect-got-newline)
     (dw (drop))
     (label expect-end)
-    (dw (lit expect-ptr @ lit expect-ptr-initial @ - dup span !))
-    (dw (origin lit expect-ptr-initial @ swap type exit))
-
-    (label expect-capacity-end)
-    (dw (jump expect-end))
+    ;; Remove the cursor, advance from the end of the wrapped field (even if
+    ;; editing ended in its middle), and leave output below the full input.
+    (dw (lit cursor lit 5 cur-col @ cur-row @ put-sprite-xor-forth))
+    (dw (lit expect-col-save @ lit expect-row-save @ at-xy))
+    (dw (lit expect-ptr-initial @ lit expect-ptr @))
+    (dw (lit expect-ptr-initial @ - type cr))
+    (dw (lit expect-ptr @ lit expect-ptr-initial @ - dup span ! drop exit))
 
     (label expect-got-backspace)
     (dw (drop))
-    (dw (lit expect-ptr-initial @ lit expect-ptr @))
-    (dw (<> 0jump expect-backspace-to-loop))
+    (dw (lit expect-ptr-initial @ lit expect-edit-ptr @))
+    (dw (<> 0jump expect-got-blank))
+    (dw (lit 1 lit expect-edit-ptr -!))
+    ;; Shift the exact-length suffix one byte left without touching addr+u.
+    (dw (lit expect-edit-ptr @ 1+ lit expect-edit-ptr @))
+    (dw (lit expect-ptr @ lit expect-edit-ptr @ - 1- cmove))
     (dw (lit 1 lit expect-ptr -!))
     (dw (lit 1 lit expect-count +!))
-    (label expect-backspace-to-loop)
     (dw (jump expect-loop))
+
+    (label expect-got-left)
+    (dw (drop lit expect-ptr-initial @ lit expect-edit-ptr @))
+    (dw (<> 0jump expect-got-blank))
+    (dw (lit 1 lit expect-edit-ptr -! jump expect-loop))
+
+    (label expect-got-right)
+    (dw (drop lit expect-ptr @ lit expect-edit-ptr @))
+    (dw (<> 0jump expect-got-blank))
+    (dw (lit 1 lit expect-edit-ptr +! jump expect-loop))
+
+    ;; UP/DOWN are editor controls.  A shell may install EDIT-HISTORY with
+    ;; stack effect ( addr capacity used direction -- used' ), where -1 is
+    ;; older and +1 is newer.  Plain EXPECT/ACCEPT leave the vector zero.
+    (label expect-got-up)
+    (dw (drop lit 65535 jump expect-history))
+    (label expect-got-down)
+    (dw (drop lit 1))
+    (label expect-history)
+    (dw (>r lit var-edit-history @ dup 0jump expect-history-disabled >r))
+    (dw (lit expect-ptr-initial @ lit expect-capacity @))
+    (dw (lit expect-ptr @ lit expect-ptr-initial @ -))
+    (dw (r> r> swap execute))
+    ;; Refuse a buggy callback result rather than letting it move editor
+    ;; pointers outside the caller-provided field.
+    ;; Treat the callback count as unsigned: values above capacity, including
+    ;; negative cells such as $FFFF, are invalid.
+    (dw (dup lit expect-capacity @ swap u< 0jump expect-history-valid))
+    (dw (drop jump expect-got-blank))
+    (label expect-history-valid)
+    (dw (dup lit expect-ptr-initial @ + dup lit expect-ptr !))
+    (dw (lit expect-edit-ptr !))
+    (dw (lit expect-capacity @ swap - lit expect-count ! jump expect-loop))
+    (label expect-history-disabled)
+    (dw (drop rdrop jump expect-got-blank))
+
+    (label expect-scroll-field)
+    (dw (lit expect-row-save @ 0jump expect-field-at-top))
+    (dw (scroll lit 6 lit expect-row-save -! jump expect-loop))
+    (label expect-field-at-top)
+    (dw (lit expect-col-save @ lit expect-row-save @ at-xy))
+    (dw (lit expect-ptr-initial @ lit expect-edit-ptr @))
+    (dw (lit expect-ptr-initial @ - type))
+    (dw (lit cursor lit 5 cur-col @ cur-row @ put-sprite-xor-forth))
+    (dw (jump expect-got-blank))
+
+    ,@(defword "EXPECT" 0 'expect)
+    (dw (false expect-internal exit))
+
+    ;; Calculator line-editor extension: retain cursor editing at capacity.
+    ,@(defword "EDIT-LINE" 0 'edit-line)
+    (dw (true expect-internal exit))
 
     ,@(defword "ACCEPT" 0 'accept)
     (dw (expect span @ exit))
@@ -1502,7 +1720,7 @@
     (dw (dup lit ,(char->integer #\tab) <> 0jump token-overflow-done))
     (dw (drop jump token-discard-overflow))
     (label token-overflow-done)
-    (dw (drop jump token-done))
+    (dw (jump token-done))
 
     (label token-done)
     (dw (drop))
@@ -2066,6 +2284,7 @@
     ;; compilation (for example, one terminated by ABORT).
     (dw (lit 0 lit loop-compile-depth ! token ?dup 0jump colon-no-name))
     (dw (dup lit 32 u< 0jump colon-name-too-long))
+    (dw (dp @ lit compile-start-dp ! latest @ lit compile-start-latest !))
     (dw (create_ latest @))
     (dw (hidden rbrac exit))
     (label colon-name-too-long)
@@ -2076,7 +2295,7 @@
     ,@(defword ";" immediate 'semicolon)
     (dw (lit exit comma))
     (dw (latest @ hidden))
-    (dw (lbrac exit))
+    (dw (lit 0 lit compile-start-dp ! lbrac exit))
 
     ,@(defword "CONSTANT" 0 'constant)
     (dw (token ?dup 0jump constant-no-name))
@@ -2163,27 +2382,56 @@
     (push hl)
     ,@next
 
+    ,@(defword "DEFAULT-EOF" 0 'default-eof)
+    (dw (page lit quit-eof-msg plot-string pause poweroff))
+
+    ;; Reset dictionary/compiler state shared by successful input, premature
+    ;; source end, and interpreter errors.  Return-stack reset stays in QUIT
+    ;; itself so this helper can return normally.
+    ,@(defword "(QUIT-CLEANUP)" hidden 'quit-cleanup)
+    ;; Roll back an incomplete colon definition before accepting new input.
+    ;; A normal semicolon clears the marker; errors and premature source end
+    ;; leave it set to the dictionary state captured by colon.
+    (dw (lit compile-start-dp @ ?dup 0jump quit-no-rollback))
+    (dw (lit compile-start-latest @ latest ! dp !))
+    (dw (lit 0 lit compile-start-dp !))
+    (label quit-no-rollback)
+    (dw (lit 0 state ! lit 0 handler ! lit 0 lit loop-compile-depth ! exit))
+
     ,@(defword "QUIT" 0 'quit)
     (label try-more)
     ;; QUIT establishes the outer interpreter's clean control state.  In
     ;; particular, no CATCH frame or compiler context may survive a return to
     ;; the command loop.  The cleanup belongs at the shared loop head so it is
     ;; also applied after each completed input source.
-    (dw (lit 0 state ! lit 0 handler ! lit 0 lit loop-compile-depth !))
-    (dw (r0 @ rp!))
+    (dw (quit-cleanup r0 @ rp!))
     (dw (lit ok-msg plot-string cr))
-    (dw (lbrac refill 0jump quit-eof))
+    (label refill-more)
+    (dw (refill 0jump quit-eof))
     (dw (interpret))
     (dw (?dup 0= 0jump not-ok))
-    (dw (lit ok-msg plot-string cr jump try-more))
+    ;; An unfinished colon definition spans input sources.  Preserve STATE,
+    ;; its transaction marker, and compiler context until semicolon or error.
+    ;; The marker, rather than STATE, also covers a line ending inside [ ... ].
+    (label interpret-succeeded)
+    (dw (lit compile-start-dp @ 0jump try-more jump refill-more))
 
 
     (label quit-eof)
-    (dw (page lit quit-eof-msg plot-string pause poweroff))
+    ;; A transient input device may use EOF to select a new source.  Its
+    ;; handler returns after doing so, and the original interpreter loop
+    ;; consumes that source without nesting QUIT.
+    (dw (quit-cleanup r0 @ rp!))
+    (dw (lit var-current-eof-handler @ execute interpret))
+    (dw (?dup 0= 0jump not-ok))
+    (dw (jump interpret-succeeded))
 
     (label not-ok)
-    (dw (lit not-ok-msg plot-string abort))
-    (dw (exit))
+    ;; Preserve the status across the ABORT-like data-stack reset, report it,
+    ;; then use the common cleanup/rollback path before reading another line.
+    (dw (lit var-temp-cell ! sp0 @ sp! lit var-temp-cell @))
+    (dw (lit var-current-error-handler @ execute quit-cleanup r0 @ rp!))
+    (dw (jump refill-more))
 
     (label ok-msg)
     (db ,(string " ok"))
@@ -2794,11 +3042,20 @@
     ,@(defvar "HANDLER" 'handler 0)
     ;; Number of characters received by EXPECT.
     ,@(defvar "SPAN" 'span 0)
+    ;; Optional calculator line-editor history callback.  EDIT-LINE passes
+    ;; (addr capacity used direction), where direction is -1/+1 for UP/DOWN.
+    ,@(defvar "EDIT-HISTORY" 'edit-history 0)
     ,@(defvar "CURRENT-INPUT-DEVICE" 'current-input-device 0)
+    ;; Consumes the nonzero status returned by INTERPRET.
+    ,@(defvar "CURRENT-ERROR-HANDLER" 'current-error-handler 0)
+    ;; Handles input-device EOF and may arrange the next input source.
+    ,@(defvar "CURRENT-EOF-HANDLER" 'current-eof-handler 0)
     ,@(defconst "H0" 'h0 'dp-start)
     ,@(defconst "OS-END" 'os-end-forth 'os-end)
     ,@(defconst "SCREEN-BUF" 'screen-buf 'screen-buffer)
     ,@(defconst "WORD-BUF" 'word-buf 'word-buffer)
+    ,@(defconst "TOKEN-BUF" 'token-buf 'token-buffer-data)
+    ,@(defconst "PBUF" 'prompt-buf 'prompt-space)
     ,@(defconst "MEMA" 'mema #x4000)
     ,@(defconst "HERE" 'here '(var-dp))
     ,@(defconst "BL" 'bl 32)
@@ -2849,19 +3106,91 @@
   (put-char! 9 #\newline)
   (put-char! 2 #\backspace)
   (put-char! 56 #\backspace)
-  (put-char! 3 #\space)
   (put-char! 33 #\space)
   (put-char! 18 #\@)
   (put-char! 25 #\.)
   (put-char! 53 #\:)
   (put-char! 52 #\;)
+  (put-char! 10 #\")
+  (put-char! 17 #\?)
+
+  ;; Non-printing editor controls, matching the conventional Emacs bytes.
+  (list-set! res 2 2)                 ; LEFT / control-B
+  ;; zkeme80's arrow table remaps physical RIGHT to 1 (keyboard.scm).
+  (list-set! res 1 6)                 ; RIGHT / control-F
+  (list-set! res 4 16)                ; UP / control-P
+  (list-set! res 3 14)                ; DOWN / control-N
 
   ;; Add more characters as you need them.
+  res
   )
+
+(define (make-numeric-char-lookup-table)
+  (define res (make-list 128 0))
+  (define (put-char! id char)
+    (list-set! res id (char->integer char))
+    res)
+
+  ;; Keys whose unshifted legends are useful in Forth source.
+  (put-char! 9 #\newline)
+  (put-char! 2 #\backspace)
+  (put-char! 56 #\backspace)
+  (put-char! 33 #\0)
+  (put-char! 34 #\1)
+  (put-char! 26 #\2)
+  (put-char! 18 #\3)
+  (put-char! 35 #\4)
+  (put-char! 27 #\5)
+  (put-char! 19 #\6)
+  (put-char! 36 #\7)
+  (put-char! 28 #\8)
+  (put-char! 20 #\9)
+  (put-char! 10 #\+)
+  (put-char! 11 #\-)
+  (put-char! 12 #\*)
+  (put-char! 13 #\/)
+  (put-char! 17 #\-)
+  (put-char! 21 #\))
+  (put-char! 25 #\.)
+  (put-char! 29 #\()
+  (put-char! 37 #\,)
+
+  ;; Remaining printable ASCII punctuation.  Together with the direct
+  ;; alphabetic table, 2ND exposes every character from space through '~'.
+  (put-char! 47 #\!)               ; MATH
+  (put-char! 39 #\#)               ; APPS
+  (put-char! 31 #\$)               ; PRGM
+  (put-char! 46 #\%)               ; reciprocal
+  (put-char! 38 #\&)               ; SIN
+  (put-char! 30 #\')               ; COS
+  (put-char! 23 #\<)               ; VARS
+  (put-char! 32 #\=)               ; STAT
+  (put-char! 49 #\>)               ; GRAPH
+  (put-char! 45 #\[)               ; square
+  (put-char! 44 #\\)               ; LOG
+  (put-char! 43 #\])               ; LN
+  (put-char! 14 #\^)               ; power
+  (put-char! 42 #\_)               ; STO
+  (put-char! 40 #\`)               ; X,T,theta,n
+  (put-char! 50 #\{)               ; TRACE
+  (put-char! 52 #\|)               ; WINDOW
+  (put-char! 51 #\})               ; ZOOM
+  (put-char! 53 #\~)               ; Y=
+
+  ;; Navigation remains navigation after 2ND; begin/end bindings are future
+  ;; work, but shifted arrows must never become deletion or text insertion.
+  (list-set! res 2 2)                 ; LEFT / control-B
+  (list-set! res 1 6)                 ; RIGHT / control-F
+  (list-set! res 4 16)                ; UP / control-P
+  (list-set! res 3 14)                ; DOWN / control-N
+
+  res)
 
 (define forth-char-lookup-table
   `((label char-lookup-table)
-    (db ,(make-char-lookup-table))))
+    (db ,(make-char-lookup-table))
+    (label numeric-char-lookup-table)
+    (db ,(make-numeric-char-lookup-table))))
 
 (define forth-input-devices
   `(;; Example of an input device.
@@ -2875,12 +3204,22 @@
 
     ;; An input device that should be a prompt.
     ,@(defword "PROMPT" 0 'prompt)
-    (dw (lit prompt-space lit 128 expect))
+    ;; Reserve one complete output row below the input field.
+    (label prompt-make-room)
+    (dw (lit var-cur-row @ lit 48 > 0jump prompt-has-room))
+    (dw (scroll jump prompt-make-room))
+    (label prompt-has-room)
+    (dw (lit prompt-prefix plot-string))
+    ;; Keep the editor to one display line, then install an exact-length
+    ;; source with a private terminator for diagnostics.
+    (dw (lit prompt-space lit 20 edit-line))
     (dw (lit prompt-space lit input-buffer span @ cmove))
     (dw (lit 0 lit input-buffer span @ + c!))
     (dw (lit input-buffer span @ source-store))
     (dw (true))
-    (dw (exit))))
+    (dw (exit))
+    (label prompt-prefix)
+    (db ,(string "> "))))
 
 (define forth-main
   `((label main)
@@ -2896,6 +3235,8 @@
     (dw (lit return-stack-start r0 !))
     (dw (lit 1 lit bootstrap-load-bool !))
     (dw (lit string-input-device lit var-current-input-device !))
+    (dw (lit abort lit var-current-error-handler !))
+    (dw (lit default-eof lit var-current-eof-handler !))
     (dw (quit))
 
     (dw (poweroff))
