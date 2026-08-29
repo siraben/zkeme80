@@ -33,9 +33,10 @@ Two coordinate systems matter, exactly as with TI-OS:
   Page N occupies `[N*0x4000, (N+1)*0x4000)`.  All labelmap addresses
   are image offsets.
 * **CPU address** — what the Z80 sees.  Page 0 is permanently mapped at
-  `0000h–3FFFh`, other pages bank into `4000h–7FFFh`, and the image
-  slice `[8000h,C000h)` is the initial contents of RAM `8000h–BFFFh`
-  (copied by the boot code), so its labels double as RAM addresses.
+  `0000h–3FFFh` and other pages bank into `4000h–7FFFh`.  The image
+  slice `[8000h,C000h)` is an assembly-time address template for RAM
+  `8000h–BFFFh`; boot clears the actual RAM, so only its labels—not its
+  emitted initial bytes—describe runtime state.
 
 All Forth code words (`defcode`/`defword` in `src/forth.scm`) live in
 page 0, where image offset equals CPU address, so threaded-code
@@ -102,7 +103,9 @@ kernel label and per page-0 **Forth dictionary word**; static RAM
 labels in `$8000–$BFFF` resolve when selector `$81` maps physical RAM
 page 1.  Use a full trace here: a ring/backtrace can discard the early
 mapper writes and does not preserve their resulting state in its
-header.  The same fork's `tools/tilem_trace.py` offers runtime Forth
+header.  The analyzer memory-maps the trace rather than reading the whole
+multi-gigabyte file into the Python heap.  The same fork's
+`tools/tilem_trace.py` offers runtime Forth
 dictionary reconstruction, key timelines, and DROP-underflow
 detection for deeper forensics.
 
