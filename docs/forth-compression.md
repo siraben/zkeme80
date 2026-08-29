@@ -1,8 +1,8 @@
 # Forth bootstrap stream compression
 
-The bootstrap sources are currently stored as plain text on flash pages. Two
-offline tools quantify ways to shrink them; neither changes the ROM format or
-the runtime interpreter yet.
+The bootstrap sources are stored as plain text on Flash pages. Two offline
+tools quantify ways to shrink them; neither changes the ROM format or the
+runtime interpreter yet.
 
 - `tools/analyze_forth_compression.py` applies LZSS directly to the source
   bytes. This is the smallest current baseline.
@@ -19,8 +19,8 @@ python3 tools/bootstrap_stream.py report --window 512
 
 It prints source, token-stream, and LZSS payload sizes for each stage, followed
 by totals including archive framing and the dictionary. On the current source
-set and a 4 KiB window, 29,578 source bytes become 13,496 bytes of separately
-compressed token payloads or a 16,942-byte complete archive. The complete
+set and a 4 KiB window, 29,584 source bytes become 13,504 bytes of separately
+compressed token payloads or a 16,950-byte complete archive. The complete
 archive includes a 403-word, 3,257-byte dictionary and stage metadata. Direct
 raw-byte LZSS remains smaller at about 13.0 KiB; the token archive trades that
 space for explicit lexical boundaries and dictionary references that a future
@@ -113,7 +113,7 @@ distance minus one and a four-bit length minus three, giving distances of
 dictionary indices, canonical integers, final CRCs, and trailing bytes are all
 checked by the host decoder.
 
-## Runtime direction
+## Streaming decoder design
 
 The archive is organized for sequential consumption. A future `GETC`-style
 device can retain the current stage pointer, LZSS flag state, a sliding output
@@ -123,7 +123,7 @@ directly while emitting other records unchanged. Error reporting that seeks
 backward to the current line additionally needs a small line buffer or an
 explicit loss of source-line echo.
 
-Before changing the ROM layout:
+The runtime integration requires these checks before changing the ROM layout:
 
 1. Implement a bounded streaming decoder without moving pages.
 2. Trace boot and the on-device suite with archived and raw inputs, comparing
@@ -132,11 +132,10 @@ Before changing the ROM layout:
    choosing the page layout and `.8xu` page manifest.
 4. Keep an uncompressed developer-build path for parser diagnostics.
 
-Comment stripping or whitespace normalization could save more, but each is a
-semantic change and intentionally outside this byte-exact format version.
+Comment stripping or whitespace normalization could save more, but each would
+change the source byte stream and remains outside this format version.
 
-The implemented alternative that avoids parsing or decompressing source
-on-device is the versioned [precompiled bootstrap image](precompiled-bootstrap.md).
-It packages the post-bootstrap RAM dictionary on flash page 6 while keeping
-this compressed-source work useful for future smaller distribution images and
-the plain text path as a compatibility and diagnostics fallback.
+The [precompiled bootstrap image](precompiled-bootstrap.md) avoids parsing or
+decompressing source on the calculator. It packages the post-bootstrap RAM
+dictionary on Flash page `06`; compressed source remains an option for smaller
+distribution images, while plain text remains the diagnostic fallback.
