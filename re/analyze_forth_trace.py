@@ -18,7 +18,8 @@ coordinate space, then attributes execution counts to:
 
 Usage:
     analyze_forth_trace.py TRACE LABELMAP [--top N] [--forth-only]
-                           [--timeline] [--csv OUT] [--min-count N]
+                           [--forth-bigrams] [--timeline] [--csv OUT]
+                           [--min-count N]
 """
 import argparse
 import csv
@@ -57,6 +58,10 @@ class SymbolResolver:
             return None
         return self.names[self.addresses[index]]
 
+    def resolve_exact(self, addr):
+        """Resolve an exact symbol entry rather than its owned range."""
+        return self.names.get(addr)
+
 
 class ExactSymbolResolver:
     """Resolve only exact addresses, for non-code RAM symbols."""
@@ -68,6 +73,24 @@ class ExactSymbolResolver:
 
     def resolve(self, addr):
         return self.names.get(addr)
+
+
+class ForthBigramProfiler:
+    """Count dynamic Forth word entries and adjacent entry pairs."""
+
+    def __init__(self):
+        self.entries = Counter()
+        self.bigrams = Counter()
+        self.previous = None
+        self.total_entries = 0
+
+    def observe(self, word):
+        """Record one visit to a Forth word's exact code-field address."""
+        self.entries[word] += 1
+        self.total_entries += 1
+        if self.previous is not None:
+            self.bigrams[(self.previous, word)] += 1
+        self.previous = word
 
 
 def _make_page_resolvers(entries, resolver=SymbolResolver):
@@ -234,6 +257,8 @@ def main(argv=None):
     ap.add_argument("--top", type=int, default=40)
     ap.add_argument("--forth-only", action="store_true",
                     help="report only Forth dictionary words")
+    ap.add_argument("--forth-bigrams", action="store_true",
+                    help="report adjacent dynamic Forth word entries")
     ap.add_argument("--timeline", action="store_true",
                     help="print symbol transitions as they occur")
     ap.add_argument("--csv", metavar="OUT",
@@ -247,6 +272,7 @@ def main(argv=None):
     counts = Counter()
     word_counts = Counter()
     unresolved = Counter()
+    forth_profile = ForthBigramProfiler() if args.forth_bigrams else None
     transitions = [] if args.timeline else None
     last_sym = None
     ninstr = 0
@@ -280,6 +306,10 @@ def main(argv=None):
                     w = forth.resolve(local_addr) if page == 0 else None
                     if w:
                         word_counts[w] += 1
+                    if forth_profile is not None and page == 0:
+                        entry = forth.resolve_exact(local_addr)
+                        if entry:
+                            forth_profile.observe(entry)
                 else:
                     resolver = ram.get(page)
                     if resolver is not None:
@@ -308,6 +338,15 @@ def main(argv=None):
         print("top symbols:")
     for sym, c in rows[:args.top]:
         print("  %8d  %s" % (c, sym))
+    if args.forth_bigrams:
+        print()
+        print("Forth word entries: %d" % forth_profile.total_entries)
+        print("unique Forth bigrams: %d" % len(forth_profile.bigrams))
+        print()
+        print("top adjacent Forth-word bigrams:")
+        for (first, second), c in forth_profile.bigrams.most_common(args.top):
+            if c >= args.min_count:
+                print("  %8d  %s -> %s" % (c, first, second))
     print()
     print("top unresolved (banked flash / foreign RAM) PCs:")
     for s, c in unresolved.most_common(5):

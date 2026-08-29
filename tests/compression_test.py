@@ -22,6 +22,15 @@ class CompressionTests(unittest.TestCase):
     def test_rejects_bad_window(self):
         with self.assertRaises(ValueError):
             compression.compress(b"data", 4097)
+        with self.assertRaises(ValueError):
+            compression.decompress(b"data", 0)
+
+    def test_decoder_enforces_declared_window(self):
+        # Two literals, then a match at distance two.
+        packed = bytes((0b00000011, ord("a"), ord("b"), 1, 0))
+        self.assertEqual(b"ababa", compression.decompress(packed, 2))
+        with self.assertRaisesRegex(ValueError, "configured window"):
+            compression.decompress(packed, 1)
 
 
 if __name__ == "__main__":

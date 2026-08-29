@@ -7,12 +7,40 @@
     (close-port port)
     expr))
 
+(define (include-binary-as-bytes filename)
+  (let* ((port (open-file filename "rb"))
+         (bytes (get-bytevector-all port))
+         (expr `((db ,(bytevector->u8-list bytes)))))
+    (close-port port)
+    expr))
+
 ;; Immediate flag
 (define immediate 128)
 (define hidden 64)
 
+(define next-inline
+  `((ld a (de))
+    (ld l a)
+    (inc de)
+    (ld a (de))
+    (ld h a)
+    (inc de)
+    (jp (hl))))
+
 (define next
   `((jp next-sub)))
+
+;; DOCOL arrives with the parameter-field address in HL.  This alternate
+;; NEXT entry avoids first moving it to DE and then immediately fetching it
+;; back into HL.  It is kept as an inline sequence because jumping to a
+;; shared copy would give back most of the cycle saving.
+(define next-hl-inline
+  `((ld e (hl))
+    (inc hl)
+    (ld d (hl))
+    (inc hl)
+    (ex de hl)
+    (jp (hl))))
 
 (define push-bc-rs
   `((dec ix)
@@ -130,41 +158,35 @@
 
 (define next-sub
   `((label next-sub)
-    (ld a (de))
-    (ld l a)
-    (inc de)
-    (ld a (de))
-    (ld h a)
-    (inc de)
-    (jp (hl))))
+    ,@next-inline))
 
 (define docol-sub
   `((label docol)
     ,@push-de-rs
-    (pop de)
-    ,@next))
+    (pop hl)
+    ,@next-hl-inline))
 
 
 (define forth-stack-words
   `(,@(defcode "DUP" 0 'dup)
     (push bc)
-    ,@next
+    ,@next-inline
 
     ,@(defcode "?DUP" 0 '?dup)
     (ld hl 0)
     (call cp-hl-bc)
     (jp nz dup)
-    ,@next
+    ,@next-inline
 
     ,@(defcode "DROP" 0 'drop)
     (pop bc)
-    ,@next
+    ,@next-inline
 
     ,@(defcode "SWAP" 0 'swap)
     (pop hl)
     (push bc)
     ,@hl-to-bc
-    ,@next
+    ,@next-inline
 
     ,@(defcode "NIP" 0 'nip)
     (pop hl)
@@ -179,12 +201,12 @@
     ,@(defcode ">R" 0 '>r)
     ,@push-bc-rs
     (pop bc)
-    ,@next
+    ,@next-inline
 
     ,@(defcode "R>" 0 'r>)
     (push bc)
     ,@pop-bc-rs
-    ,@next
+    ,@next-inline
 
     ,@(defcode "R@" 0 'r@)
     (push bc)
@@ -248,7 +270,7 @@
     (push hl)
     (push bc)
     ,@hl-to-bc
-    ,@next
+    ,@next-inline
 
     ,@(defcode "ROT" 0 'rot)
     (pop hl)
@@ -321,7 +343,7 @@
     (pop hl)
     (sbc hl bc)
     ,@hl-to-bc
-    ,@next
+    ,@next-inline
 
     ,@(defcode "AND" 0 'and)
     (pop hl)
@@ -341,7 +363,7 @@
     (ld a b)
     (or h)
     (ld b a)
-    ,@next
+    ,@next-inline
 
     ,@(defcode "XOR" 0 'xor)
     (pop hl)
@@ -541,7 +563,7 @@
     (ld a (bc))
     (ld h a)
     ,@hl-to-bc
-    ,@next
+    ,@next-inline
 
     ,@(defword "?" 0 '?)
     (dw (@ u. exit))
@@ -556,7 +578,7 @@
     (adc a h)
     (ld (bc) a)
     (pop bc)
-    ,@next
+    ,@next-inline
 
     ,@(defcode "-!" 0 '-!)
     (pop hl)
@@ -642,7 +664,28 @@
     ))
 
 (define forth-graphics-words
-  `( ;; Draw a rectangle using OR
+  `(
+    (label mark-display-dirty)
+    (ld a 1)
+    (ld (display-dirty) a)
+    (ret)
+
+    (label flush-display)
+    (ld a (display-dirty))
+    (or a)
+    (ret z)
+    (label flush-display-dirty)
+    (ld iy screen-buffer)
+    (call fast-copy)
+    (xor a)
+    (ld (display-dirty) a)
+    (ret)
+
+    ,@(defcode "FLUSH" 0 'flush)
+    (call flush-display)
+    ,@next
+
+    ;; Draw a rectangle using OR
     ;; ( x y width height -- )
     ,@(defcode "RECT-OR" 0 'rect-or-forth)
     (ld b c)
@@ -653,7 +696,7 @@
     (pop de)
     (ld iy screen-buffer)
     (call rect-or)
-    (call fast-copy)
+    (call mark-display-dirty)
     (ld de (var-temp-cell))
     (pop bc)
     ,@next
@@ -669,7 +712,7 @@
     (pop de)
     (ld iy screen-buffer)
     (call rect-xor)
-    (call fast-copy)
+    (call mark-display-dirty)
     (ld de (var-temp-cell))
     (pop bc)
     ,@next
@@ -685,7 +728,7 @@
     (pop de)
     (ld iy screen-buffer)
     (call rect-and)
-    (call fast-copy)
+    (call mark-display-dirty)
     (ld de (var-temp-cell))
     (pop bc)
     ,@next
@@ -697,13 +740,14 @@
     (pop bc)
     (ld a c)
     (call set-pixel)
+    (call mark-display-dirty)
     (pop bc)
     ,@next
 
     ,@(defcode "CLEAR-SCREEN" 0 'clear-screen)
     (ld iy screen-buffer)
     (call clear-buffer)
-    (call fast-copy)
+    (call mark-display-dirty)
     ,@next
 
     ,@(defword "PAGE" 0 'page)
@@ -721,7 +765,7 @@
     (ld b c)
     (pop hl)
     (call put-sprite-or)
-    (call fast-copy)
+    (call mark-display-dirty)
     (pop bc)
     (ld de (var-temp-cell))
     ,@next
@@ -736,7 +780,7 @@
     (ld b c)
     (pop hl)
     (call put-sprite-and)
-    (call fast-copy)
+    (call mark-display-dirty)
     (pop bc)
     (ld de (var-temp-cell))
     ,@next
@@ -752,7 +796,7 @@
     (ld b c)
     (pop hl)
     (call put-sprite-xor)
-    (call fast-copy)
+    (call mark-display-dirty)
     (pop bc)
     (ld de (var-temp-cell))
     ,@next
@@ -763,6 +807,8 @@
     (push bc)
     (pop iy)
     (call fast-copy)
+    (xor a)
+    (ld (display-dirty) a)
     (pop bc)
     ,@next
 
@@ -770,6 +816,8 @@
     ,@(defcode "PLOT" 0 'plot)
     (ld iy screen-buffer)
     (call fast-copy)
+    (xor a)
+    (ld (display-dirty) a)
     ,@next
 
 
@@ -812,7 +860,7 @@
     (ld bc 25152)
 
     (call wrap-char-shared)
-    (call fast-copy)
+    (call mark-display-dirty)
     (ld a d)
     (ld (var-cur-col) a)
     (ld a e)
@@ -869,7 +917,7 @@
     (ld bc 25152)
     (xor a)
     (call wrap-str)
-    (call fast-copy)
+    (call mark-display-dirty)
     (ld a d)
     (ld (var-cur-col) a)
     (ld a e)
@@ -907,7 +955,7 @@
     (ld a (de))
     (ld h a)
     ,@hl-to-de
-    ,@next
+    ,@next-inline
 
     ,@(defcode "0JUMP" 0 '0jump)
     (xor a)
@@ -926,7 +974,7 @@
     (inc de)
     (inc de)
     (pop bc)
-    ,@next
+    ,@next-inline
 
     ,@(defcode "BRANCH" 0 'branch)
     (ex de hl)
@@ -937,7 +985,7 @@
 
     (add hl de)
     (ex de hl)
-    ,@next
+    ,@next-inline
 
     ,@(defcode "0BRANCH" 0 '0branch)
     (xor a)
@@ -956,7 +1004,7 @@
     (inc de)
     (inc de)
     (pop bc)
-    ,@next
+    ,@next-inline
 
     ,@(defcode "=" 0 '=)
     (pop hl)
@@ -1015,13 +1063,19 @@
 
 (define forth-text-words
   `(,@(defcode "KEYC" 0 'keyc)
+    (ld a (display-dirty))
+    (or a)
+    (call nz flush-display-dirty)
     (call get-key)
     (push bc)
     (ld b 0)
     (ld c a)
-    ,@next
+    ,@next-inline
 
     ,@(defcode "KEY" 0 'key)
+    (ld a (display-dirty))
+    (or a)
+    (call nz flush-display-dirty)
     (call flush-keys)
     (call wait-key)
     (push bc)
@@ -1032,6 +1086,9 @@
     ;; Read a key as an ASCII character.
     ,@(defcode "AKEY" 0 'akey)
     (ld (var-temp-cell) de)
+    (ld a (display-dirty))
+    (or a)
+    (call nz flush-display-dirty)
     (call flush-keys)
     (call wait-key)
     (ld h 0)
@@ -1076,15 +1133,15 @@
     ;; Still somewhat buggy.
     ,@(defword "EXPECT" 0 'expect)
     ;; Store the address and count so we can do various checks.
-    (dw (lit expect-count ! dup lit expect-ptr !))
+    (dw (lit expect-count ! dup-lit expect-ptr !))
     ;; And the initial pointer.
     (dw (lit expect-ptr-initial !))
     (label expect-loop)
     ;; Check if we have no characters left.
-    (dw (lit expect-count @ not 0jump expect-more))
+    (dw (lit-fetch expect-count not 0jump expect-more))
     (dw (jump expect-full))
     (label expect-more)
-    (dw (page lit expect-ptr-initial @ plot-string))
+    (dw (page lit-fetch expect-ptr-initial plot-string))
     (dw (lit 8 cur-row +! lit ,(char->integer #\^) emit))
     (dw (lit 8 cur-row -!))
 
@@ -1094,28 +1151,28 @@
     (label expect-got-blank)
     (dw (akey))
     (dw (?dup 0jump expect-got-blank))
-    (dw (dup lit ,(char->integer #\newline) <> 0jump expect-got-newline))
-    (dw (dup lit ,(char->integer #\backspace) <> 0jump expect-got-backspace))
+    (dw (dup-lit ,(char->integer #\newline) not-equal-zero-jump expect-got-newline))
+    (dw (dup-lit ,(char->integer #\backspace) not-equal-zero-jump expect-got-backspace))
     ;; General case
-    (dw (lit expect-ptr @ c!))
-    (dw (lit 1 lit expect-ptr +!))
-    (dw (lit 1 lit expect-count -!))
+    (dw (lit-fetch expect-ptr c!))
+    (dw (lit-lit 1 expect-ptr +!))
+    (dw (lit-lit 1 expect-count -!))
     (dw (jump expect-loop))
 
     (label expect-got-newline)
-    (dw (lit expect-ptr-initial @ lit expect-ptr @))
-    (dw (<> 0jump expect-got-blank))
+    (dw (lit-fetch expect-ptr-initial lit-fetch expect-ptr))
+    (dw (not-equal-zero-jump expect-got-blank))
     (label expect-end)
-    (dw (origin lit expect-ptr-initial @ plot-string))
-    (dw (drop lit 0 lit expect-ptr @ c! exit))
+    (dw (origin lit-fetch expect-ptr-initial plot-string))
+    (dw (drop lit 0 lit-fetch expect-ptr c! exit))
 
     (label expect-got-backspace)
     (dw (drop))
-    (dw (lit expect-ptr-initial @ lit expect-ptr @))
-    (dw (<> 0jump expect-backspace-to-loop))
-    (dw (lit 1 lit expect-ptr -!))
-    (dw (lit 0 lit expect-ptr @ c!))
-    (dw (lit 1 lit expect-count +!))
+    (dw (lit-fetch expect-ptr-initial lit-fetch expect-ptr))
+    (dw (not-equal-zero-jump expect-backspace-to-loop))
+    (dw (lit-lit 1 expect-ptr -!))
+    (dw (lit 0 lit-fetch expect-ptr c!))
+    (dw (lit-lit 1 expect-count +!))
     (label expect-backspace-to-loop)
     (dw (jump expect-loop))
 
@@ -1123,12 +1180,12 @@
     (label expect-full)
     (dw (akey))
     (dw (?dup 0jump expect-full))
-    (dw (dup lit ,(char->integer #\newline) <> 0jump expect-got-newline))
-    (dw (dup lit ,(char->integer #\backspace) <> 0jump expect-got-backspace))
+    (dw (dup-lit ,(char->integer #\newline) not-equal-zero-jump expect-got-newline))
+    (dw (dup-lit ,(char->integer #\backspace) not-equal-zero-jump expect-got-backspace))
     (dw (drop jump expect-full))
 
     ,@(defword "REFILL" 0 'refill)
-    (dw (lit var-current-input-device @ execute))
+    (dw (lit-fetch var-current-input-device execute))
     (dw (0jump refill-fail))
     ;; (dw (lit input-buffer lit var-input-ptr ! ))
     (dw (true exit))
@@ -1137,12 +1194,12 @@
 
     ;; Get the next character from the input source.
     ,@(defword "GETC" 0 'getc)
-    (dw (lit var-input-ptr @ c@))
-    (dw (lit 1 lit var-input-ptr +!))
+    (dw (lit-fetch var-input-ptr c@))
+    (dw (lit-lit 1 var-input-ptr +!))
     (dw (exit))
 
     ,@(defword "UNGETC" 0 'ungetc)
-    (dw (lit 1 lit var-input-ptr -!))
+    (dw (lit-lit 1 var-input-ptr -!))
     (dw (exit))
 
     ;; Parse the next word.
@@ -1153,17 +1210,17 @@
     ;; Comments are #\\ until #\newline
     ;; ( -- addr len )
     ,@(defword "WORD" 0 'word)
-    (dw (lit word-buffer lit word-ptr !))
+    (dw (lit-lit word-buffer word-ptr !))
     (label skip-space)
     (dw (getc))
     (dw (?dup 0jump empty-word))
-    (dw (dup lit ,(char->integer #\space) <>))
+    (dw (dup-lit ,(char->integer #\space) <>))
     (dw (0jump skip-space-consume))
-    (dw (dup lit ,(char->integer #\newline) <>))
+    (dw (dup-lit ,(char->integer #\newline) <>))
     (dw (0jump skip-space-consume))
-    (dw (dup lit ,(char->integer #\tab) <>))
+    (dw (dup-lit ,(char->integer #\tab) <>))
     (dw (0jump skip-space-consume))
-    (dw (dup lit ,(char->integer #\\) <>))
+    (dw (dup-lit ,(char->integer #\\) <>))
     (dw (0jump skip-comment-start))
 
     (dw (jump actual-word))
@@ -1176,7 +1233,7 @@
     (dw (drop))
     (label skip-comment)
     (dw (getc ?dup 0jump empty-word))
-    (dw (dup lit ,(char->integer #\newline) <> 0jump skip-space-consume))
+    (dw (dup-lit ,(char->integer #\newline) not-equal-zero-jump skip-space-consume))
     (dw (drop))
     (dw (jump skip-comment))
 
@@ -1184,36 +1241,36 @@
     ;; Reserve the final byte of the 32-byte buffer for the NUL.  If a
     ;; token is longer, consume its tail and return the truncated name;
     ;; the interpreter will reject it without corrupting adjacent RAM.
-    (dw (lit word-ptr @ lit word-buffer-end 1- =))
+    (dw (lit-fetch word-ptr lit word-buffer-end 1- =))
     (dw (0jump actual-word-store))
     (label discard-word-tail)
     (dw (getc))
     (dw (dup 0jump word-done))
-    (dw (dup lit ,(char->integer #\space)   <> 0jump word-done))
-    (dw (dup lit ,(char->integer #\newline) <> 0jump word-done))
-    (dw (dup lit ,(char->integer #\tab)     <> 0jump word-done))
+    (dw (dup-lit ,(char->integer #\space)   not-equal-zero-jump word-done))
+    (dw (dup-lit ,(char->integer #\newline) not-equal-zero-jump word-done))
+    (dw (dup-lit ,(char->integer #\tab)     not-equal-zero-jump word-done))
     (dw (drop jump discard-word-tail))
 
     (label actual-word-store)
-    (dw (lit word-ptr @ c!))
-    (dw (lit 1 lit word-ptr +!))
+    (dw (lit-fetch word-ptr c!))
+    (dw (lit-lit 1 word-ptr +!))
 
     (label actual-word-loop)
     (dw (getc))
     (dw (dup 0jump word-done))
-    (dw (dup lit ,(char->integer #\space)   <> 0jump word-done))
-    (dw (dup lit ,(char->integer #\newline) <> 0jump word-done))
-    (dw (dup lit ,(char->integer #\tab) <> 0jump word-done))
+    (dw (dup-lit ,(char->integer #\space)   not-equal-zero-jump word-done))
+    (dw (dup-lit ,(char->integer #\newline) not-equal-zero-jump word-done))
+    (dw (dup-lit ,(char->integer #\tab) not-equal-zero-jump word-done))
 
     (dw (jump actual-word))
 
     (label word-done)
     (dw (drop))
     ;; Write a 0 and reset the word buffer pointer.
-    (dw (lit 0 lit word-ptr @ c!))
+    (dw (lit 0 lit-fetch word-ptr c!))
     ;; Push the word length on the stack.
-    (dw (lit word-ptr @ lit word-buffer -))
-    (dw (lit word-buffer dup lit word-ptr !))
+    (dw (lit-fetch word-ptr lit word-buffer -))
+    (dw (lit word-buffer dup-lit word-ptr !))
     (dw (swap exit))
     ;; Couldn't get a word, return 0.
     (label empty-word)
@@ -1227,7 +1284,33 @@
     ))
 
 (define forth-semantics-words
-  `(,@(defcode "LIT" 0 'lit)
+  `(
+    ;; Map a non-empty token in HL, with its length in B, to one of 64
+    ;; two-byte cache slots.  The inexpensive hash combines the length and
+    ;; endpoint characters; strcmp still validates every hit.
+    (label find-cache-address)
+    (push bc)
+    (push de)
+    (ld a (hl))
+    (xor b)
+    (ld c a)
+    (ld e b)
+    (ld d 0)
+    (add hl de)
+    (dec hl)
+    (ld a (hl))
+    (xor c)
+    (and 63)
+    (add a a)
+    (ld e a)
+    (ld d 0)
+    (ld hl find-cache)
+    (add hl de)
+    (pop de)
+    (pop bc)
+    (ret)
+
+    ,@(defcode "LIT" 0 'lit)
     (push bc)
     (ld a (de))
     (ld c a)
@@ -1235,10 +1318,228 @@
     (ld a (de))
     (ld b a)
     (inc de)
-    ,@next
+    ,@next-inline
+
+    ;; Trace-selected static superinstructions.  Their immediate layouts
+    ;; are the concatenation of the component words with intermediate NEXTs
+    ;; removed.
+    (label dup-lit)
+    (push bc)
+    (push bc)
+    (ld a (de))
+    (ld c a)
+    (inc de)
+    (ld a (de))
+    (ld b a)
+    (inc de)
+    ,@next-inline
+
+    (label lit-lit)
+    (push bc)
+    (ld a (de))
+    (ld c a)
+    (inc de)
+    (ld a (de))
+    (ld b a)
+    (inc de)
+    (push bc)
+    (ld a (de))
+    (ld c a)
+    (inc de)
+    (ld a (de))
+    (ld b a)
+    (inc de)
+    ,@next-inline
+
+    (label lit-fetch)
+    (push bc)
+    (ld a (de))
+    (ld l a)
+    (inc de)
+    (ld a (de))
+    (ld h a)
+    (inc de)
+    (ld c (hl))
+    (inc hl)
+    (ld b (hl))
+    ,@next-inline
+
+    (label lit-not-equal)
+    (ld a (de))
+    (ld l a)
+    (inc de)
+    (ld a (de))
+    (ld h a)
+    (inc de)
+    (call cp-hl-bc)
+    (jp z fal)
+    (jp tru)
+
+    (label not-equal-zero-jump)
+    (pop hl)
+    (call cp-hl-bc)
+    (pop bc)
+    (jp z jump)
+    (inc de)
+    (inc de)
+    ,@next-inline
+
+    (label not-equal-zero-branch)
+    (pop hl)
+    (call cp-hl-bc)
+    (pop bc)
+    (jp z branch)
+    (inc de)
+    (inc de)
+    ,@next-inline
+
+    ;; Compile one execution token, folding the five hot pairs measured by
+    ;; --forth-bigrams.  Literal payload cells still go through ordinary ,.
+    ,@(defcode "(COMPILE-XT)" hidden 'compile-xt)
+    (ld (compile-xt-saved-ip) de)
+    (ld (compile-xt-current) bc)
+
+    (ld hl lit)
+    (call cp-hl-bc)
+    (jp z compile-xt-lit)
+    (ld hl @)
+    (call cp-hl-bc)
+    (jp z compile-xt-after-lit-fetch)
+    (ld hl <>)
+    (call cp-hl-bc)
+    (jp z compile-xt-after-lit-not-equal)
+    (ld hl 0branch)
+    (call cp-hl-bc)
+    (jp z compile-xt-after-not-equal)
+    (jp compile-xt-emit)
+
+    (label compile-xt-lit)
+    ;; DUP LIT -> DUP-LIT when at least one token exists.
+    (ld hl (var-dp))
+    (ld de (current-definition-body))
+    (or a)
+    (sbc hl de)
+    (ld de 2)
+    (call cp-hl-de)
+    (jp c compile-xt-emit)
+    (ld hl (var-dp))
+    (dec hl)
+    (dec hl)
+    (ld e (hl))
+    (inc hl)
+    (ld d (hl))
+    (ld hl dup)
+    (call cp-hl-de)
+    (jp z compile-xt-fuse-dup-lit)
+
+    ;; LIT value LIT -> LIT-LIT value, with the next , supplying value 2.
+    (ld hl (var-dp))
+    (ld de (current-definition-body))
+    (or a)
+    (sbc hl de)
+    (ld de 4)
+    (call cp-hl-de)
+    (jp c compile-xt-emit)
+    (ld hl (var-dp))
+    (dec hl)
+    (dec hl)
+    (dec hl)
+    (dec hl)
+    (ld e (hl))
+    (inc hl)
+    (ld d (hl))
+    (ld hl lit)
+    (call cp-hl-de)
+    (jp nz compile-xt-emit)
+    (ld de lit-lit)
+    (jp compile-xt-store-four-back)
+
+    (label compile-xt-fuse-dup-lit)
+    (ld de dup-lit)
+    (jp compile-xt-store-two-back)
+
+    (label compile-xt-after-lit-fetch)
+    (ld de lit-fetch)
+    (jp compile-xt-after-lit)
+
+    (label compile-xt-after-lit-not-equal)
+    (ld de lit-not-equal)
+    (label compile-xt-after-lit)
+    (push de)
+    (ld hl (var-dp))
+    (ld de (current-definition-body))
+    (or a)
+    (sbc hl de)
+    (ld de 4)
+    (call cp-hl-de)
+    (pop de)
+    (jp c compile-xt-emit)
+    (ld hl (var-dp))
+    (dec hl)
+    (dec hl)
+    (dec hl)
+    (dec hl)
+    (push hl)
+    (ld c (hl))
+    (inc hl)
+    (ld b (hl))
+    (ld hl lit)
+    (call cp-hl-bc)
+    (pop hl)
+    (jp nz compile-xt-emit)
+    (jp compile-xt-store-at-hl)
+
+    (label compile-xt-after-not-equal)
+    (ld hl (var-dp))
+    (ld de (current-definition-body))
+    (or a)
+    (sbc hl de)
+    (ld de 2)
+    (call cp-hl-de)
+    (jp c compile-xt-emit)
+    (ld hl (var-dp))
+    (dec hl)
+    (dec hl)
+    (push hl)
+    (ld e (hl))
+    (inc hl)
+    (ld d (hl))
+    (ld hl <>)
+    (call cp-hl-de)
+    (pop hl)
+    (jp nz compile-xt-emit)
+    (ld de not-equal-zero-branch)
+    (jp compile-xt-store-at-hl)
+
+    (label compile-xt-store-four-back)
+    (ld hl (var-dp))
+    (dec hl)
+    (dec hl)
+    (dec hl)
+    (dec hl)
+    (jp compile-xt-store-at-hl)
+
+    (label compile-xt-store-two-back)
+    (ld hl (var-dp))
+    (dec hl)
+    (dec hl)
+    (label compile-xt-store-at-hl)
+    (ld (hl) e)
+    (inc hl)
+    (ld (hl) d)
+    (pop bc)
+    (ld de (compile-xt-saved-ip))
+    ,@next-inline
+
+    (label compile-xt-emit)
+    (ld bc (compile-xt-current))
+    (call _comma)
+    (pop bc)
+    (ld de (compile-xt-saved-ip))
+    ,@next-inline
 
     ,@(defword "LITERAL" immediate 'literal)
-    (dw (tick lit comma comma exit))
+    (dw (tick lit compile-xt comma exit))
 
     ,@(defword "POSTPONE" immediate 'postpone)
     (dw (word find >cfa comma exit))
@@ -1277,7 +1578,7 @@
     ;; Exit from the current word.
     ,@(defcode "EXIT" 0 'exit)
     ,@pop-de-rs
-    ,@next
+    ,@next-inline
 
     ;; ( addr -- )
     ;; Execute code at address ADDR.
@@ -1299,18 +1600,70 @@
     (dw (r> exit))
 
     ;; Find a word.
-    ;; ( addr -- xt | 0 )
+    ;; ( addr len -- xt | 0 )
     ;; Going off standard.  We're returning 0 for a word that is not
     ;; found, and let other words check if it's immediate or not.
     ,@(defcode "FIND" 0 'find)
+    ;; WORD has already measured the token.  Retain that length in B so
+    ;; candidates with a different header length never enter strcmp.
+    (ld a c)
     (pop bc)
     (push de)
     ,@bc-to-hl
+    (ld b a)
+    (ld (var-temp-cell) hl)
+
+    ;; Empty strings are never dictionary names and cannot be hashed using
+    ;; endpoint characters.  WORD normally filters these before FIND.
+    (ld a b)
+    (or a)
+    (jp z find-linear-start)
+
+    ;; Probe the direct-mapped cache, then validate the complete header so a
+    ;; collision can never change FIND's semantics.
+    (push hl)
+    (call find-cache-address)
+    (ld e (hl))
+    (inc hl)
+    (ld d (hl))
+    (pop hl)
+    (ld a d)
+    (or e)
+    (jp z find-linear-start)
+    (push de)
+    (inc de)
+    (inc de)
+    (ld a (de))
+    (bit 6 a)
+    (jp nz find-cache-miss)
+    (and 31)
+    (cp b)
+    (jp nz find-cache-miss)
+    (inc de)
+    (call strcmp)
+    (jp nz find-cache-miss)
+
+    ;; Cache hit: return the validated NFA and restore the Forth IP.
+    (pop hl)
+    (pop de)
+    ,@hl-to-bc
+    ,@next-inline
+
+    (label find-cache-miss)
+    (pop de)
+
+    (label find-linear-start)
     (ld de (var-latest))
     (inc de)
     (inc de)
     (inc de)
     (label find-loop)
+    (dec de)
+    (ld a (de))
+    (inc de)
+    (and 31)
+    (cp b)
+    (jp nz find-retry)
     (call strcmp)
     (jp z find-succeed)
     (jp nz find-retry)
@@ -1322,10 +1675,18 @@
     (jp nz find-succ-hidden)
     (dec de)
     (dec de)
+    ;; Install the visible result in the token's cache slot.
+    (push de)
+    (ld hl (var-temp-cell))
+    (call find-cache-address)
+    (pop de)
+    (ld (hl) e)
+    (inc hl)
+    (ld (hl) d)
     (pop hl)
     (ex de hl)
     ,@hl-to-bc
-    ,@next
+    ,@next-inline
 
     (label find-retry)
     (dec de)
@@ -1384,6 +1745,20 @@
     (pop de)
     (pop hl)
     (ret)
+
+    ;; Invalidate all cached NFAs after an operation such as FORGET that can
+    ;; make previously valid dictionary addresses unreachable.
+    ,@(defcode "(CLEAR-FIND-CACHE)" hidden 'clear-find-cache)
+    (push bc)
+    (push de)
+    (ld hl find-cache)
+    (ld de find-cache-second)
+    (ld bc 127)
+    (ld (hl) 0)
+    (ldir)
+    (pop de)
+    (pop bc)
+    ,@next
 
     ;; Not standard compilant.  Doesn't conform to run-time behavior.
     ;; Exactly the same as LIT
@@ -1485,6 +1860,19 @@
     ;; Parse a name and create a definition header for it.
 
     ,@(defcode "CREATE_" hidden 'create_)
+    ;; A new definition may shadow a cached name.  Invalidate just its hash
+    ;; slot; other hot names remain cached while the body is compiled.
+    (ld a c)
+    (pop hl)
+    (push hl)
+    (ld b a)
+    (call find-cache-address)
+    (ld (hl) 0)
+    (inc hl)
+    (ld (hl) 0)
+    (ld a b)
+    (ld b 0)
+    (ld c a)
     (ld hl (var-dp))
     (ld (var-temp-cell) de)
     (ld de (var-latest))
@@ -1535,6 +1923,7 @@
     (ld a h)
     (ld (de) a)
     (inc de)
+    (ld (current-definition-body) de)
     (ld hl var-dp)
     (ld (hl) e)
     (inc hl)
@@ -1552,6 +1941,15 @@
     (ld a 64)
     (xor (hl))
     (ld (hl) a)
+    ;; Hiding during compilation can cache an older definition with the
+    ;; same name.  Invalidate the slot again when this header is revealed.
+    (and 31)
+    (ld b a)
+    (inc hl)
+    (call find-cache-address)
+    (ld (hl) 0)
+    (inc hl)
+    (ld (hl) 0)
     (pop bc)
     ,@next
 
@@ -1718,7 +2116,7 @@
     (dw (>cfa execute jump interpret-loop))
 
     (label compile-word)
-    (dw (>cfa comma jump interpret-loop))
+    (dw (>cfa compile-xt jump interpret-loop))
 
 
     (label maybe-number)
@@ -1729,7 +2127,7 @@
     (dw (state @ 0jump interpret-loop))
     ;; Otherwise we compile LIT and the number.
     (label compile-num)
-    (dw (lit lit comma comma jump interpret-loop))
+    (dw (lit lit compile-xt comma jump interpret-loop))
 
     ;; Failed to read a number.
     (label num-fail)
@@ -1747,7 +2145,7 @@
 
 (define forth-control-words
   `(,@(defword "IF" immediate 'if)
-    (dw (tick 0branch comma here lit 0 comma exit))
+    (dw (tick 0branch compile-xt here lit 0 comma exit))
 
     ,@(defword "THEN" immediate 'then)
     (dw (dup here swap - swap ! exit))
@@ -1760,13 +2158,13 @@
     (dw (here exit))
 
     ,@(defword "UNTIL" immediate 'until)
-    (dw (tick 0branch comma here - comma exit))
+    (dw (tick 0branch compile-xt here - comma exit))
 
     ,@(defword "AGAIN" immediate 'again)
     (dw (tick branch comma here - comma exit))
 
     ,@(defword "WHILE" immediate 'while)
-    (dw (tick 0branch comma here lit 0 comma exit))
+    (dw (tick 0branch compile-xt here lit 0 comma exit))
 
     ,@(defword "ALLOT" 0 'allot)
     (dw (dp +! exit))
@@ -1784,11 +2182,11 @@
 
     ,@(defword "LOOP" immediate 'loop)
     (dw (tick r> comma tick r> comma tick 1+ comma tick 2dup comma))
-    (dw (tick = comma tick 0branch comma here - comma tick 2drop comma exit))
+    (dw (tick = comma tick 0branch compile-xt here - comma tick 2drop comma exit))
 
     ,@(defword "+LOOP" immediate '+loop)
     (dw (tick r> comma tick r> comma tick rot comma tick + comma))
-    (dw (tick 2dup comma tick = comma tick 0branch comma here))
+    (dw (tick 2dup comma tick = comma tick 0branch compile-xt here))
     (dw (- comma tick 2drop comma exit))
 
     ,@(defword "CASE" immediate 'case)
@@ -1804,7 +2202,7 @@
     (dw (tick drop comma ?dup 0branch 8 then branch ,(- 65536 10) exit))
 
     ,@(defword "FORGET" 0 'forget)
-    (dw (word find dup @ latest ! dp ! exit))
+    (dw (word find dup @ latest ! dp ! clear-find-cache exit))
 
     ,@(defcode "I" 0 'curr-loop-index)
     (push bc)
@@ -1832,11 +2230,11 @@
 
     (label tru)
     (ld bc 1)
-    ,@next
+    ,@next-inline
 
     (label fal)
     (ld bc 0)
-    ,@next
+    ,@next-inline
 
     ))
 
@@ -1889,7 +2287,264 @@
     ))
 
 (define forth-misc-words
-  `(;; Shut down the calculator.
+  `(;; Load the optional version-2 dictionary image from flash page 6.
+    ;; Any format, range, or CRC failure restores the normal mapping and
+    ;; resumes the text bootstrap through the next threaded instruction.
+    ,@(defcode "(BOOTSTRAP-IMAGE)" hidden 'bootstrap-image-loader)
+    (push de)
+    (push bc)
+    (push ix)
+    (ld a 6)
+    (out (6) a)
+
+    ;; Magic and fixed format fields.
+    (ld hl #x4000)
+    (ld de bootstrap-image-magic)
+    (ld b 8)
+    (label bootstrap-image-magic-loop)
+    (ld a (de))
+    (cp (hl))
+    (jp nz bootstrap-image-failed)
+    (inc de)
+    (inc hl)
+    (djnz bootstrap-image-magic-loop)
+    (ld a (#x4008))
+    (cp 2)
+    (jp nz bootstrap-image-failed)
+    (ld a (#x4009))
+    (or a)
+    (jp nz bootstrap-image-failed)
+    (ld a (#x400a))
+    (cp 160)
+    (jp nz bootstrap-image-failed)
+    (ld a (#x400b))
+    (or a)
+    (jp nz bootstrap-image-failed)
+    (ld a (#x400c))
+    (cp 1)
+    (jp nz bootstrap-image-failed)
+    (ld a (#x4014))
+    (cp #x81)
+    (jp nz bootstrap-image-failed)
+
+    ;; The image must target this exact RAM layout and fit in its window.
+    (ld hl (#x4018))
+    (ld de dp-start)
+    (or a)
+    (sbc hl de)
+    (jp nz bootstrap-image-failed)
+    (ld a (#x401a))
+    (or a)
+    (jp nz bootstrap-image-failed)
+    (ld a (#x401b))
+    (or a)
+    (jp nz bootstrap-image-failed)
+    (ld hl (#x4020))
+    (ld de var-dp)
+    (or a)
+    (sbc hl de)
+    (jp nz bootstrap-image-failed)
+    (ld a (#x4022))
+    (or a)
+    (jp nz bootstrap-image-failed)
+    (ld a (#x4023))
+    (or a)
+    (jp nz bootstrap-image-failed)
+    (ld hl (#x4028))
+    (ld de var-latest)
+    (or a)
+    (sbc hl de)
+    (jp nz bootstrap-image-failed)
+    (ld a (#x402a))
+    (or a)
+    (jp nz bootstrap-image-failed)
+    (ld a (#x402b))
+    (or a)
+    (jp nz bootstrap-image-failed)
+    (ld hl (#x4030))
+    (ld de dp-start)
+    (or a)
+    (sbc hl de)
+    (jp nz bootstrap-image-failed)
+    (ld a (#x4032))
+    (or a)
+    (jp nz bootstrap-image-failed)
+    (ld a (#x4033))
+    (or a)
+    (jp nz bootstrap-image-failed)
+    (ld a (#x401e))
+    (or a)
+    (jp nz bootstrap-image-failed)
+    (ld a (#x401f))
+    (or a)
+    (jp nz bootstrap-image-failed)
+    (ld bc (#x401c))
+    (ld a b)
+    (or c)
+    (jp z bootstrap-image-failed)
+    (ld hl dp-start)
+    (add hl bc)
+    (jp c bootstrap-image-failed)
+    (ld de (#x4024))
+    (or a)
+    (sbc hl de)
+    (jp nz bootstrap-image-failed)
+    (ld a (#x4026))
+    (or a)
+    (jp nz bootstrap-image-failed)
+    (ld a (#x4027))
+    (or a)
+    (jp nz bootstrap-image-failed)
+    (ld hl (#x4024))
+    (ld de #xc000)
+    (or a)
+    (sbc hl de)
+    (jp nc bootstrap-image-failed)
+
+    ;; LATEST and the entry CFA must both lie in the copied dictionary.
+    (ld hl (#x402c))
+    (ld de dp-start)
+    (or a)
+    (sbc hl de)
+    (jp c bootstrap-image-failed)
+    (ld a (#x402e))
+    (or a)
+    (jp nz bootstrap-image-failed)
+    (ld a (#x402f))
+    (or a)
+    (jp nz bootstrap-image-failed)
+    (ld hl (#x4024))
+    (ld de (#x402c))
+    (or a)
+    (sbc hl de)
+    (jp c bootstrap-image-failed)
+    (jp z bootstrap-image-failed)
+    (ld hl (#x409c))
+    (ld de dp-start)
+    (or a)
+    (sbc hl de)
+    (jp c bootstrap-image-failed)
+    (ld hl (#x4024))
+    (ld de (#x409c))
+    (or a)
+    (sbc hl de)
+    (jp c bootstrap-image-failed)
+    (jp z bootstrap-image-failed)
+    (ld a (#x409e))
+    (or a)
+    (jp nz bootstrap-image-failed)
+    (ld a (#x409f))
+    (or a)
+    (jp nz bootstrap-image-failed)
+
+    ;; CRC-32/ISO-HDLC over the payload.  The 32-bit accumulator is DEHL,
+    ;; with L as the least-significant byte.
+    (ld ix #x40a0)
+    (ld bc (#x401c))
+    (ld de #xffff)
+    (ld hl #xffff)
+    (label bootstrap-image-crc-byte)
+    (ld a (+ ix 0))
+    (xor l)
+    (ld l a)
+    (inc ix)
+    (push bc)
+    (ld b 8)
+    (label bootstrap-image-crc-bit)
+    (srl d)
+    (rr e)
+    (rr h)
+    (rr l)
+    (jr nc bootstrap-image-crc-no-xor)
+    (ld a l)
+    (xor #x20)
+    (ld l a)
+    (ld a h)
+    (xor #x83)
+    (ld h a)
+    (ld a e)
+    (xor #xb8)
+    (ld e a)
+    (ld a d)
+    (xor #xed)
+    (ld d a)
+    (label bootstrap-image-crc-no-xor)
+    (djnz bootstrap-image-crc-bit)
+    (pop bc)
+    (dec bc)
+    (ld a b)
+    (or c)
+    (jr nz bootstrap-image-crc-byte)
+    (ld a l)
+    (cpl)
+    (ld c a)
+    (ld a (#x4034))
+    (cp c)
+    (jp nz bootstrap-image-failed)
+    (ld a h)
+    (cpl)
+    (ld c a)
+    (ld a (#x4035))
+    (cp c)
+    (jp nz bootstrap-image-failed)
+    (ld a e)
+    (cpl)
+    (ld c a)
+    (ld a (#x4036))
+    (cp c)
+    (jp nz bootstrap-image-failed)
+    (ld a d)
+    (cpl)
+    (ld c a)
+    (ld a (#x4037))
+    (cp c)
+    (jp nz bootstrap-image-failed)
+
+    ;; Install the dictionary and transfer control to its recorded entry.
+    (ld hl #x40a0)
+    (ld de dp-start)
+    (ld bc (#x401c))
+    (ldir)
+    (ld hl (#x4024))
+    (ld (var-dp) hl)
+    (ld hl (#x402c))
+    (ld (var-latest) hl)
+    (ld hl (#x409c))
+    (ld a (hl))
+    (cp #xcd)
+    (jp nz bootstrap-image-failed)
+    (pop ix)
+    (pop bc)
+    (pop hl)
+    (ld de bootstrap-image-return-thread)
+    (push bc)
+    (ld bc (#x409c))
+    (jp execute)
+
+    (label bootstrap-image-failed)
+    ;; A late failure may have copied bytes or restored the captured
+    ;; pointers already.  Reset the live dictionary before interpreting
+    ;; the authoritative text bootstrap.
+    (ld hl last-forth-word)
+    (ld (var-latest) hl)
+    (ld hl dp-start)
+    (ld (var-dp) hl)
+    (ld a #x3f)
+    (out (6) a)
+    (pop ix)
+    (pop bc)
+    (pop de)
+    ,@next
+
+    (label bootstrap-image-return-thread)
+    ;; MENU-DEMO's click handlers switch INPUT-PTR to the test or shell
+    ;; source.  Resume at INTERPRET just as the text bootstrap would after
+    ;; the MENU-DEMO token returns.
+    (dw (interpret poweroff))
+    (label bootstrap-image-magic)
+    (db (#x5a #x4b #x45 #x4d #x45 #x38 #x30 #x42))
+
+    ;; Shut down the calculator.
     ,@(defcode "POWEROFF" 0 'poweroff)
     (jp shutdown)
 
@@ -2289,7 +2944,7 @@
     (dw (lit 65530 sp0 !))
     (dw (lit return-stack-start r0 !))
     (dw (lit string-input-device lit var-current-input-device !))
-    (dw (quit))
+    (dw (bootstrap-image-loader quit))
 
     (dw (poweroff))
 

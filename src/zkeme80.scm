@@ -146,6 +146,26 @@
     (label bootstrap-load-bool)
     (dw (65535))
 
+    ;; Direct-mapped FIND cache.  Each of the 64 slots holds the NFA of a
+    ;; previously resolved name.  The whole RAM area is cleared at boot.
+    (label find-cache)
+    (db (0))
+    (label find-cache-second)
+    (db ,(make-list 127 0))
+    (label find-cache-end)
+
+    ;; State for the peephole compiler.  CREATE_ records the first byte of
+    ;; the current definition body; COMPILE-XT uses it to avoid examining
+    ;; bytes in the header when looking behind the current DP.
+    (label current-definition-body)
+    (dw (0))
+    (label compile-xt-saved-ip)
+    (dw (0))
+    (label compile-xt-current)
+    (dw (0))
+    (label display-dirty)
+    (db (0))
+
     (dw ,(make-list 128 0))
     (label return-stack-start)
 
@@ -170,6 +190,16 @@
        (PRINT-PC)
        (format #t "~a bytes left for page 4.\n" (- #x18000 *pc*))
        '())
+
+    ,(fill-up-to #xff #x18000)
+
+    ;; Optional, verified post-bootstrap dictionary image.  Ordinary builds
+    ;; leave page 6 erased and take the text-bootstrap fallback.
+    (label bootstrap-image-page)
+    ,@(let ((image (getenv "ZKEME80_BOOTSTRAP_IMAGE")))
+        (if image
+            (include-binary-as-bytes image)
+            '()))
 
     ,(fill-up-to #xff #xf0000)
 
