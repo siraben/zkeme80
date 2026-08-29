@@ -1,56 +1,47 @@
 # zkeme80 reverse-engineering tools
 
-This directory adapts the workflow developed in the TI-84 Plus OS
-reverse-engineering project (`~/ti84p-re`) to zkeme80 itself.  Because
-the OS source lives here, we get something TI's ROM cannot offer:
-every label and every Forth word is emitted by the assembler with its
-exact address.  These scripts load that information into Ghidra and
-into dynamic traces so that "what is the CPU doing" always resolves to
-a named Forth word or kernel routine.
+This directory maps assembler-emitted symbols and Forth metadata into Ghidra
+and dynamic TilEm traces. The label map gives native words and kernel routines
+exact image offsets; runtime traces cover words compiled into RAM.
 
 ## Data flow
 
-```text
-make build
-  └─► src/zkeme80.rom               1 MiB flash image
-  └─► src/zkeme80.ram-labelmap.json labels + forth_words + RAM layout
-
-Ghidra (flat import of the ROM)
-  ├─ Zkeme80ApplyLabelmap.java      symbols + functions from the JSON
-  ├─ Zkeme80AnnotateForth.java      decompile threaded colon definitions
-  └─ Zkeme80ForthCallgraph.java     word-to-word call graph (CSV)
-
-TilEm headless (dynamic)
-  ├─ macros/*.macro                 boot / menu navigation scenarios
-  └─ analyze_forth_trace.py         TLMT v2 trace → Forth word hits
+```mermaid
+flowchart TB
+    A[make build] --> B[zkeme80.rom<br/>1 MiB Flash image]
+    A --> C[zkeme80.ram-labelmap.json<br/>labels, Forth words, and RAM layout]
+    C --> D[Ghidra symbols and functions]
+    C --> E[Threaded Forth annotations]
+    C --> F[Forth call graph CSV]
+    B --> G[TilEm headless trace]
+    C --> H[Trace mapper and symbol resolver]
+    G --> H
 ```
 
 ## Address spaces
 
-Two coordinate systems matter, exactly as with TI-OS:
+The tools use two coordinate systems:
 
-* **Image offset** — byte position in `zkeme80.rom` (and in the JSON).
-  Page N occupies `[N*0x4000, (N+1)*0x4000)`.  All labelmap addresses
-  are image offsets.
-* **CPU address** — what the Z80 sees.  Page 0 is permanently mapped at
-  `0000h–3FFFh` and other pages bank into `4000h–7FFFh`.  The image
-  slice `[8000h,C000h)` is an assembly-time address template for RAM
-  `8000h–BFFFh`; boot clears the actual RAM, so only its labels—not its
-  emitted initial bytes—describe runtime state.
+- *Image offset* — a byte position in `zkeme80.rom` and the JSON label map.
+  Flash page $n$ occupies offsets $[n \times 0x4000, (n+1) \times 0x4000)$.
+- *CPU address* — the address visible to the Z80. Flash page `00` is fixed at
+  `00:0000`–`00:3FFF`; selected pages occupy `0x4000`–`0x7FFF`.
 
-All Forth code words (`defcode`/`defword` in `src/forth.scm`) live in
-page 0, where image offset equals CPU address, so threaded-code
-pointers compare directly against labelmap addresses.  Words compiled
-from `.fs` sources at boot live in RAM and only exist at runtime.  The
-static JSON can name their backing RAM variables but cannot name those
-runtime-created dictionary entries; use `tilem_trace.py --forth-rom`
-when you need reconstructed RAM-word transitions.
+The image slice at offsets `0x8000`–`0xBFFF` describes the assembly-time RAM
+layout. `src/boot.scm` clears runtime addresses `0x8000`–`0xFFFF`; it does not
+copy that slice. The label map marks this slice as RAM so its symbols resolve at
+their intended CPU addresses. [confirmed]
+
+Native Forth words from `defcode` and `defword` in `src/forth.scm` reside on
+Flash page `00`, where image offsets equal CPU addresses. Words compiled from
+`.fs` sources reside in RAM and require a runtime trace. The static label map
+still names their backing variables; the TilEm trace tool can reconstruct
+runtime dictionary transitions with `--forth-rom`.
 
 ## Ghidra usage
 
-The scripts are plain GhidraScript Java sources (Ghidra 12 removed
-Jython; Java keeps them working everywhere).  Headless batch — adjust
-the `analyzeHeadless` path to your install:
+The Java sources implement the GhidraScript interface used by Ghidra 12.
+Adjust `GHIDRA` for the local installation, then run:
 
 ```sh
 GHIDRA=/path/to/ghidra/support/analyzeHeadless
@@ -61,31 +52,26 @@ $GHIDRA /tmp/zk80-proj zkeme80 \
   -scriptPath re/ghidra \
   -postScript Zkeme80ApplyLabelmap.java src/zkeme80.ram-labelmap.json \
   -postScript Zkeme80AnnotateForth.java src/zkeme80.ram-labelmap.json \
-  -postScript Zkeme80ForthCallgraph.java src/zkeme80.ram-labelmap.json /tmp/callgraph.csv
+  -postScript Zkeme80ForthCallgraph.java \
+    src/zkeme80.ram-labelmap.json /tmp/callgraph.csv
 ```
 
-Run all three in one pass: `ApplyLabelmap` also force-disassembles at
-every code label so the later stages see flows.
+`Zkeme80ApplyLabelmap.java` names assembler labels, prefixes RAM symbols with
+`ram_`, creates functions, and disassembles at code labels.
+`Zkeme80AnnotateForth.java` follows each `CALL docol` thread and adds word
+sequences, per-cell comments, and data references.
+`Zkeme80ForthCallgraph.java` assigns each page-`00` instruction before the
+embedded source to its nearest routine and emits escaped `caller,callee` CSV
+edges for calls and threaded cells. [confirmed]
 
-`Zkeme80ApplyLabelmap.java` names every assembler label (prefixing RAM
-symbols with `ram_`) and creates functions for kernel routines and
-Forth code words.  `Zkeme80AnnotateForth.java` walks the `call docol`
-threads of every colon definition and writes the full word sequence
-(resolving code-field addresses back to word names) as a plate
-comment plus per-cell end-of-line comments and DATA references, so
-threaded Forth reads like source inside Ghidra.
-`Zkeme80ForthCallgraph.java` attributes page-0 code (stopping before
-the embedded bootstrap source and flash padding) to its nearest
-preceding named routine and emits caller,callee edges from CALL flows
-and threaded-cell references as properly escaped CSV.  Note: `rst 38h`
-traps show up as calls to `swap-sector` (that symbol is equated to
-`0x38`, the interrupt vector) — filter that edge when summarizing.
+The `swap-sector` equate has value `0x0038`, which is also the IM 1 vector.
+Call-graph summaries should exclude `RST 0x38` edges attributed to that equate.
 
 ## Dynamic tracing
 
-Requires the [tilem-headless](https://github.com/siraben/tilem-headless)
-fork (`nix build .#tilem` there).  Capture a full instruction trace
-while driving the OS with a macro:
+Dynamic tracing requires the
+[tilem-headless](https://github.com/siraben/tilem-headless) fork. Build that
+repository with `nix build .#tilem`, then capture and analyze a trace:
 
 ```sh
 TILEM=~/Git/tilem-headless/result/bin/tilem2
@@ -96,37 +82,34 @@ python3 re/analyze_forth_trace.py /tmp/zk80.trace \
   src/zkeme80.ram-labelmap.json --forth-only --forth-bigrams --top 30
 ```
 
-The analyzer replays the mapper from the trace's OUT instructions
-(ports 4/5/6/7), including TI-84+ mode-1 even/odd pairing, so banked
-window PCs resolve correctly.  It reports execution counts per static
-kernel label and per page-0 **Forth dictionary word**; static RAM
-labels in `$8000–$BFFF` resolve when selector `$81` maps physical RAM
-page 1.  `--forth-bigrams` counts visits to exact static Forth code-field
-addresses and reports adjacent dynamic word entries.  These pairs rank
-possible superinstructions; because dynamic adjacency can cross a colon-word
-call or return, confirm that a candidate also occurs in adjacent threaded
-cells before fusing it.  Use a full trace here: a ring/backtrace can discard
-the early mapper writes and does not preserve their resulting state in its
-header.  The analyzer memory-maps the trace rather than reading the whole
-multi-gigabyte file into the Python heap.  The same fork's
-`tools/tilem_trace.py` offers runtime Forth dictionary reconstruction, key
-timelines, and DROP-underflow detection for deeper forensics.
+The analyzer memory-maps the trace, replays writes to mapper ports
+`0x04`–`0x07`, handles mode-1 even/odd pairing, and reports instruction counts
+by kernel label and page-`00` Forth word. It resolves `ram:8000`–`ram:BFFF`
+when selector `0x81` maps that physical RAM page. Use a full trace: a ring
+trace can discard mapper writes without recording their resulting state.
+[confirmed]
 
-Run the mapper/resolver regression tests with:
+`--forth-bigrams` counts adjacent entries at exact static Forth code-field
+addresses. Dynamic adjacency can cross a colon-word call or return, so verify a
+superinstruction candidate against adjacent threaded cells before fusing it.
+
+Run the mapper, resolver, and profiler regression tests with:
 
 ```sh
 python3 re/test_analyze_forth_trace.py -v
 ```
 
-`re/macros/boot-only.macro` just boots and screenshots;
-`re/macros/run-test-suite.macro` navigates the main menu to the test
-suite button, captures the final tally (265/265 as of this writing)
-and the menu it returns to — handy as a smoke test after any kernel
-change.
+The fork's `tools/tilem_trace.py` reconstructs runtime dictionaries and RAM,
+emits key-event timelines, and checks the cached-TOS Forth stack model.
 
-The macro waits for the final tally before sending the unload key.
-`KEY` first flushes held keys, so sending input while the suite is
-still running—or holding a key before it reaches `PAUSE`—will be
-discarded by design.  With the current 35-second normal-speed wait, a
-single ENTER completes the full lifecycle: tests → unload via
-`FORGET TEST-SUITE-START` → menu.
+## Test-suite macro
+
+`re/macros/boot-only.macro` captures the boot screen.
+`re/macros/run-test-suite.macro` opens the suite, waits for the terminal
+`265/265` tally, sends the unload key, and captures the restored menu. The suite
+unloads through `FORGET TEST-SUITE-START`.
+
+`KEY` discards held input before waiting for a new key. Input sent while the
+suite is running, or held before its final `PAUSE`, is therefore ignored. The
+macro's 35-second normal-speed wait keeps the final **ENTER** press on the
+unload prompt rather than in the active suite.
