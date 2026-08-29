@@ -1,34 +1,142 @@
-# Forth source compression
+# Forth bootstrap stream compression
 
-zkeme80 currently stores each bootstrap stage as plain Forth text on a flash
-page.  Run `python tools/analyze_forth_compression.py` to reproduce the size
-of a classic LZSS format with a 4 KiB window, 3–18 byte matches, one flag bit
-per token, and two-byte match records.  The tool decodes every result and
-checks it byte-for-byte against the input.
+The bootstrap sources are currently stored as plain text on flash pages. Two
+offline tools quantify ways to shrink them; neither changes the ROM format or
+the runtime interpreter yet.
 
-On the current sources, separate per-stage streams reduce roughly 29.6 KiB of
-text to 13.0 KiB.  This is small enough for one 16 KiB flash page plus a
-decoder, instead of the current sources occupying pages 1, 2, 3, 4, and 5.
-A 512-byte window retains most of the benefit while consuming much less of the
-14.4 KiB initial dictionary space; measure it with `--window 512`.
+- `tools/analyze_forth_compression.py` applies LZSS directly to the source
+  bytes. This is the smallest current baseline.
+- `tools/bootstrap_stream.py` first makes a deterministic, Forth-aware token
+  stream, then optionally applies the same LZSS codec. It reconstructs every
+  source byte and is intended as a stable prototype for a future input device.
 
-The appropriate runtime design is a decompression-backed input device for
-`GETC`/`UNGETC`, not whole-stage expansion into the dictionary area.  Its
-state consists of the compressed pointer/page, flag byte and bit count, and a
-sliding output ring.  `UNGETC` requires at least a one-byte decoded pushback;
-error reporting that seeks backward to the current line needs either a small
-line buffer or an explicit loss of source-line echo for compressed input.
+Run the report from the repository root:
+
+```sh
+python3 tools/bootstrap_stream.py report
+python3 tools/bootstrap_stream.py report --window 512
+```
+
+It prints source, token-stream, and LZSS payload sizes for each stage, followed
+by totals including archive framing and the dictionary. On the current source
+set and a 4 KiB window, 29,578 source bytes become 13,496 bytes of separately
+compressed token payloads or a 16,942-byte complete archive. The complete
+archive includes a 403-word, 3,257-byte dictionary and stage metadata. Direct
+raw-byte LZSS remains smaller at about 13.0 KiB; the token archive trades that
+space for explicit lexical boundaries and dictionary references that a future
+token input path can consume. These figures are measurements, not a proposed
+flash layout.
+
+Build and verify an archive with:
+
+```sh
+make bootstrap-stream
+python3 tools/bootstrap_stream.py verify build/bootstrap.zbs
+
+# Compare decoded stages byte-for-byte with explicit source files.
+python3 tools/bootstrap_stream.py verify build/bootstrap.zbs \
+  src/boot.fs src/bootstrap-flash{1,2,3,4,5}.fs
+```
+
+The make target is opt-in and writes an ignored archive; normal ROM builds are
+unchanged. `build --codec tokens` omits LZSS, and `--window N` selects a
+1–4096-byte LZSS history. Smaller windows reduce a future decoder's RAM need.
+
+## Lexing and exactness
+
+Lexing operates on bytes, not decoded text. It recognizes:
+
+- runs of the current `WORD` delimiters (space, tab, and LF);
+- ordinary whitespace-delimited words;
+- `\` line comments through, but not including, the line ending;
+- `(` comments through the next `)`;
+- `S"` and `."` forms through the next `"`.
+
+Recognition begins only when `\`, `(`, `S"`, or `."` is a complete Forth word.
+That mirrors how the current input is written and prevents comment or string
+contents from being dictionary-tokenized. Unterminated constructs consume the
+remaining input, allowing malformed test cases to round-trip too. Names,
+strings, comments, spaces, tabs, CR/LF bytes, and final-newline presence are all
+preserved. A CR remains ordinary payload because the current `WORD` does not
+treat it as a delimiter. Archive construction decodes its own output and
+rejects differences.
+
+The global word dictionary is deterministic. Repeated ordinary words are
+considered in bytewise lexical order and retained only when literal-versus-
+reference accounting shows a net token-stream saving. Input path spelling and
+the current working directory therefore do not affect output; only unique file
+basenames and contents are stored.
+
+## Version 1 archive format
+
+All integers marked `ULEB` use canonical unsigned LEB128. Fixed-width integers
+are little-endian.
+
+| Field | Encoding | Meaning |
+| --- | --- | --- |
+| magic | 4 bytes | `ZKBS` |
+| version | byte | `1` |
+| codec | byte | `0` token records, `1` LZSS records |
+| window | u16 | zero for codec 0; 1–4096 for codec 1 |
+| dictionary count | ULEB | number of shared word entries |
+| dictionary entries | repeated ULEB + bytes | length and exact word bytes |
+| stage count | ULEB | number of following stage records |
+
+Each stage record contains, in order:
+
+| Field | Encoding |
+| --- | --- |
+| basename | ULEB length + UTF-8 bytes |
+| reconstructed source length | ULEB |
+| lexical token count | ULEB |
+| decoded token-stream length | ULEB |
+| stored payload length | ULEB |
+| reconstructed-source CRC-32 | u32 |
+| token or LZSS payload | stored payload length bytes |
+
+The decoded stage payload is a sequence of tagged records followed by `END`:
+
+| Tag | Name | Body |
+| --- | --- | --- |
+| `00` | `END` | none |
+| `01` | `WORD` | ULEB length + exact bytes |
+| `02` | `WORD_REF` | ULEB dictionary index |
+| `03` | `WHITESPACE` | ULEB length + exact bytes |
+| `04` | `LINE_COMMENT` | ULEB length + exact bytes |
+| `05` | `PAREN_COMMENT` | ULEB length + exact bytes |
+| `06` | `QUOTED` | ULEB length + exact bytes |
+
+Codec 1 uses the format in `analyze_forth_compression.py`: eight LSB-first
+flags followed by literal bytes or two-byte matches. A match stores a 12-bit
+distance minus one and a four-bit length minus three, giving distances of
+1–4096 and lengths of 3–18 bytes. Payload bounds, decoded lengths, token counts,
+dictionary indices, canonical integers, final CRCs, and trailing bytes are all
+checked by the host decoder.
+
+## Runtime direction
+
+The archive is organized for sequential consumption. A future `GETC`-style
+device can retain the current stage pointer, LZSS flag state, a sliding output
+ring, the current token payload, and a one-byte pushback. It can replay exact
+bytes into the existing parser; a later token-aware path may handle `WORD_REF`
+directly while emitting other records unchanged. Error reporting that seeks
+backward to the current line additionally needs a small line buffer or an
+explicit loss of source-line echo.
 
 Before changing the ROM layout:
 
-1. Add the streaming decoder and round-trip fixtures without moving pages.
-2. Trace boot and the full on-device suite with compressed and raw inputs and
-   compare dictionary/RAM dumps.
-3. Choose the smallest window whose compressed stream plus decoder is a net
-   win, then pack stages and update the `.8xu` page manifest.
-4. Keep an uncompressed developer build option so parser failures still show
-   exact source lines.
+1. Implement a bounded streaming decoder without moving pages.
+2. Trace boot and the on-device suite with archived and raw inputs, comparing
+   dictionary/RAM dumps and emitted text.
+3. Measure decoder code plus archive size at several window sizes before
+   choosing the page layout and `.8xu` page manifest.
+4. Keep an uncompressed developer-build path for parser diagnostics.
 
-Build-time comment stripping can save more, but it is a separate semantic
-change: quoted strings, `\\` line comments, parenthesized comments, and line
-boundaries used by error reporting must all be preserved deliberately.
+Comment stripping or whitespace normalization could save more, but each is a
+semantic change and intentionally outside this byte-exact format version.
+
+The implemented alternative that avoids parsing or decompressing source
+on-device is the versioned [precompiled bootstrap image](precompiled-bootstrap.md).
+It packages the post-bootstrap RAM dictionary on flash page 6 while keeping
+this compressed-source work useful for future smaller distribution images and
+the plain text path as a compatibility and diagnostics fallback.

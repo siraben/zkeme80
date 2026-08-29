@@ -93,7 +93,7 @@ $TILEM --headless --rom src/zkeme80.rom --model ti84p --normal-speed \
   --reset --macro re/macros/run-test-suite.macro \
   --trace /tmp/zk80.trace --trace-range all
 python3 re/analyze_forth_trace.py /tmp/zk80.trace \
-  src/zkeme80.ram-labelmap.json --forth-only --top 30
+  src/zkeme80.ram-labelmap.json --forth-only --forth-bigrams --top 30
 ```
 
 The analyzer replays the mapper from the trace's OUT instructions
@@ -101,13 +101,16 @@ The analyzer replays the mapper from the trace's OUT instructions
 window PCs resolve correctly.  It reports execution counts per static
 kernel label and per page-0 **Forth dictionary word**; static RAM
 labels in `$8000–$BFFF` resolve when selector `$81` maps physical RAM
-page 1.  Use a full trace here: a ring/backtrace can discard the early
-mapper writes and does not preserve their resulting state in its
+page 1.  `--forth-bigrams` counts visits to exact static Forth code-field
+addresses and reports adjacent dynamic word entries.  These pairs rank
+possible superinstructions; because dynamic adjacency can cross a colon-word
+call or return, confirm that a candidate also occurs in adjacent threaded
+cells before fusing it.  Use a full trace here: a ring/backtrace can discard
+the early mapper writes and does not preserve their resulting state in its
 header.  The analyzer memory-maps the trace rather than reading the whole
 multi-gigabyte file into the Python heap.  The same fork's
-`tools/tilem_trace.py` offers runtime Forth
-dictionary reconstruction, key timelines, and DROP-underflow
-detection for deeper forensics.
+`tools/tilem_trace.py` offers runtime Forth dictionary reconstruction, key
+timelines, and DROP-underflow detection for deeper forensics.
 
 Run the mapper/resolver regression tests with:
 

@@ -1,0 +1,7 @@
+# Boot through the text bootstrap and capture all eight physical RAM pages.
+# tools/bootstrap_image.py extracts selector 0x81, which owns $8000-$BFFF.
+set key_hold 0.25s
+set key_delay 0.05s
+key ON
+wait 10s
+memdump build/bootstrap.ram ram

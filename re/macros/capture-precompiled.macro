@@ -1,0 +1,7 @@
+# Give the optional image loader time to validate, install, and draw the menu,
+# then capture physical RAM for tools/bootstrap_image.py verify-ram.
+set key_hold 0.05s
+set key_delay 0.02s
+key ON
+wait 1s
+memdump build/precompiled.ram ram
