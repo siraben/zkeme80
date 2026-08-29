@@ -1,137 +1,120 @@
-# The TI-84+ boot process and how zkeme80 boots
+# TI-84+ and zkeme80 boot process
 
-This document cross-references zkeme80's boot path with the
-hardware-level boot behavior documented in the separate TI-84+ OS
-reverse-engineering project (OS 2.55MP retail boot page).  Claims about
-TI's retail boot are tagged like there: `[confirmed]` (read from the
-retail boot page / traced), `[standard]` (publicly documented), or
-`[hypothesis]`.
+This document relates zkeme80's startup code to the TI-84+ OS 2.55MP retail
+boot page. Evidence tags distinguish byte- or trace-backed claims
+(`[confirmed]`), public platform behavior (`[standard]`), and interpretations
+that still require a device test (`[hypothesis]`).
 
-## 1. What happens between reset and an OS
+## Reset and OS handoff
 
-On reset the Z80 starts executing the **boot sector**, flash page `3F`,
-mapped at logical `8000h–BFFFh`.  Emulators disagree on the exact reset
-PC (TilEm starts at `8000`; Wabbitemu at `0000`), so an OS must not
-depend on which window the boot page appears in `[confirmed]`.
+Hardware reset begins on fixed Flash page `3F` at `3F:4000`. The retail boot
+code converges at `3F:412C`, configures the mapper and peripherals, and tests
+for an installed OS at `3F:4238`. [confirmed]
 
-TI's retail boot stub then:
-
-1. Programs ports `04`/`06`(/`07`) explicitly instead of trusting reset
-   mapper defaults.
-2. Runs a ~0.29 s delay loop, sets `IM 1`, `SP := 0xFFC5`.
-3. Reprograms every mapper window; final runtime map is window A
-   (`4000h–7FFFh`, port 6) = flash page `3F`, windows B/C = RAM pages
-   `[standard]`.
-4. Initializes link assist, bus-timing wait states, execution
-   protection bounds, GPIO/USB control `[confirmed]`.
-5. Scans the keypad once: DEL held → serial recovery, STAT held → USB
-   recovery, otherwise → the *installed-OS check* `[confirmed]`.
-
-### The installed-OS handshake
-
-The fast reset path checks exactly two things on page 0 before handing
-off `[confirmed]`:
-
-```z80
-ld a,(0x0038); cp 0xFF      ; IM1 vector must contain real code
-ld hl,(0x0056); ld bc,0xA55A; sbc hl,bc
-jp z,0x0053                 ; -> jump to the installed OS entry
-```
-
-i.e. byte `0x38` must not be blank flash, the little-endian word at
-`0x0056` must equal `A55Ah`, and the `JP` at `0x0053` receives control.
-(Cryptographic validation via `_CheckOSValidated` only runs on the
-recovery/diagnostic paths, not on this fast path.)
-
-**zkeme80 satisfies this handshake**: `header.scm` places
-`jp sys-interrupt` at `0x38`, `jp boot` at `0x53`, and the bytes
-`5A A5 FF` at `0x56`.  With these bytes, a calculator whose retail
-boot page is intact soft-resets straight into zkeme80.  (Historically
-zkeme80 shipped `FF A5 FF` here — the word read `A5FFh`, the check
-failed, and real hardware fell into the *"Waiting… Please install
-operating system now"* recovery screen.  TilEm never noticed because a
-blank boot page reaches page 0 through a different path.)
-
-## 2. The zkeme80 image layout
-
-| Image offset | Contents | Runtime home |
-|---|---|---|
-| `0x0000–0x3FFF` | kernel: header, `boot`, `sys-interrupt`, Forth VM + code words | flash page 0, hardwired at `0000h–3FFFh` |
-| `0x4000–0x7FFF` | `bootstrap-flash1.fs` source text | interpreted from banked flash |
-| `0x8000–0xBFFF` | assembly-time RAM layout: Forth variables, input buffers, stacks region marker | address template only; boot clears runtime RAM and `forth-main` initializes live state |
-| `0xC000–0xFFFF` … | more `.fs` source (flash2–5) | interpreted from banked flash |
-| `0x18000–0x1BFFF` (page `06`) | optional verified precompiled dictionary; erased in ordinary builds | copied to RAM or rejected before the text bootstrap |
-| `0xF0000` (page `3C`) | `wtf-prog`: the unlock/lock-flash trampolines | banked by `unlock-flash`/`lock-flash` |
-
-The `mktiupgrade`-produced installer writes pages `00` through `06` plus
-`3C`; writing page `06` also clears any stale precompiled image during an
-ordinary upgrade.  It leaves the retail boot page `3F` intact, which is why the
-handshake above matters.
-
-## 3. zkeme80's boot sequence (`src/boot.scm`)
+The installed-OS test is equivalent to:
 
 ```text
-boot/shutdown:  DI ; OUT(4)=6        slowest timer tick, independent mapping
-                OUT(7)=0x81          window B -> RAM page 81
-                LD SP,0 ; CALL sleep IM1 gets set inside sleep
-restart/reboot: OUT(0E)=3, OUT(0F)=0 extended flash bits
-                unlock-flash ... execution-protection ports 22/23/25/26 ... lock-flash
-                OUT(20)=1            CPU clock 15 MHz
-                OUT(3)=0b0001011     interrupt mask: ON + timer1 (+bit3 keep-power-in-HALT)
-                zero RAM $8000-$FFFF
-                LCD init writes to port 10 with fixed delays
-                JP into the Forth main loop
+if byte[ram:0038] != 0xFF and word_le[ram:0056] == 0xA55A:
+    jump ram:0053
 ```
 
-Cross-checked against TI's own initialization `[confirmed unless noted]`:
+The first condition requires code at the IM 1 vector. The second requires the
+little-endian signature bytes `5A A5` at `ram:0056`. A successful check jumps
+through `ram:0053`; cryptographic OS validation belongs to recovery and
+diagnostic paths, not this direct handoff. [confirmed]
 
-* **Interrupt mode**: `sleep` executes `IM 1` before `EI`, and the
-  handler lives at the fixed `0038h` vector — same model as TI-OS,
-  which also runs IM 1 with its ISR at `ram:0038`.
-* **Interrupt mask `0x0B`** equals TI's normal-work mask (ON key +
-  standard timer 1 enabled, bit 3 keeping power during `HALT`).  Timer
-  1 ticks at ~107.8 Hz with the `OUT(4)=6` rate bits, matching TI's
-  choice.
-* **ISR acknowledgement** uses the clear-on-zero dance (`IN(3)`,
-  `RES n`, `OUT(3)`, `SET n`, `OUT(3)`), equivalent to TI's
-  latch-clearing sequence.  USB events are drained separately through
-  port `55h`/`56h`/`57h`; note TI's ISR treats port `55h` as active-low
-  in bits 0–4 and port `56h` as an event bitmap that port-3 acks do
-  *not* clear — an OS that ignores USB will spin in its ISR, so
-  zkeme80's drain is required, not optional.
-* **Execution-protection ports** (`22/23/25/26`) are written while
-  flash is unlocked.  On real hardware TI additionally gates each such
-  write behind the fetched-byte pattern `00 00 ED 56 F3 D3`
-  (`nop nop im 1 di out`) executed from specific physical pages
-  `[confirmed for TI-OS]`; it is `[hypothesis]` whether the ASIC
-  enforces this for all writers.  Even if the writes silently fail,
-  the stock bounds still permit zkeme80's use: pages `00–07` are
-  executable and default mode 0 makes odd RAM pages fully executable,
-  which covers both the page-0 kernel and RAM-resident Forth code.
-* **LCD init** writes the command sequence `05 01 03 17 0B EF` to port
-  `10h` guarded by fixed delays rather than polling the ready bit on
-  port `02h`.  TI polls readiness before every command and starts with
-  `40h`; zkeme80's sequence works on emulators and has worked on
-  hardware `[standard/hypothesis]` — tightening this would be cheap.
-* **Stack**: early boot uses `SP=0` (wrapping into `$FFxx` RAM, safe
-  because RAM is cleared after interrupts are masked); the Forth VM
-  then installs `SP=0xFFF4`-ish and return stack at `IX=$C000`
-  (`forth-shared-header`).  TI-OS uses `SP=0xFFF7` steady-state.
+zkeme80 supplies all three values in `src/header.scm`:
 
-## 4. Practical consequences
+```scheme
+(jp sys-interrupt)          ; ram:0038
+...
+(jp boot)                   ; ram:0053
+(db (#x5a #xa5 #xff))       ; ram:0056
+```
 
-* **Soft resets land in zkeme80** thanks to the `A55Ah` handshake — no
-  key needed, matching TI-OS UX.
-* **DEL/STAT at reset still reach TI's recovery paths** (serial/USB
-  OS receive).  That is desirable: it preserves a recovery channel.
-* **Do not ship code on flash pages `08h–29h`**: with the stock
-  protection bounds a fetch there resets the machine.  zkeme80 keeps
-  everything in pages `00–06` plus the `3C` trampoline page — well
-  inside the legal set.
-* **The `wtf-prog` page (`3C`)** provides the two routines reached at
-  logical `4001h`/`4017h` when page `3C` is banked: they perform the
-  protected `OUT (14h)` gate write (unlock/lock flash) using the same
-  instruction-shape the ASIC expects.
-* When tracing under TilEm headless, seed the mapper replay with
-  `port4=0x07, port5=0, port6=0x3F, port7=0x3F` (TilEm reset state);
-  `re/analyze_forth_trace.py` does this automatically.
+Before this check, the retail code scans the keypad. Holding **DEL** selects
+serial recovery, and holding **STAT** selects USB recovery. [confirmed]
+
+## Image layout
+
+The assembler produces a 1 MiB Flash image. Source text is interpreted from
+banked Flash during bootstrap.
+
+| Image offsets | Flash page | Contents |
+|---|---:|---|
+| `0x0000`–`0x3FFF` | `00` | Header, kernel, native Forth words, and `boot.fs` |
+| `0x4000`–`0x7FFF` | `01` | `bootstrap-flash1.fs` |
+| `0x8000`–`0xBFFF` | `02` | `bootstrap-flash2.fs` and the assembly-time RAM layout |
+| `0xC000`–`0xFFFF` | `03` | `bootstrap-flash3.fs` |
+| `0x10000`–`0x13FFF` | `04` | `bootstrap-flash4.fs` |
+| `0x14000`–`0x17FFF` | `05` | `bootstrap-flash5.fs` |
+| `0x18000`–`0x1BFFF` | `06` | Optional verified precompiled dictionary |
+| `0xF0000`–`0xF3FFF` | `3C` | Flash unlock and lock trampolines |
+
+The page-`02` RAM layout assigns addresses to system variables, buffers, and
+stacks during assembly. `src/boot.scm` clears live RAM at `0x8000`–`0xFFFF`
+and does not copy this image slice into RAM. `forth-main` then initializes the
+live dictionary pointers and other kernel variables. The label map marks the
+slice as RAM so its symbols resolve at the intended CPU addresses. [confirmed]
+
+Normal builds fill page `06` with `0xFF`; precompiled builds place a validated
+dictionary image there. Both upgrade targets package pages `00`–`06` and `3C`,
+so an ordinary upgrade also removes a stale precompiled image. The retail boot
+page `3F` remains intact. [confirmed]
+
+## zkeme80 startup
+
+`src/boot.scm` performs the following sequence:
+
+```text
+disable interrupts
+select timer rate 6 and map selector 81 into window B
+enter sleep with IM 1 enabled
+
+on restart:
+    disable interrupts and restore the stack and mapper state
+    unlock Flash
+    program execution-protection ports
+    lock Flash
+    select the 15 MHz CPU clock
+    enable ON-key and timer-1 interrupts
+    clear 0x8000–0xFFFF
+    initialize the LCD
+    enter the Forth VM
+```
+
+The sequence has these hardware-facing properties:
+
+- **Interrupt mode.** `sleep` selects IM 1 before enabling interrupts. The
+  handler is at `ram:0038`, matching the fixed vector used by TI-OS.
+- **Interrupt mask.** Port `0x03` receives `0x0B`, enabling the ON key and
+  timer 1 while preserving power during `HALT`. Port `0x04` receives `0x06`.
+- **Interrupt acknowledgement.** The handler clears port-`0x03` latches and
+  drains USB events through ports `0x55`–`0x57`.
+- **Execution protection.** The code writes ports `0x22`, `0x23`, `0x25`, and
+  `0x26` while Flash is unlocked. The retail OS also places a fetched-byte
+  sequence before protected writes. Whether every ASIC revision requires that
+  sequence for zkeme80's writes remains unverified. [hypothesis]
+- **LCD initialization.** zkeme80 sends `05 01 03 17 0B EF` to port `0x10`
+  after fixed delays. TI-OS polls the port-`0x02` ready bit before commands.
+  The zkeme80 sequence works in supported emulators; its timing margin needs a
+  physical-device trace. [hypothesis]
+- **Stacks.** Early startup uses `SP = 0x0000`. The Forth VM later places the
+  data stack near `0xFFF4` and starts its return stack at `0xC000`.
+
+Except where tagged separately, these properties are confirmed by the
+assembled source and retail-boot disassembly. [confirmed]
+
+## Operational constraints
+
+- Soft reset enters zkeme80 through the `0xA55A` installed-OS signature.
+- **DEL** and **STAT** retain access to the retail serial and USB recovery
+  paths.
+- The stock execution bounds permit zkeme80's pages `00`–`06` and its
+  RAM-resident Forth code. Code placed on Flash pages `08`–`29` can trigger an
+  execution-protection reset. [confirmed]
+- The page-`3C` trampolines execute at `3C:4001` and `3C:4017` when page `3C`
+  is selected. They write the Flash-control gate on port `0x14`.
+- TilEm trace replay begins with mapper values `0x04 = 0x07`, `0x05 = 0x00`,
+  `0x06 = 0x3F`, and `0x07 = 0x3F`. `re/analyze_forth_trace.py` uses these
+  values as explicit analyzer inputs. [confirmed]

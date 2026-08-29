@@ -95,12 +95,11 @@ tricky to build and you have to enable all sorts of flags and install
 dependencies.  If anyone knows a good emulator for macOS, please let
 me know.
 
-For a much faster boot, `make precompiled-rom TILEM_HEADLESS=/path/to/tilem2`
-captures the deterministic post-bootstrap dictionary, verifies it, and writes
-`zkeme80-precompiled.rom` with that image on flash page 6.  The calculator
-checks the payload CRC and layout before executing it and falls back to the
-ordinary text bootstrap if the page is absent or invalid.  See
-[`docs/precompiled-bootstrap.md`](docs/precompiled-bootstrap.md) for the image
+`make precompiled-rom TILEM_HEADLESS=/path/to/tilem2` captures and verifies the
+post-bootstrap dictionary, then writes it to Flash page `06` in
+`zkeme80-precompiled.rom`. The calculator checks the layout and payload CRC
+before execution; an absent or invalid image falls back to the text bootstrap.
+The [precompiled-bootstrap guide](docs/precompiled-bootstrap.md) documents the
 format, smoke test, and upgrade target.
 
 ### Using the Nix package manager (macOS or Linux)
@@ -118,23 +117,19 @@ $ nix-build && ./result/bin/runit
 
 ## Files included
 
-* `assembler.scm` assembles s-exp style assembly code into binary.  Simply
-  run `(load "assembler.scm")` into your Scheme REPL and
-  run`(assemble-prog sample-prog)` to see the binary data.  Run
+- `assembler.scm` assembles s-expression assembly code into binary. Run
+  `(load "assembler.scm")` in your Scheme REPL, then
+  run `(assemble-prog sample-prog)` to see the binary data. Run
   `(assemble-to-file sample-prog "out.bin")` to write a binary file.
-* `zkeme80.scm` is the Forth-based operating system.  Load
+- `zkeme80.scm` is the Forth-based operating system. Load
   `zkeme80.scm` then run `(make-rom "zkeme80.rom")` to output binary
   to a file `zkeme80.rom`.
-* `re/` contains reverse-engineering and tracing tools adapted from
-  the TI-84+ OS RE project: Ghidra scripts that apply the build's
-  labelmap (symbols, threaded-code annotations, Forth call graphs)
-  and headless-TilEm macros plus a trace analyzer for dynamic Forth
-  word tracing.  See `re/README.md`.
-* `docs/boot-process.md` documents how the TI-84+ boots and how
-  zkeme80 satisfies (and where it deviates from) the retail boot
-  process, including the installed-OS handshake at page-0 offset
-  `0x56`.
-* `coverage.org` tracks which Forth words are covered by the boot-time
+- `re/` contains [reverse-engineering and tracing tools](re/README.md): Ghidra
+  scripts for build labels, threaded-code annotations, and Forth call graphs,
+  plus headless TilEm macros and a dynamic trace analyzer.
+- [The boot-process guide](docs/boot-process.md) relates zkeme80 startup to the
+  retail boot path, including the installed-OS handshake at `ram:0056`.
+- `coverage.org` tracks which Forth words are covered by the boot-time
   test suite; `src/bootstrap-flash4.fs` runs it, and
   `re/macros/run-test-suite.macro` drives it headlessly under TilEm,
   including the automated RC4 known-answer tests (Wikipedia vectors).
