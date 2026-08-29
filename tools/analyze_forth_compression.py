@@ -82,7 +82,9 @@ def compress(data: bytes, window: int = 4096) -> bytes:
     return bytes(output)
 
 
-def decompress(data: bytes) -> bytes:
+def decompress(data: bytes, window: int = 4096) -> bytes:
+    if not 1 <= window <= 4096:
+        raise ValueError("window must be between 1 and 4096 bytes")
     output = bytearray()
     cursor = 0
     while cursor < len(data):
@@ -101,6 +103,8 @@ def decompress(data: bytes) -> bytes:
                 cursor += 2
                 distance = (((high & 0x0F) << 8) | low) + 1
                 length = (high >> 4) + 3
+                if distance > window:
+                    raise ValueError("LZSS match exceeds configured window")
                 if distance > len(output):
                     raise ValueError("LZSS match precedes output")
                 for _ in range(length):
@@ -119,7 +123,7 @@ def main() -> None:
     for name in args.paths:
         raw = Path(name).read_bytes()
         packed = compress(raw, args.window)
-        if decompress(packed) != raw:
+        if decompress(packed, args.window) != raw:
             raise RuntimeError(f"round-trip failed for {name}")
         total_raw += len(raw)
         total_packed += len(packed)

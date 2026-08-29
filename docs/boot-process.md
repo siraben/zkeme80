@@ -60,10 +60,12 @@ blank boot page reaches page 0 through a different path.)
 | `0x4000–0x7FFF` | `bootstrap-flash1.fs` source text | interpreted from banked flash |
 | `0x8000–0xBFFF` | assembly-time RAM layout: Forth variables, input buffers, stacks region marker | address template only; boot clears runtime RAM and `forth-main` initializes live state |
 | `0xC000–0xFFFF` … | more `.fs` source (flash2–5) | interpreted from banked flash |
+| `0x18000–0x1BFFF` (page `06`) | optional verified precompiled dictionary; erased in ordinary builds | copied to RAM or rejected before the text bootstrap |
 | `0xF0000` (page `3C`) | `wtf-prog`: the unlock/lock-flash trampolines | banked by `unlock-flash`/`lock-flash` |
 
-The `mktiupgrade`-produced installer writes pages `00` through `05` plus
-`3C`, leaving the retail boot page `3F` intact — which is why the
+The `mktiupgrade`-produced installer writes pages `00` through `06` plus
+`3C`; writing page `06` also clears any stale precompiled image during an
+ordinary upgrade.  It leaves the retail boot page `3F` intact, which is why the
 handshake above matters.
 
 ## 3. zkeme80's boot sequence (`src/boot.scm`)

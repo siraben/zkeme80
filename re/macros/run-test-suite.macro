@@ -13,15 +13,15 @@ key RIGHT
 wait 0.3s
 key DOWN
 wait 0.3s
-screenshot MENU_BEFORE.png
+screenshot re/macros/MENU_BEFORE.png
 # The first tap can be swallowed by KEY's flush-keys debounce; send a
 # second one for the wait-key loop to catch.
 key ENTER
 wait 35s
-screenshot TALLY.png
+screenshot re/macros/TALLY.png
 # The suite is now parked in PAUSE with no key held, so KEY's
 # flush-then-wait sequence observes this tap normally.
 key ENTER
 wait 3s
-screenshot BACK_AT_MENU.png
-memdump SUITE_RAM ram-logical
+screenshot re/macros/BACK_AT_MENU.png
+memdump re/macros/SUITE_RAM ram-logical

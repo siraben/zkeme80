@@ -3,5 +3,5 @@ set key_hold 0.25s
 set key_delay 0.05s
 key ON
 wait 10s
-screenshot BOOT_PNG
-memdump BOOT_RAM ram-logical
+screenshot re/macros/BOOT.png
+memdump re/macros/BOOT_RAM ram-logical

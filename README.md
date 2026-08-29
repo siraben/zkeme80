@@ -115,6 +115,14 @@ The [kernel correctness checks](docs/kernel-correctness.md) document dictionary
 bounds, checked flash mapping, and how to run the 286-case ANS suite plus
 151 boundary regressions in an extended TilEm emulator.
 
+For a much faster boot, `make precompiled-rom TILEM_HEADLESS=/path/to/tilem2`
+captures the deterministic post-bootstrap dictionary, verifies it, and writes
+`zkeme80-precompiled.rom` with that image on flash page 6.  The calculator
+checks the payload CRC and layout before executing it and falls back to the
+ordinary text bootstrap if the page is absent or invalid.  See
+[`docs/precompiled-bootstrap.md`](docs/precompiled-bootstrap.md) for the image
+format, smoke test, and upgrade target.
+
 ### Using the Nix package manager (macOS or Linux)
 If you're using the Nix package manager, just clone the repository and
 run the following to compile and build the assembler, operating

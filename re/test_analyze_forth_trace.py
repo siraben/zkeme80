@@ -6,6 +6,7 @@ import unittest
 
 from analyze_forth_trace import (
     ExactSymbolResolver,
+    ForthBigramProfiler,
     Mapper,
     SymbolResolver,
     iter_records,
@@ -58,6 +59,8 @@ class SymbolResolverTests(unittest.TestCase):
         self.assertEqual(resolver.resolve(0x1F), "a")
         self.assertEqual(resolver.resolve(0x20), "b")
         self.assertIsNone(resolver.resolve(0x30))
+        self.assertEqual(resolver.resolve_exact(0x20), "b")
+        self.assertIsNone(resolver.resolve_exact(0x21))
 
     def test_exact_resolver_does_not_claim_neighboring_ram(self):
         resolver = ExactSymbolResolver(((0x10, "variable"),))
@@ -74,6 +77,24 @@ class TraceFormatTests(unittest.TestCase):
         struct.pack_into("<I", header, 16, 1)
         with self.assertRaisesRegex(ValueError, "initial-memory snapshot"):
             list(iter_records(bytes(header)))
+
+
+class ForthBigramProfilerTests(unittest.TestCase):
+    def test_counts_entries_and_adjacent_pairs_including_repeats(self):
+        profiler = ForthBigramProfiler()
+        for word in ("LIT", "@", "LIT", "LIT"):
+            profiler.observe(word)
+
+        self.assertEqual(profiler.total_entries, 4)
+        self.assertEqual(profiler.entries, {
+            "LIT": 3,
+            "@": 1,
+        })
+        self.assertEqual(profiler.bigrams, {
+            ("LIT", "@"): 1,
+            ("@", "LIT"): 1,
+            ("LIT", "LIT"): 1,
+        })
 
 
 if __name__ == "__main__":
