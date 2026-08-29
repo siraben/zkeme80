@@ -81,6 +81,8 @@
 
 (define (defcode name flags label)
   (let ((len (string-length name)))
+    (if (> len 31)
+        (error (format #f "Forth word name exceeds 31 bytes: ~a" name)))
     ;; Record dictionary metadata for the labelmap/debug output.
     (set! *forth-words* (cons (list name flags label) *forth-words*))
     `(,make-link
@@ -2576,13 +2578,51 @@
     ,@(defcode "POWEROFF" 0 'poweroff)
     (jp shutdown)
 
-    ,@(defcode "ERASE-SECTOR" 0 'erase-sector-forth)
+    ;; Explicitly dangerous primitive: any Flash sector, including the OS.
+    ;; Returns true on success and false for an invalid page or DQ5 failure.
+    ,@(defcode "ERASE-SECTOR-UNSAFE" 0 'erase-sector-unsafe-forth)
+    (ld a b)
+    (or a)
+    (jr nz erase-sector-rejected)
     (ld a c)
+    (cp 64)
+    (jr nc erase-sector-rejected)
+    (jr erase-sector-run)
+
+    ;; Guard the installed OS (00-07), swap area (38-3B), trampoline (3C),
+    ;; certificate (3E), and retail boot page (3F).
+    ,@(defcode "ERASE-SECTOR" 0 'erase-sector-forth)
+    (ld a b)
+    (or a)
+    (jr nz erase-sector-rejected)
+    (ld a c)
+    (cp #x08)
+    (jr c erase-sector-rejected)
+    (cp #x38)
+    (jr nc erase-sector-rejected)
+
+    (label erase-sector-run)
+    (ld a i)
+    (push af)
     (di)
+    (ld a c)
     (call unlock-flash)
     (call erase-flash-sector)
+    (push af)
     (call lock-flash)
+    (pop af)
+    (ld bc 0)
+    (jr z erase-sector-status-ready)
+    (inc bc)
+    (label erase-sector-status-ready)
+    (pop af)
+    (jp po erase-sector-done)
     (ei)
+    (label erase-sector-done)
+    ,@next
+
+    (label erase-sector-rejected)
+    (ld bc 0)
     ,@next
 
     ;; Enable interrupts
@@ -2690,35 +2730,84 @@
     (ei)
     ,@next
 
-    ;; ( src dest amount -- )
+    ;; Program within the currently mapped Flash window.  The transfer may
+    ;; end at $8000 but cannot cross into RAM.  ( src dest amount -- flag )
     ,@(defcode "CMOVE-FLASH" 0 'cmove-flash)
     (ld (var-temp-cell) de)
 
     (pop de)
     (pop hl)
+    (ld a b)
+    (or c)
+    (jr z cmove-flash-validated)
+    (ld a d)
+    (cp #x40)
+    (jr c cmove-flash-rejected)
+    (cp #x80)
+    (jr nc cmove-flash-rejected)
+    (push hl)
+    (ld h d)
+    (ld l e)
+    (add hl bc)
+    (jr c cmove-flash-span-rejected)
+    (ld a h)
+    (cp #x80)
+    (jr c cmove-flash-span-valid)
+    (jr nz cmove-flash-span-rejected)
+    (ld a l)
+    (or a)
+    (jr nz cmove-flash-span-rejected)
+    (label cmove-flash-span-valid)
+    (pop hl)
+
+    (label cmove-flash-validated)
+    (ld a i)
+    (push af)
     (di)
     (call unlock-flash)
     (call write-flash-buffer)
+    (push af)
     (call lock-flash)
+    (pop af)
+    (ld bc 0)
+    (jr z cmove-flash-status-ready)
+    (inc bc)
+    (label cmove-flash-status-ready)
+    (pop af)
+    (jp po cmove-flash-done)
     (ei)
+    (label cmove-flash-done)
     (ld de (var-temp-cell))
-    (pop bc)
 
     ,@next
 
-    ;; Set page number loaded at memory bank A.
+    (label cmove-flash-span-rejected)
+    (pop hl)
+    (label cmove-flash-rejected)
+    (ld bc 0)
+    (ld de (var-temp-cell))
+    ,@next
+
+    ;; Map Flash page N into memory bank A ($4000-$7FFF).
     ;; Addresses 16#4000 to 16#7fff
     ;; ( n -- flag )
-    ,@(defcode "SET-RAM-MEMA" 0 'set-ram-mema)
+    ,@(defcode "SET-FLASH-MEMA" 0 'set-flash-mema)
+    (ld a b)
+    (or a)
+    (jp nz invalid-bank-selected)
     (ld a c)
-    (cp 8)
+    (cp 64)
     (jp nc invalid-bank-selected)
-    ;; We can try loading a RAM page now.
+    ;; Bit 7 clear selects Flash; the low six bits select its page.
+    (ld a i)
+    (push af)
     (di)
-    (ld a 64)
-    (add a c)
+    (ld a c)
     (out (6) a)
+    (pop af)
+    (jp po flash-page-selected)
     (ei)
+    (label flash-page-selected)
     (ld bc 65535)
     ,@next
 

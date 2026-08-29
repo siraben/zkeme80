@@ -23,6 +23,7 @@ Usage:
 import argparse
 import csv
 import json
+import mmap
 import struct
 import sys
 from bisect import bisect_right
@@ -250,46 +251,49 @@ def main(argv=None):
     last_sym = None
     ninstr = 0
 
-    with open(args.trace, "rb") as f:
-        buf = f.read()
-    if len(buf) < HEADER_LEN:
-        sys.exit("truncated TLMT header")
-    magic = buf[:4]
-    if magic != b"TLMT":
-        sys.exit("not a TLMT trace (magic %r)" % magic)
-    version = struct.unpack_from("<H", buf, 4)[0]
-    if version != 2:
-        sys.exit("unsupported TLMT version %d" % version)
+    with open(args.trace, "rb") as trace_file:
+        if trace_file.seek(0, 2) < HEADER_LEN:
+            sys.exit("truncated TLMT header")
+        trace_file.seek(0)
+        # Keep multi-gigabyte traces out of the Python heap while retaining
+        # the indexed buffer interface used by iter_records.
+        with mmap.mmap(trace_file.fileno(), 0, access=mmap.ACCESS_READ) as buf:
+            magic = buf[:4]
+            if magic != b"TLMT":
+                sys.exit("not a TLMT trace (magic %r)" % magic)
+            version = struct.unpack_from("<H", buf, 4)[0]
+            if version != 2:
+                sys.exit("unsupported TLMT version %d" % version)
 
-    for rec in iter_records(buf):
-        if rec[0] != "instr":
-            continue
-        r = rec[1]
-        ninstr += 1
-        space, page = mapper.space(r["pc"])
-        local_addr = r["pc"] & 0x3FFF
-        sym = None
-        if space == "flash":
-            resolver = flash.get(page)
-            if resolver is not None:
-                sym = resolver.resolve(local_addr)
-            w = forth.resolve(local_addr) if page == 0 else None
-            if w:
-                word_counts[w] += 1
-        else:
-            resolver = ram.get(page)
-            if resolver is not None:
-                sym = resolver.resolve(local_addr)
-        if sym is None:
-            unresolved["%s%02x:%04x" % (space, page, r["pc"])] += 1
-            sym = "%s%02x:%04x" % (space, page, r["pc"])
-        counts[sym] += 1
-        if transitions is not None and sym != last_sym:
-            transitions.append((r["clock"], sym))
-            last_sym = sym
-        # The trace callback runs after each instruction.  Apply an OUT
-        # only after attributing that instruction under the old mapping.
-        mapper.observe(r["opcode"], r["regs"])
+            for rec in iter_records(buf):
+                if rec[0] != "instr":
+                    continue
+                r = rec[1]
+                ninstr += 1
+                space, page = mapper.space(r["pc"])
+                local_addr = r["pc"] & 0x3FFF
+                sym = None
+                if space == "flash":
+                    resolver = flash.get(page)
+                    if resolver is not None:
+                        sym = resolver.resolve(local_addr)
+                    w = forth.resolve(local_addr) if page == 0 else None
+                    if w:
+                        word_counts[w] += 1
+                else:
+                    resolver = ram.get(page)
+                    if resolver is not None:
+                        sym = resolver.resolve(local_addr)
+                if sym is None:
+                    unresolved["%s%02x:%04x" % (space, page, r["pc"])] += 1
+                    sym = "%s%02x:%04x" % (space, page, r["pc"])
+                counts[sym] += 1
+                if transitions is not None and sym != last_sym:
+                    transitions.append((r["clock"], sym))
+                    last_sym = sym
+                # The trace callback runs after each instruction.  Apply an
+                # OUT only after attributing it under the old mapping.
+                mapper.observe(r["opcode"], r["regs"])
 
     print("instructions: %d" % ninstr)
     print("unique symbols hit: %d" % len(counts))

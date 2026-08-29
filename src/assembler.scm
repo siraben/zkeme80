@@ -60,6 +60,9 @@
 (define (index-reg? reg)
   (member reg '(ix iy)))
 
+(define (stack-reg? reg)
+  (member reg '(af bc de hl)))
+
 ;; We often see in the data sheet opcodes like this:
 ;; PUSH reg16 -> 11[reg16]0101
 ;; ((bc . #b00) (de . #b01) (hl . #b10) (af . #b11))
@@ -87,26 +90,37 @@
   (force (inst-generator inst)))
 
 (define (assemble-push reg)
-  (if (index-reg? reg)
-      (make-inst 2 `(,(lookup reg push-pop-index-regs) #b11100101))
-      (make-inst 1 `(,(make-opcode (lookup reg 16-bit-regs) 4 #b11000101)))))
+  (cond
+   ((index-reg? reg)
+    (make-inst 2 `(,(lookup reg push-pop-index-regs) #b11100101)))
+   ((stack-reg? reg)
+    (make-inst 1 `(,(make-opcode (lookup reg 16-bit-regs) 4 #b11000101))))
+   (else (error (format #f "Invalid operand to push: ~a" reg)))))
 
 (define (assemble-pop reg)
-  (if (index-reg? reg)
-      (make-inst 2  `(,(lookup reg push-pop-index-regs) #b11100001))
-      (make-inst 1 `(,(make-opcode (lookup reg 16-bit-regs) 4 #b11000001)))))
+  (cond
+   ((index-reg? reg)
+    (make-inst 2 `(,(lookup reg push-pop-index-regs) #b11100001)))
+   ((stack-reg? reg)
+    (make-inst 1 `(,(make-opcode (lookup reg 16-bit-regs) 4 #b11000001))))
+   (else (error (format #f "Invalid operand to pop: ~a" reg)))))
 
 (define (unsigned-nat? x) (and (integer? x) (>= x 0)))
 (define (num->binary n) (format #f "~8,'0b" n))
 (define (num->hex n) (format #f "~2,'0x" n))
-(define (16-bit-reg? x) (lookup x 16-bit-regs))
-(define (8-bit-reg? x) (member x '(a b c d e f h l i r (hl))))
+(define (16-bit-reg? x) (member x '(bc de hl sp)))
+(define (8-bit-reg? x) (member x '(a b c d e h l (hl))))
+(define (indirect-a-reg? x) (member x '(bc de)))
 (define (ir-reg? x) (lookup x ir-regs))
 (define (reg? x) (or (16-bit-reg? x)  (8-bit-reg? x)))
 
 (define (8-bit-imm? x)
   (and (unsigned-nat? x)
        (> (ash 1 8) x)))
+
+;; Registers encoded by the Z80's ED-prefixed IN/OUT (C) group.
+;; F, I, R, and (HL) are accepted elsewhere but are not operands here.
+(define (io-reg? x) (member x '(a b c d e h l)))
 
 (define (16-bit-imm-or-label? x)
   (or (symbol? x)
@@ -230,9 +244,9 @@
     (((? 8-bit-reg? a) (? 8-bit-reg? b))                       (assemble-ld-reg8-reg8 a b))
     (((? 8-bit-reg? a) ('+ (? index-reg? b) (? 8-bit-imm? c))) (assemble-ld-reg8-index-offset a b c))
     (((? 8-bit-reg? a) ('+ (? 8-bit-imm? c) (? index-reg? b))) (assemble-ld-reg8-index-offset a b c))
-    (('a ((? 16-bit-reg? b)))                                  (assemble-ld-a-ireg16 b))
+    (('a ((? indirect-a-reg? b)))                              (assemble-ld-a-ireg16 b))
     (('a ((? 16-bit-imm-or-label? b)))                         (assemble-ld-a-imm16 b))
-    ((((? 16-bit-reg? b)) 'a)                                  (assemble-ld-ireg16-a b))
+    ((((? indirect-a-reg? b)) 'a)                              (assemble-ld-ireg16-a b))
     ((((? 16-bit-imm-or-label? a)) 'a)                         (assemble-ld-iimm16-a a))
     (((? 8-bit-reg? a) (? 8-bit-imm? b))                       (assemble-ld-reg8-imm8 a b))
     (((? 16-bit-reg? a) (? 16-bit-imm-or-label? b))            (assemble-ld-reg16-imm16 a b))
@@ -422,13 +436,13 @@
                  ,port)))
 
 (define (assemble-out-c-reg reg)
-  (make-inst 2 `(#b11101011
+  (make-inst 2 `(#b11101101
                  ,(make-opcode (lookup reg ld-regs) 3 #b01000001))))
 
 (define (assemble-out arg)
   (match arg
     ((((? 8-bit-imm? p)) 'a)     (assemble-out-iimm8-a p))
-    (`((c) ,(? 8-bit-reg? r))    (assemble-out-c-reg r))
+    (`((c) ,(? io-reg? r))       (assemble-out-c-reg r))
     (_ (error (format #f "Invalid operands to out: ~a" arg)))))
 
 (define (assemble-in-a-iimm8 imm8)
@@ -436,14 +450,14 @@
                  ,imm8)))
 
 (define (assemble-in-reg8-ic reg)
-  (make-inst 2 `(#b11101011
+  (make-inst 2 `(#b11101101
                  ,(make-opcode (lookup reg ld-regs) 3 #b01000000))))
 
 (define (assemble-in arg)
   (match arg
     (('a ((? 8-bit-imm? p))) (assemble-in-a-iimm8 p))
-    (((? 8-bit-reg? r) '(c)) (assemble-in-reg8-ic r))
-    (_ (error (format #f "Invalid operands to out: ~a" arg)))))
+    (((? io-reg? r) '(c)) (assemble-in-reg8-ic r))
+    (_ (error (format #f "Invalid operands to in: ~a" arg)))))
 
 (define (assemble-xor-8-bit-reg a)
   (make-inst 1 `(,(make-opcode (lookup a ld-regs) 0 #b10101000))))

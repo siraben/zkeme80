@@ -12,3 +12,5 @@ jobs:
         nix_path: nixpkgs=channel:nixos-unstable
     - name: Build
       run: nix-build
+    - name: Test
+      run: nix develop -c make test

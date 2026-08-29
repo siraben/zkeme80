@@ -54,6 +54,7 @@
   `((ram-range #x8000 #xc000)
     ,(equ 'flash-executable-ram #x8000)
     ,(equ 'flash-executable-ram-size 100)
+    ,(equ 'flash-operation-status #x80ff)
     ,(equ 'screen-buffer #x8100)
     ,(equ 'swap-sector #x38)
 
