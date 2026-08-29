@@ -19,10 +19,10 @@ python3 tools/bootstrap_stream.py report --window 512
 
 It prints source, token-stream, and LZSS payload sizes for each stage, followed
 by totals including archive framing and the dictionary. On the current source
-set and a 4 KiB window, 29,584 source bytes become 13,504 bytes of separately
-compressed token payloads or a 16,950-byte complete archive. The complete
-archive includes a 403-word, 3,257-byte dictionary and stage metadata. Direct
-raw-byte LZSS remains smaller at about 13.0 KiB; the token archive trades that
+set and a 4 KiB window, 29,101 source bytes become 12,716 bytes of separately
+compressed token payloads or a 16,403-byte complete archive. The complete
+archive includes a 432-word, 3,498-byte dictionary and stage metadata. Direct
+raw-byte LZSS remains smaller at 12,365 bytes; the token archive trades that
 space for explicit lexical boundaries and dictionary references that a future
 token input path can consume. These figures are measurements, not a proposed
 flash layout.

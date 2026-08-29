@@ -105,11 +105,22 @@ emits key-event timelines, and checks the cached-TOS Forth stack model.
 ## Test-suite macro
 
 `re/macros/boot-only.macro` captures the boot screen.
-`re/macros/run-test-suite.macro` opens the suite, waits for the terminal
-`265/265` tally, sends the unload key, and captures the restored menu. The suite
-unloads through `FORGET TEST-SUITE-START`.
+`re/macros/run-test-suite.macro` opens the suite, records the terminal
+`286/286` tally, dumps logical RAM, unloads the transient test words, and
+captures the restored menu. The suite unloads through
+`FORGET TEST-SUITE-START`.
+
+Verify the counters and restored dictionary pointers independently of the
+screenshots:
+
+```sh
+python3 re/verify_test_ram.py \
+  re/macros/SUITE_RAM zkeme80.ram-labelmap.json \
+  --before re/macros/BEFORE_SUITE_RAM \
+  --after re/macros/AFTER_SUITE_RAM
+```
 
 `KEY` discards held input before waiting for a new key. Input sent while the
 suite is running, or held before its final `PAUSE`, is therefore ignored. The
-macro's 35-second normal-speed wait keeps the final **ENTER** press on the
+macro's 45-second normal-speed wait keeps the final **ENTER** press on the
 unload prompt rather than in the active suite.

@@ -82,8 +82,7 @@ payload CRC before executing any stored byte. A failed check restores the
 normal Flash mapping and continues into `QUIT`, so an ordinary build with an
 erased page `06` follows the source-only path.
 
-The measured image stores a 4,789-byte dictionary plus the 160-byte header. A
-traced image boot reaches `MENU-DEMO` in 563,249 Z80 instructions;
-the optimized text path reaches it in 7,274,904 instructions, so the optional
-path removes roughly 92% of bootstrap instructions. Both paths pass the
-265/265 on-device suite and return to the menu.
+The measured image stores a 4,656-byte dictionary plus the 160-byte header.
+The smoke test verifies that the loader reconstructs the captured dictionary
+byte for byte. Both boot paths pass the 286/286 on-device suite and return to
+the menu.
