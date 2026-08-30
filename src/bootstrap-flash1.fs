@@ -98,7 +98,7 @@ ZKEME80-LOGO
 DRAW-LOADING-DOT
 
 : LOAD-TEST-SUITE
-  4 SET-RAM-MEMA
+  4 SET-FLASH-MEMA
   IF
     MEMA CSTRING-SOURCE
   ELSE
@@ -109,7 +109,7 @@ suite.  Shutting down." CR
 ;
 
 : LOAD-SHELL
-  5 SET-RAM-MEMA
+  5 SET-FLASH-MEMA
   IF
     MEMA CSTRING-SOURCE
   ELSE
@@ -402,7 +402,7 @@ DRAW-LOADING-DOT
 \ Is n an arrow key?
 : ARROW-KEY?    ( n -- b ) DUP 1 5 WITHIN SWAP 9 = OR ;
 \ Block until an arrow key is read.
-: GET-ARROW-KEY ( -- k ) BEGIN KEYC DUP ARROW-KEY? IF EXIT THEN DROP AGAIN ;
+: GET-ARROW-KEY ( -- k ) BEGIN RAW-KEY DUP ARROW-KEY? IF EXIT THEN DROP AGAIN ;
 \ Set the click flag iff the xt is not null.
 : ?DO-CLICK ( xt|0 -- ) DUP MENU-ENTRY.ON-CLICK @ IF 1 TO CLICKED? THEN ;
 \ Maybe the key is enter, and act on it.

@@ -60,6 +60,9 @@
 (define (index-reg? reg)
   (member reg '(ix iy)))
 
+(define (stack-reg? reg)
+  (member reg '(af bc de hl)))
+
 ;; We often see in the data sheet opcodes like this:
 ;; PUSH reg16 -> 11[reg16]0101
 ;; ((bc . #b00) (de . #b01) (hl . #b10) (af . #b11))
@@ -87,26 +90,37 @@
   (force (inst-generator inst)))
 
 (define (assemble-push reg)
-  (if (index-reg? reg)
-      (make-inst 2 `(,(lookup reg push-pop-index-regs) #b11100101))
-      (make-inst 1 `(,(make-opcode (lookup reg 16-bit-regs) 4 #b11000101)))))
+  (cond
+   ((index-reg? reg)
+    (make-inst 2 `(,(lookup reg push-pop-index-regs) #b11100101)))
+   ((stack-reg? reg)
+    (make-inst 1 `(,(make-opcode (lookup reg 16-bit-regs) 4 #b11000101))))
+   (else (error (format #f "Invalid operand to push: ~a" reg)))))
 
 (define (assemble-pop reg)
-  (if (index-reg? reg)
-      (make-inst 2  `(,(lookup reg push-pop-index-regs) #b11100001))
-      (make-inst 1 `(,(make-opcode (lookup reg 16-bit-regs) 4 #b11000001)))))
+  (cond
+   ((index-reg? reg)
+    (make-inst 2 `(,(lookup reg push-pop-index-regs) #b11100001)))
+   ((stack-reg? reg)
+    (make-inst 1 `(,(make-opcode (lookup reg 16-bit-regs) 4 #b11000001))))
+   (else (error (format #f "Invalid operand to pop: ~a" reg)))))
 
 (define (unsigned-nat? x) (and (integer? x) (>= x 0)))
 (define (num->binary n) (format #f "~8,'0b" n))
 (define (num->hex n) (format #f "~2,'0x" n))
-(define (16-bit-reg? x) (lookup x 16-bit-regs))
-(define (8-bit-reg? x) (member x '(a b c d e f h l i r (hl))))
+(define (16-bit-reg? x) (member x '(bc de hl sp)))
+(define (8-bit-reg? x) (member x '(a b c d e h l (hl))))
+(define (indirect-a-reg? x) (member x '(bc de)))
 (define (ir-reg? x) (lookup x ir-regs))
 (define (reg? x) (or (16-bit-reg? x)  (8-bit-reg? x)))
 
 (define (8-bit-imm? x)
   (and (unsigned-nat? x)
        (> (ash 1 8) x)))
+
+;; Registers encoded by the Z80's ED-prefixed IN/OUT (C) group.
+;; F, I, R, and (HL) are accepted elsewhere but are not operands here.
+(define (io-reg? x) (member x '(a b c d e h l)))
 
 (define (16-bit-imm-or-label? x)
   (or (symbol? x)
@@ -230,9 +244,9 @@
     (((? 8-bit-reg? a) (? 8-bit-reg? b))                       (assemble-ld-reg8-reg8 a b))
     (((? 8-bit-reg? a) ('+ (? index-reg? b) (? 8-bit-imm? c))) (assemble-ld-reg8-index-offset a b c))
     (((? 8-bit-reg? a) ('+ (? 8-bit-imm? c) (? index-reg? b))) (assemble-ld-reg8-index-offset a b c))
-    (('a ((? 16-bit-reg? b)))                                  (assemble-ld-a-ireg16 b))
+    (('a ((? indirect-a-reg? b)))                              (assemble-ld-a-ireg16 b))
     (('a ((? 16-bit-imm-or-label? b)))                         (assemble-ld-a-imm16 b))
-    ((((? 16-bit-reg? b)) 'a)                                  (assemble-ld-ireg16-a b))
+    ((((? indirect-a-reg? b)) 'a)                              (assemble-ld-ireg16-a b))
     ((((? 16-bit-imm-or-label? a)) 'a)                         (assemble-ld-iimm16-a a))
     (((? 8-bit-reg? a) (? 8-bit-imm? b))                       (assemble-ld-reg8-imm8 a b))
     (((? 16-bit-reg? a) (? 16-bit-imm-or-label? b))            (assemble-ld-reg16-imm16 a b))
@@ -422,13 +436,13 @@
                  ,port)))
 
 (define (assemble-out-c-reg reg)
-  (make-inst 2 `(#b11101011
+  (make-inst 2 `(#b11101101
                  ,(make-opcode (lookup reg ld-regs) 3 #b01000001))))
 
 (define (assemble-out arg)
   (match arg
     ((((? 8-bit-imm? p)) 'a)     (assemble-out-iimm8-a p))
-    (`((c) ,(? 8-bit-reg? r))    (assemble-out-c-reg r))
+    (`((c) ,(? io-reg? r))       (assemble-out-c-reg r))
     (_ (error (format #f "Invalid operands to out: ~a" arg)))))
 
 (define (assemble-in-a-iimm8 imm8)
@@ -436,14 +450,14 @@
                  ,imm8)))
 
 (define (assemble-in-reg8-ic reg)
-  (make-inst 2 `(#b11101011
+  (make-inst 2 `(#b11101101
                  ,(make-opcode (lookup reg ld-regs) 3 #b01000000))))
 
 (define (assemble-in arg)
   (match arg
     (('a ((? 8-bit-imm? p))) (assemble-in-a-iimm8 p))
-    (((? 8-bit-reg? r) '(c)) (assemble-in-reg8-ic r))
-    (_ (error (format #f "Invalid operands to out: ~a" arg)))))
+    (((? io-reg? r) '(c)) (assemble-in-reg8-ic r))
+    (_ (error (format #f "Invalid operands to in: ~a" arg)))))
 
 (define (assemble-xor-8-bit-reg a)
   (make-inst 1 `(,(make-opcode (lookup a ld-regs) 0 #b10101000))))
@@ -769,6 +783,10 @@
 (define *ram-end*            #f)
 (define *debug-output-file*  #f)
 (define *debug-records*      '())
+;; Forth dictionary metadata collected by DEFWORD/DEFCODE at load time:
+;; each entry is (name flags label-symbol).  Addresses are resolved at
+;; debug-output time because labels only exist after assembly.
+(define *forth-words*        '())
 (define (reset-pc!)          (set! *pc* 0))
 (define (reset-labels!)      (set! *labels* '()))
 (define (reset-debug!)       (set! *debug-records* '()))
@@ -971,6 +989,9 @@
         sorted
         (loop (cdr rest) (insert-label (car rest) sorted)))))
 
+(define (label-region addr)
+  (if (pc-in-ram? addr) "ram" "flash"))
+
 (define (write-label-entry port label)
   (let ((name (symbol->string (car label)))
         (addr (cdr label)))
@@ -980,7 +1001,68 @@
     (display addr port)
     (display ", \"addr_hex\": " port)
     (write-json-string port (format #f "0x~x" addr))
+    (display ", \"region\": " port)
+    (write-json-string port (label-region addr))
     (display "}" port)))
+
+;; Keep only the last definition for each (name . label) pair, so
+;; reloading the sources in one Guile session doesn't duplicate entries.
+(define (collect-forth-words)
+  (let loop ((rest (reverse *forth-words*)) (seen '()) (out '()))
+    (if (null? rest)
+        out
+        (let* ((w (car rest))
+               (key (cons (car w) (caddr w))))
+          (loop (cdr rest)
+                (cons key seen)
+                (if (member key seen)
+                    out
+                    (cons w out)))))))
+
+(define (resolve-forth-word w)
+  (let* ((name (car w))
+         (flags (cadr w))
+         (sym (caddr w))
+         (addr (assq-ref *labels* sym)))
+    (and addr
+         (list name flags (symbol->string sym) addr))))
+
+(define (insert-forth-word-desc w sorted)
+  ;; Sort by address descending: latest dictionary definition first.
+  (cond
+   ((null? sorted) (list w))
+   ((>= (list-ref w 3) (list-ref (car sorted) 3)) (cons w sorted))
+   (else (cons (car sorted) (insert-forth-word-desc w (cdr sorted))))))
+
+(define (sorted-forth-words)
+  (let loop ((rest (collect-forth-words))
+             (resolved '()))
+    (if (null? rest)
+        (let loop ((rest resolved) (sorted '()))
+          (if (null? rest)
+              sorted
+              (loop (cdr rest)
+                    (insert-forth-word-desc (car rest) sorted))))
+        (loop (cdr rest)
+              (let ((w (resolve-forth-word (car rest))))
+                (if w (cons w resolved) resolved))))))
+
+(define (write-forth-word-entry port w)
+  (match w
+    ((name flags label-sym addr)
+     (display "{\"name\": " port)
+     (write-json-string port name)
+     (display ", \"flags\": " port)
+     (display flags port)
+     (display ", \"label\": " port)
+     (write-json-string port label-sym)
+     (display ", \"addr\": " port)
+     (display addr port)
+     (display ", \"addr_hex\": " port)
+     (write-json-string port (format #f "0x~x" addr))
+     (display ", \"region\": " port)
+     (write-json-string port (label-region addr))
+     (display "}" port))))
 
 (define (write-layout-entry port entry)
   (match entry
@@ -998,10 +1080,7 @@
      (display "}" port))))
 
 (define (write-debug-json filename)
-  (let* ((labels (if (ram-range-set?)
-                     (filter label-in-ram? *labels*)
-                     *labels*))
-         (sorted-labels (sort-labels labels))
+  (let* ((sorted-labels (sort-labels *labels*))
          (layout (reverse *debug-records*))
          (port (open-output-file filename)))
     (display "{\n" port)
@@ -1020,6 +1099,8 @@
         (display "null" port))
     (display ",\n  \"labels\": " port)
     (write-json-array port sorted-labels "  " write-label-entry)
+    (display ",\n  \"forth_words\": " port)
+    (write-json-array port (sorted-forth-words) "  " write-forth-word-entry)
     (display ",\n  \"layout\": " port)
     (write-json-array port layout "  " write-layout-entry)
     (display "\n}\n" port)
