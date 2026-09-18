@@ -17,9 +17,11 @@ background jobs should continue; no timer forcibly preempts Forth execution.
 An interpreter error clears compilation state and rolls back an unfinished
 definition to the saved dictionary boundary, including errors during `[ ... ]`
 interpretation within a definition. Definitions completed before that saved
-boundary are retained. Leaving with `BYE` during bracket interpretation also
-discards the unfinished definition. This is recovery for interactive mistakes, not protection from
-arbitrary memory writes or forgetting words still referenced by tasks.
+boundary are retained. Deliberately hiding a completed word with `HIDDEN`
+does not mark it unfinished. Leaving with `BYE` during bracket interpretation
+also discards the unfinished definition. This is recovery for interactive
+mistakes, not protection from arbitrary memory writes or forgetting words
+still referenced by tasks.
 
 The editor accepts up to 128 bytes and wraps across display rows.  Left and
 right move through the complete buffer, including across visual row

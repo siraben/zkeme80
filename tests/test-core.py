@@ -114,6 +114,7 @@ VARIABLE CORE-ROLLBACK-LATEST
 : BOUNDARY
   HERE CORE-ROLLBACK-DP ! LATEST @ CORE-ROLLBACK-LATEST ! ;
 : BRACKET 0 STATE ! ; IMMEDIATE
+: HIDE LATEST @ HIDDEN ;
 MENU-DEMO
 """
     commands = f"""set key_hold 0.08s
@@ -148,6 +149,14 @@ memdump {output}/bracket-exit.ram ram-logical
 key ENTER
 wait 0.2s
 memdump {output}/bracket-reopened.ram ram-logical
+scanstring ": KEPT STAR ; HIDE"
+key ENTER
+scanstring "BOUNDARY"
+key ENTER
+scanstring "NOPE"
+key ENTER
+wait 0.2s
+memdump {output}/hidden-kept.ram ram-logical
 """
     run(args, output, "bracket-workspace", source, commands)
     opened = (output / "bracket-open.ram").read_bytes()
@@ -156,7 +165,7 @@ memdump {output}/bracket-reopened.ram ram-logical
         opened, rom, "CORE-ROLLBACK-DP"), "bracket fixture did not begin a definition"
     assert int.from_bytes(opened[state_offset:state_offset + 2], "little") == 0
     for name in ("bracket-recovered", "nested-recovered", "bracket-exit",
-                 "bracket-reopened"):
+                 "bracket-reopened", "hidden-kept"):
         ram = (output / f"{name}.ram").read_bytes()
         for pointer, checkpoint in (("DP", "CORE-ROLLBACK-DP"),
                                     ("LATEST", "CORE-ROLLBACK-LATEST")):
@@ -168,7 +177,12 @@ memdump {output}/bracket-reopened.ram ram-logical
     for name, running in (("bracket-exit", 0), ("bracket-reopened", 1)):
         ram = (output / f"{name}.ram").read_bytes()
         assert variable(ram, rom, "SHELL-RUNNING") == running, (name, output)
-    print("Bracket interpretation, nested-definition rollback, and compiler exit passed")
+    hidden = (output / "hidden-kept.ram").read_bytes()
+    latest = variable(hidden, rom, "CORE-ROLLBACK-LATEST") - 0x8000
+    assert hidden[latest + 2] & 64, "completed definition was not hidden"
+    assert not hidden[latest + 2] & 32, "completed definition marked unfinished"
+    print("Bracket interpretation, nested-definition rollback, compiler exit,")
+    print("and preservation of deliberately hidden completed definitions passed")
     print(f"Emulator artifacts: {output}")
 
 
