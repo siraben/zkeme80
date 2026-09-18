@@ -630,7 +630,7 @@ T{ BRACKET-TEST BRACK-VISITS @ -> 1 }T
 T{ SP@ SP@ SWAP 2 - = -> <TRUE> }T
 T{ : RW1 RP@ ; RP@ RW1 > -> <TRUE> }T
 
-T{ USED UNUSED + H0 + 49152 = -> <TRUE> }T
+T{ USED UNUSED + H0 + DP-LIMIT = -> <TRUE> }T
 
 T{ S" ABC" SWAP C@ -> 3 65 }T
 : LS1 S" ABC" ;

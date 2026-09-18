@@ -1322,6 +1322,8 @@
     (call nz flush-display-dirty)
     (call flush-keys)
     (call wait-key)
+    ;; Consume release before handing control to another input device.
+    (call flush-keys)
     (push bc)
     (ld b 0)
     (ld c a)
