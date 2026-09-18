@@ -37,6 +37,7 @@
   (for-each
    (lambda (module)
      (unless (and (symbol? (rom-module-name module))
+                  (<= (string-length (symbol->string (rom-module-name module))) 24)
                   (string-match "^[a-z][a-z0-9-]*$"
                                 (symbol->string (rom-module-name module))))
        (error "Invalid ROM module name" (rom-module-name module)))
@@ -108,3 +109,7 @@
 
 (define (module-source entry)
   `((db ,(module-source-bytes entry))))
+
+;; The upgrade contains code/template pages, never writable object storage.
+(define* (rom-upgrade-pages #:optional (layout module-layout))
+  (sort (delete-duplicates (append '(0 2 60) (map rom-allocation-page layout))) <))
