@@ -44,9 +44,10 @@ while other jobs continue. A changed data-stack depth throws -4 and stops the
 job. This check detects ordinary callback mistakes; it does not protect against
 arbitrary memory writes, return-stack corruption, or consuming/overwriting
 values beneath the callback's context. The scheduler restores `BASE`, `STATE`,
-and `INPUT-PTR` after each step, including failed steps. Callbacks must preserve
-page mappings, input handlers, and other shared interpreter state. Callbacks
-must not reset the task table, roll back the dictionary, or block for input.
+`INPUT-PTR`, and the flash bank selector after each step, including failed
+steps. Callback code must remain outside the banked window while changing
+its mapping. Callbacks must preserve input handlers and other shared
+interpreter state. Callbacks must not reset the task table, roll back the dictionary, or block for input.
 
 These are cooperative jobs, not isolated processes or stackful threads. A
 callback that never returns prevents all other work. The old
@@ -73,5 +74,5 @@ and `BYE`. Use `--emulator` to specify your emulator binary and `--output` to
 retain its screenshots and RAM snapshots in a chosen directory. The binary
 defaults to `$TILEM` or `tilem2`; launch through `nix develop --command` if its
 dependencies require the development environment. Target
-verification passes all 64 assertions; the keyboard regression confirms that
+verification passes all 75 assertions; the keyboard regression confirms that
 background callbacks keep advancing while the shell awaits input.
