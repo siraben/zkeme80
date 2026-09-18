@@ -253,22 +253,41 @@ def lifecycle_scenario(args, output):
 
 
 def check_pixels(empty, populated):
-    labels = ("Forth workspace", "Files", "Tasks", "Pages / memory",
-              "System calls", "Test suite", "Power off")
+    labels = ("Workspace", "Files", "Tasks", "Memory",
+              "Services", "Tests", "Power off")
     for scenario, name, choice in ((empty, "desktop", 0), (empty, "home-last", 6),
                                    (populated, "returned", 3),
                                    (populated, "suite-selected", 5)):
-        model = ScreenModel().frame("ZKEME80 / WORKBENCH", "^v select ENT open")
+        model = ScreenModel().text(5, 19, "zkeme80")
+        # The original four 8x8 logo tiles, inverted inside their 16x16 box.
+        for x, y, rows in (
+                (10, 28, (0, 0, 36, 66, 66, 66, 66, 36)),
+                (18, 28, (0, 24, 36, 36, 24, 36, 36, 24)),
+                (10, 36, (0, 0, 124, 8, 16, 32, 124, 0)),
+                (18, 36, (0, 24, 36, 36, 36, 36, 24, 0))):
+            for row, bits in enumerate(rows):
+                for col in range(8):
+                    model.pixels[y + row][x + col] = bool(bits & (128 >> col))
+        model.invert(10, 28, 16, 16).invert(35, 0, 1, 54)
+        model.text(40, 2, "APPS").text(78, 2, f"{choice + 1}/7")
+        model.invert(37, 0, 59, 9)
+        model.invert(0, 55, 96, 1).text(2, 58, "^v select ENT open")
         first = max(0, choice - 4)
         for row in range(5):
             index = first + row
-            y = 20 + row * 7
-            model.text(4, y, f"{index + 1} ").text(15, y, labels[index])
+            y = 13 + row * 8
+            model.text(40, y, labels[index])
             if index == choice:
-                model.invert(2, y - 1, 91, 7)
-        # Free dictionary bytes change with the injected fixture. Check all
-        # other pixels, including blank gaps, scrolling rows and footer.
-        model.compare(scenario, name, ((0, 0, 96, 9), (0, 17, 96, 47)))
+                model.invert(38, y - 1, 51, 7)
+        for row in range(12, 51):
+            model.pixels[row][93] = True
+        for row in range(12 + first * 6, 39 + first * 6):
+            for col in range(92, 95):
+                model.pixels[row][col] = True
+        # Free RAM depends on the fixture. Check the logo, full panel,
+        # scrolling indicator, blank gaps, and footer around that status line.
+        model.compare(scenario, name, ((0, 0, 35, 46), (35, 0, 61, 64),
+                                       (0, 53, 35, 11)))
 
     for name in ("files", "files-still-empty"):
         (ScreenModel().frame("FILES", "^v ENT view CLR back")

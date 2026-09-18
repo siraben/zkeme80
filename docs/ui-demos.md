@@ -7,6 +7,11 @@ with nearest-neighbor sampling. Boot is trimmed; the remaining frames retain
 their recorded order and timing. No UI elements or text are composited onto
 the emulator output.
 
+The home screen keeps the original zkeme80 wordmark and four-tile logo on
+the left. A separate five-row launcher panel on the right scrolls through
+seven entries, with an inverse selection, position counter, and scrollbar.
+The logo stays visible while the launcher scrolls.
+
 ![Workbench desktop](workbench-cover.png)
 
 ## Objects and the Forth workspace

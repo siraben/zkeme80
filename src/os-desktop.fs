@@ -191,24 +191,30 @@ VARIABLE OS-NOTICE
   AGAIN ;
 : OS-ITEM ( index -- )
   CASE
-    0 OF ." Forth workspace" ENDOF
+    0 OF ." Workspace" ENDOF
     1 OF ." Files" ENDOF
     2 OF ." Tasks" ENDOF
-    3 OF ." Pages / memory" ENDOF
-    4 OF ." System calls" ENDOF
-    5 OF ." Test suite" ENDOF
+    3 OF ." Memory" ENDOF
+    4 OF ." Services" ENDOF
+    5 OF ." Tests" ENDOF
     6 OF ." Power off" ENDOF
   ENDCASE ;
 : OS-FIRST ( -- index ) OS-CHOICE @ 4 > IF OS-CHOICE @ 4 - ELSE 0 THEN ;
 : OS-DRAW ( -- )
-  S" ZKEME80 / WORKBENCH" OS-TITLE
-  2 11 AT-XY UNUSED OS-NUM ." B free / " FS-COUNT OS-NUM ." files"
+  PAGE
+  10 TO ZKEME80-LOGO-STARTX 28 TO ZKEME80-LOGO-STARTY ZKEME80-LOGO
+  3 47 AT-XY UNUSED 1024 / OS-NUM ." K free"
+  35 0 1 54 RECT-OR
+  40 2 AT-XY ." APPS"
+  78 2 AT-XY OS-CHOICE @ 49 + EMIT ." /7"
+  37 0 59 9 RECT-XOR
   5 0 DO
     OS-FIRST I +
-    4 I 7 * 20 + AT-XY DUP 1+ OS-NUM
-    15 I 7 * 20 + AT-XY DUP OS-ITEM
-    OS-CHOICE @ = IF I 7 * 20 + OS-SELECT THEN
+    40 I 8 * 13 + AT-XY DUP OS-ITEM
+    OS-CHOICE @ = IF 38 I 8 * 12 + 51 7 RECT-XOR THEN
   LOOP
+  93 12 1 39 RECT-OR
+  92 OS-FIRST 6 * 12 + 3 27 RECT-OR
   OS-FOOT ." ^v select ENT open" ;
 : MENU-DEMO ( -- )
   BEGIN
