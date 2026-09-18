@@ -63,12 +63,13 @@ def main():
                                     for suffix in ("rom", "sav", "macro", "gif"))
         image.write_bytes(rom)
         state.write_text("MODEL = ti84p\n")
-        # Leave enough release time for a full inspector redraw before the
-        # next edge, including when another emulator is sharing the host.
+        # key_delay spaces scanstring characters only. Raw key commands need
+        # an explicit released interval for the OS to observe separate edges.
         commands = ["set key_hold 0.25s", "set key_delay 0.3s", "key ON", "wait 15s"]
 
         def keys(*names):
-            commands.extend(f"key {key}" for key in names)
+            for key in names:
+                commands.extend((f"key {key}", "wait 0.3s"))
 
         def pause(seconds=1.5):
             commands.append(f"wait {seconds}s")

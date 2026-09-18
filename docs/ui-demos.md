@@ -46,6 +46,9 @@ start one in a separate terminal with
 `nix develop -c Xvfb :100 -screen 0 1024x768x24 -nolisten tcp`.
 The standard Nix development shell supplies Python and ImageMagick; its
 stock TilEm package does not supply the headless recording extensions.
+Raw macro key commands include an explicit 0.3-second released interval after
+each press so repeated keys produce separate input events. TilEm's `key_delay`
+setting only spaces characters in `scanstring` and `type` commands.
 
 The recorder checks RAM snapshots to confirm fixture initialization,
 object pagination, source loading, actual execution of `GREET`, resumed
