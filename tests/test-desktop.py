@@ -63,7 +63,10 @@ class Scenario:
         self.expected = {}
 
     def keys(self, *names):
-        self.commands.extend(f"key {name}" for name in names)
+        # TilEm's raw `key` command does not apply key_delay after release.
+        # Advance explicitly so repeated arrow keys are distinct events.
+        for name in names:
+            self.commands.extend((f"key {name}", "wait 0.3s"))
 
     def snapshot(self, name, **expected):
         self.commands.extend(["wait 1s", f"screenshot {self.output}/{name}.png",
@@ -80,7 +83,7 @@ class Scenario:
             [self.args.emulator, "--headless", "--full-speed", "--rom", str(image),
              "--state-file", str(state), "--reset", "--macro", str(macro)],
             cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            timeout=240, env={**os.environ, "DISPLAY": self.args.display},
+            timeout=360, env={**os.environ, "DISPLAY": self.args.display},
         )
         (self.output / "desktop.log").write_text(process.stdout)
         assert process.returncode == 0, (process.returncode, process.stdout, self.output)
