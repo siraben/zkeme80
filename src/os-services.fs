@@ -17,15 +17,23 @@
     DUP ?UNFINISHED IF 2DROP 1 EXIT THEN @
   REPEAT 2DROP 0
 ;
-\ A source must finish in the compilation state in which it started.
-: (EVAL-CLEANUP) ( ior old-latest old-here old-state -- ior )
+: (EVAL-ROLLBACK) ( old-latest old-here old-flags -- )
+  >R DP ! DUP LATEST ! 2+ R> SWAP C!
+;
+\ Compilation must stay inside its entry definition, even across [ and ].
+: (EVAL-CLEANUP) ( ior old-latest old-here old-state old-flags -- ior )
   >R
-  R@ STATE @ <> R@ 0= IF 2 PICK (EVAL-PARTIAL?) OR THEN
+  DUP STATE @ <> OVER IF
+    3 PICK LATEST @ <> OR
+    R@ 32 AND LATEST @ ?UNFINISHED <> OR
+  ELSE 3 PICK (EVAL-PARTIAL?) OR THEN
   IF
-    R@ 0= IF DP ! LATEST ! ELSE 2DROP THEN
-    DUP 0= IF DROP 22 THEN
-  ELSE 2DROP THEN
-  R> STATE !
+    >R >R >R DUP 0= IF DROP 22 THEN R> R> R> 1
+  ELSE 3 PICK 0 <> OVER 0 <> AND THEN
+  IF
+    R@ SWAP >R (EVAL-ROLLBACK) R>
+  ELSE >R 2DROP R> THEN
+  STATE ! R> DROP
 ;
 
 \ Nested zero-terminated input, preserving source, radix, and compiler state.
@@ -33,10 +41,11 @@
 \ Reject unfinished definitions and discard their partial dictionary entries.
 : EVALUATE0 ( zaddr -- ior )
   INPUT-PTR @ >R BASE @ >R
+  LATEST @ 2+ C@ >R
   STATE @ >R HERE >R LATEST @ >R
   INPUT-PTR ! ['] INTERPRET CATCH
   ?DUP IF THEN
-  R> R> R> (EVAL-CLEANUP)
+  R> R> R> R> (EVAL-CLEANUP)
   R> BASE ! R> INPUT-PTR !
 ;
 

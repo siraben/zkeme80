@@ -31,7 +31,10 @@ An error that leaves such a source unfinished rolls its dictionary
 back to the entry `HERE`/`LATEST` snapshots. This discards partial definitions
 and any other definitions added in the same failed evaluation. Successful,
 balanced definitions remain available. Evaluation from compilation state is
-permitted if the source ends in that same state.
+permitted if it stays inside the caller's definition. Closing that definition,
+even when followed by `]`, returns 22. A failed evaluation entered while
+compiling restores the entry dictionary pointer, latest word, and header flags,
+so partial generated code cannot corrupt the caller's unfinished definition.
 
 Evaluation is not a general transaction: completed definitions before an error
 that leaves no unfinished definition, arbitrary memory writes, output, and
