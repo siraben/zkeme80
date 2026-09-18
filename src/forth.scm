@@ -2290,8 +2290,9 @@
     (dw (lit 3 + exit))
 
     ,@(defword "CFA>" 0 'cfa>)
+    ;; Headers and execution tokens are unsigned addresses across ROM and RAM.
     (dw (latest @ ?dup 0branch 22 2dup swap))
-    (dw (< 0branch 6 nip exit @ branch ,(- 65536 24) drop))
+    (dw (u< 0branch 6 nip exit @ branch ,(- 65536 24) drop))
     (dw (lit 0 exit))
 
     ,@(defword "PICK" 0 'pick)

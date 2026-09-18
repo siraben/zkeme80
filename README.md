@@ -113,7 +113,7 @@ repository root.
 
 The [kernel correctness checks](docs/kernel-correctness.md) document dictionary
 bounds, checked flash mapping, and how to run the 286-case ANS suite plus
-154 boundary regressions in an extended TilEm emulator.
+156 boundary regressions in an extended TilEm emulator.
 
 `make precompiled-rom TILEM_HEADLESS=/path/to/tilem2` captures and verifies the
 post-bootstrap dictionary, then writes it to Flash page `06` in
