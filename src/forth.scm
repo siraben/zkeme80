@@ -1,11 +1,8 @@
 ;; Forth portion of the operating system.
 
 (define (include-file-as-bytes filename)
-  (let* ((port (open-file filename "r"))
-         (res (get-string-all port))
-         (expr `((db ,(string res)))))
-    (close-port port)
-    expr))
+  `((db ,(string (call-with-input-file filename get-string-all
+                  #:encoding "UTF-8")))))
 
 ;; Immediate flag
 (define immediate 128)
@@ -812,7 +809,7 @@
     (dw (here h0 - exit))
 
     ,@(defword "UNUSED" 0 'unused)
-    (dw (lit #xc000 here - exit))
+    (dw (dp-limit here - exit))
     ))
 
 (define forth-graphics-words
@@ -1518,7 +1515,7 @@
     (dw (lit #xfff0 throw))
 
     ,@(defword "[CHAR]" immediate 'char-brac)
-    (dw (tick lit comma char comma exit))
+    (dw (char tick lit comma comma exit))
     ))
 
 (define forth-semantics-words
@@ -1570,28 +1567,29 @@
     (ex de hl)
     ,@next
 
-    ,@(defword "S\"" immediate 's-quote)
-    (dw (state @ 0jump s-quote-interpret))
-    (dw (tick litstring comma here lit 0 comma))
-    (label s-quote-compile-loop)
-    (dw (getc dup 0jump s-quote-compile-eof))
-    (dw (dup lit 34 <> 0jump s-quote-compile-done))
-    (dw (c-comma jump s-quote-compile-loop))
-    (label s-quote-compile-done)
-    (dw (drop lit 0 c-comma dup here swap - lit 3 - swap ! exit))
-    (label s-quote-compile-eof)
-    (dw (drop lit #xffee throw))
-
-    (label s-quote-interpret)
-    (dw (here))
-    (label s-quote-interpret-loop)
-    (dw (getc dup 0jump s-quote-interpret-eof))
-    (dw (dup lit 34 <> 0jump s-quote-interpret-done))
-    (dw (over c! 1+ jump s-quote-interpret-loop))
-    (label s-quote-interpret-done)
-    (dw (drop here - here swap exit))
-    (label s-quote-interpret-eof)
+    ;; Scan the bounded input before changing dictionary memory. Derive the
+    ;; start from SOURCE/>IN: callers may have changed >IN since the last GETC.
+    ;; ( -- source-address length )
+    ,@(defword "(PARSE-QUOTE)" hidden 'parse-quote)
+    (dw (lit var-source-address @ lit var-to-in @ +))
+    (label parse-quote-next)
+    (dw (getc dup 0jump parse-quote-eof))
+    (dw (lit 34 = 0jump parse-quote-next))
+    (dw (lit var-source-address @ lit var-to-in @ + 1- over - exit))
+    (label parse-quote-eof)
     (dw (2drop lit #xffee throw))
+
+    ;; The caller has checked capacity. ( source-address length -- length )
+    ,@(defword "(COPY-QUOTE)" hidden 'copy-quote)
+    (dw (tuck here swap cmove exit))
+
+    ,@(defword "S\"" immediate 's-quote)
+    (dw (parse-quote dup room state @ 0jump s-quote-interpret))
+    ;; The first ROOM prevents length + overhead from wrapping a cell.
+    (dw (dup lit 5 + room tick litstring comma dup comma copy-quote))
+    (dw (dup here + lit 0 swap c! 1+ allot exit))
+    (label s-quote-interpret)
+    (dw (copy-quote here swap exit))
 
     ,@(defword ".\"" immediate 'dot-quote)
     (dw (state @ 0jump dot-quote-interpret))
@@ -1829,7 +1827,10 @@
     ,@(defword "'" 0 'run-tick)
     (dw (parse-header >cfa exit))
 
-    ,@(defcode "," 0 'comma)
+    ,@(defword "," 0 'comma)
+    (dw (lit 2 room raw-comma exit))
+
+    ,@(defcode "(,)" hidden 'raw-comma)
     (call _comma)
     (pop bc)
     ,@next
@@ -1849,7 +1850,10 @@
     (pop de)
     (ret)
 
-    ,@(defcode "C," 0 'c-comma)
+    ,@(defword "C," 0 'c-comma)
+    (dw (lit 1 room raw-c-comma exit))
+
+    ,@(defcode "(C,)" hidden 'raw-c-comma)
     (call _c-comma)
     (pop bc)
     ,@next
@@ -1922,8 +1926,8 @@
     ;; Parse a name and create a definition header for it.
 
     ,@(defcode "CREATE_" hidden 'create_)
-    ;; Header flags reserve only five bits for the name length.  TOKEN already
-    ;; enforces this, but keep the primitive safe for internal direct callers.
+    ;; Header flags reserve only five bits for the name length. Public defining
+    ;; words validate it before reaching this private writer.
     (ld a b)
     (or a)
     (jr nz create-name-too-long)
@@ -2016,14 +2020,19 @@
     (pop bc)
     ,@next
 
-    ,@(defword "CREATE" 0 'create)
-    (dw (token ?dup 0jump create-no-name))
-    (dw (dup lit 32 u< 0jump create-name-too-long-forth))
-    (dw (create_ latest @ make-dovar exit))
-    (label create-name-too-long-forth)
-    (dw (2drop exit))
+    ;; Parse and reserve a complete definition before changing DP or LATEST.
+    ;; ( body-bytes -- name length )
+    ,@(defword "(CREATE-ROOM)" hidden 'create-room)
+    (dw (>r token ?dup 0jump create-no-name))
+    (dw (dup lit 32 u< 0jump create-long-name))
+    (dw (dup lit 7 + r> + room exit))
     (label create-no-name)
-    (dw (exit))
+    (dw (lit #xfff0 throw))
+    (label create-long-name)
+    (dw (lit #xffed throw))
+
+    ,@(defword "CREATE" 0 'create)
+    (dw (lit 0 create-room create_ latest @ make-dovar exit))
 
     ,@(defcode "HIDDEN" 0 'hidden)
     ,@bc-to-hl
@@ -2062,14 +2071,9 @@
     ,@(defword ":" 0 'colon)
     ;; A fresh definition cannot inherit loop fixups from an abandoned
     ;; compilation (for example, one terminated by ABORT).
-    (dw (lit 0 lit loop-compile-depth ! token ?dup 0jump colon-no-name))
-    (dw (dup lit 32 u< 0jump colon-name-too-long))
+    (dw (lit 0 create-room lit 0 lit loop-compile-depth !))
     (dw (create_ latest @))
     (dw (hidden rbrac exit))
-    (label colon-name-too-long)
-    (dw (2drop lbrac exit))
-    (label colon-no-name)
-    (dw (lbrac exit))
 
     ,@(defword ";" immediate 'semicolon)
     (dw (lit exit comma))
@@ -2077,24 +2081,11 @@
     (dw (lbrac exit))
 
     ,@(defword "CONSTANT" 0 'constant)
-    (dw (token ?dup 0jump constant-no-name))
-    (dw (dup lit 32 u< 0jump constant-name-too-long))
-    (dw (create_))
+    (dw (lit 6 create-room create_))
     (dw (tick lit comma comma tick exit comma exit))
-    (label constant-name-too-long)
-    (dw (2drop drop exit))
-    (label constant-no-name)
-    (dw (drop exit))
 
     ,@(defword "VALUE" 0 'value)
-    (dw (token ?dup 0jump value-no-name))
-    (dw (dup lit 32 u< 0jump value-name-too-long))
-    (dw (create_))
-    (dw (tick lit comma comma tick exit comma exit))
-    (label value-name-too-long)
-    (dw (2drop drop exit))
-    (label value-no-name)
-    (dw (drop exit))
+    (dw (constant exit))
 
     ,@(defword "TO" immediate 'to)
     (dw (parse-header >dfa cell+ state @ 0branch 20 tick lit comma comma))
@@ -2124,7 +2115,10 @@
     ,@pop-de-rs
     ,@next
 
-    ,@(defcode "DOES>" immediate 'does>)
+    ,@(defword "DOES>" immediate 'does>)
+    (dw (lit 5 room raw-does-compile exit))
+
+    ,@(defcode "(DOES-COMPILE)" hidden 'raw-does-compile)
     (push de)
     (ld de (var-dp))
     (ld hl does-brac)
@@ -2346,18 +2340,28 @@
     ,@(defword "WHILE" immediate 'while)
     (dw (tick 0branch comma here lit 0 comma exit))
 
+    ;; Addresses and byte counts are unsigned even though ordinary < is signed.
+    ,@(defword "ROOM" 0 'room)
+    (dw (here h0 u< dp-limit here u< or 0jump room-size))
+    (dw (drop lit #xfff8 throw))
+    (label room-size)
+    (dw (dp-limit here - swap u< 0jump room-done))
+    (dw (lit #xfff8 throw))
+    (label room-done)
+    (dw (exit))
+
     ,@(defword "ALLOT" 0 'allot)
-    (dw (dp +! exit))
+    (dw (dup 0< 0jump allot-positive lit 0 room negate))
+    (dw (here h0 - over u< 0jump allot-shrink))
+    (dw (drop lit #xfff8 throw))
+    (label allot-shrink)
+    (dw (dp -! exit))
+    (label allot-positive)
+    (dw (dup room dp +! exit))
 
     ,@(defword "VARIABLE" 0 'variable)
-    (dw (token ?dup 0jump variable-no-name))
-    (dw (dup lit 32 u< 0jump variable-name-too-long))
-    (dw (create_ latest @ make-dovar))
+    (dw (lit 2 create-room create_ latest @ make-dovar))
     (dw (lit 0 comma exit))
-    (label variable-name-too-long)
-    (dw (2drop exit))
-    (label variable-no-name)
-    (dw (exit))
 
     ,@(defword "REPEAT" immediate 'repeat)
     (dw (tick branch comma swap here - comma))
@@ -2707,14 +2711,15 @@
     ;; Set page number loaded at memory bank A.
     ;; Addresses 16#4000 to 16#7fff
     ;; ( n -- flag )
-    ,@(defcode "SET-RAM-MEMA" 0 'set-ram-mema)
+    ,@(defcode "MAP-FLASH" 0 'map-flash)
+    (ld a b)
+    (or a)
+    (jp nz invalid-bank-selected)
     (ld a c)
-    (cp 8)
+    (cp 64)
     (jp nc invalid-bank-selected)
-    ;; We can try loading a RAM page now.
+    ;; Bit 7 selects RAM; flash selectors are 0..63 without an alias offset.
     (di)
-    (ld a 64)
-    (add a c)
     (out (6) a)
     (ei)
     (ld bc 65535)
@@ -2723,6 +2728,10 @@
     (label invalid-bank-selected)
     (ld bc 0)
     ,@next
+
+    ;; Historical name retained for bootstrap and application compatibility.
+    ,@(defword "SET-RAM-MEMA" 0 'set-ram-mema)
+    (dw (map-flash exit))
 
     ;; Advance past a counted-string length byte and return its count.
     ;; ( c-addr1 -- c-addr2 u )
@@ -2794,6 +2803,7 @@
     ,@(defvar "SPAN" 'span 0)
     ,@(defvar "CURRENT-INPUT-DEVICE" 'current-input-device 0)
     ,@(defconst "H0" 'h0 'dp-start)
+    ,@(defconst "DP-LIMIT" 'dp-limit dictionary-limit)
     ,@(defconst "OS-END" 'os-end-forth 'os-end)
     ,@(defconst "SCREEN-BUF" 'screen-buf 'screen-buffer)
     ,@(defconst "WORD-BUF" 'word-buf 'word-buffer)

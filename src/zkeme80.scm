@@ -2,6 +2,8 @@
 (load "macros.scm")
 
 (define swap-sector #x38)
+;; Flash programming uses scratch RAM at C000; keep the dictionary below it.
+(define dictionary-limit #xc000)
 (load "forth.scm")
 (load "header.scm")
 (load "boot.scm")
@@ -177,7 +179,7 @@
     ;; Free space until #xc000
     (label dp-start)
     ,(lambda ()
-       (format #t "~a bytes left for HERE.\n" (- #xc000 *pc*))
+       (format #t "~a bytes left for HERE.\n" (- dictionary-limit *pc*))
        '())
 
     ,(fill-up-to #x0 #xc000)
