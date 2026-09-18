@@ -1,0 +1,175 @@
+\ Resident system navigator. All views share the cooperative key event loop.
+VARIABLE OS-LAST-KEY
+VARIABLE OS-CHOICE
+VARIABLE OS-PAGE-NO
+VARIABLE OS-TASK-ID
+VARIABLE OS-SERVICE-FIRST
+VARIABLE OS-FILE-NO
+VARIABLE OS-FILE-OFFSET
+0 OS-LAST-KEY ! 0 OS-CHOICE ! 0 OS-PAGE-NO !
+1 OS-TASK-ID ! 0 OS-SERVICE-FIRST !
+0 OS-FILE-NO ! 0 OS-FILE-OFFSET !
+
+: OS-KEY ( -- key )
+  BEGIN
+    YIELD KEYC DUP OS-LAST-KEY @ = IF DROP 0 ELSE
+      DUP OS-LAST-KEY !
+    THEN
+    ?DUP IF EXIT THEN
+  AGAIN ;
+
+: OS-BACK? ( key -- flag ) DUP 15 = SWAP 50 = OR ;
+: OS-FOOT ( -- ) 0 57 AT-XY ;
+: OS-WAIT ( -- ) OS-KEY DROP ;
+: OS-MARK ( flag -- ) IF 62 ELSE 32 THEN EMIT ;
+
+: OS-PRINTABLE ( c -- c )
+  DUP 32 < OVER 126 > OR IF DROP 46 THEN ;
+
+: OS-FILE-TEXT ( -- )
+  OS-FILE-NO @ FS-NTH IF
+    2DROP FS-GET IF DROP 2DROP ." Read error" ELSE
+      DROP DUP IF DUP 1- 128 / 128 * ELSE 0 THEN
+      OS-FILE-OFFSET @ MIN DUP OS-FILE-OFFSET !
+      ROT OVER + -ROT - 128 MIN
+      ?DUP IF 0 DO
+        I 16 MOD 0= IF CR THEN DUP I + C@ OS-PRINTABLE EMIT
+      LOOP THEN DROP
+    THEN
+  ELSE 2DROP 2DROP THEN ;
+
+: OS-FILE-VIEW ( -- )
+  0 OS-FILE-OFFSET !
+  BEGIN
+    PAGE OS-FILE-TEXT 0 0 AT-XY ." Object offset " OS-FILE-OFFSET @ .
+    OS-FOOT ." LEFT/RIGHT CLEAR back"
+    OS-KEY DUP OS-BACK? IF DROP EXIT THEN
+    CASE
+      LEFT OF OS-FILE-OFFSET @ 128 >= IF 128 OS-FILE-OFFSET -! THEN ENDOF
+      RIGHT OF 128 OS-FILE-OFFSET +! ENDOF
+    ENDCASE
+  AGAIN ;
+
+: OS-FILE-DRAW ( -- )
+  PAGE ." Files / flash" CR
+  ." Objects " FS-COUNT . CR
+  ." Free slots " FS-FREE . CR CR
+  OS-FILE-NO @ FS-NTH IF
+    ." Type " . ." Bytes " . CR TYPE
+  ELSE 2DROP 2DROP ." No object" THEN CR CR
+  ." ENTER views contents" CR
+  ." FS-PUT saves in shell"
+  OS-FOOT ." UP/DOWN CLEAR back" ;
+
+: OS-FILES ( -- )
+  BEGIN
+    OS-FILE-DRAW OS-KEY DUP OS-BACK? IF DROP EXIT THEN
+    CASE
+      UP OF OS-FILE-NO @ IF 1 OS-FILE-NO -! THEN ENDOF
+      DOWN OF OS-FILE-NO @ 1+ FS-COUNT < IF 1 OS-FILE-NO +! THEN ENDOF
+      9 OF OS-FILE-NO @ FS-COUNT < IF OS-FILE-VIEW THEN ENDOF
+    ENDCASE
+  AGAIN ;
+
+: OS-TASK-STATE ( state -- )
+  CASE
+    0 OF ." free" ENDOF 1 OF ." ready" ENDOF
+    2 OF ." paused" ENDOF 3 OF ." stopped" ENDOF
+    4 OF ." failed" ENDOF 5 OF ." waiting" ENDOF
+  ENDCASE ;
+
+: OS-TASK-DRAW ( -- )
+  PAGE ." Cooperative tasks" CR CR
+  ." Task " OS-TASK-ID @ . CR
+  OS-TASK-ID @ TASK-INFO
+  ." Error: " . CR ." Runs: " . CR OS-TASK-STATE CR
+  ." Demo count: " TASK-COUNT @ . CR
+  ." ENTER run/pause" CR
+  ." RIGHT new demo" CR
+  OS-FOOT ." UP/DN task CLEAR back" ;
+
+: OS-TASKS ( -- )
+  BEGIN
+    OS-TASK-DRAW OS-KEY DUP OS-BACK? IF DROP EXIT THEN
+    CASE
+      UP OF OS-TASK-ID @ 1 > IF 1 OS-TASK-ID -! THEN ENDOF
+      DOWN OF OS-TASK-ID @ TASK-LIMIT < IF 1 OS-TASK-ID +! THEN ENDOF
+      RIGHT OF TASK-DEMO ?DUP IF OS-TASK-ID ! THEN ENDOF
+      9 OF OS-TASK-ID @ TASK-INFO 2DROP 1 = IF
+        OS-TASK-ID @ TASK-PAUSE ELSE OS-TASK-ID @ TASK-RUN
+        THEN DROP ENDOF
+    ENDCASE
+  AGAIN ;
+
+: OS-PAGE-TEXT ( -- )
+  32 0 DO
+    I 16 MOD 0= IF CR THEN
+    MEMA I + C@ OS-PRINTABLE EMIT
+  LOOP ;
+
+: OS-PAGE-DRAW ( -- )
+  PAGE ." Memory / flash pages" CR
+  ." Dictionary free " UNUSED . CR
+  ." Bank A selector " BANK@ . CR
+  ." Flash page " OS-PAGE-NO @ . CR
+  ['] OS-PAGE-TEXT OS-PAGE-NO @ WITH-PAGE DROP CR CR
+  ." Core " MODULE-CORE . ." Tests " MODULE-TESTS . CR
+  ." Workspace " MODULE-WORKBENCH .
+  OS-FOOT ." LEFT/RIGHT CLEAR back" ;
+
+: OS-PAGES ( -- )
+  BEGIN
+    OS-PAGE-DRAW OS-KEY DUP OS-BACK? IF DROP EXIT THEN
+    CASE
+      LEFT OF OS-PAGE-NO @ IF 1 OS-PAGE-NO -! THEN ENDOF
+      RIGHT OF OS-PAGE-NO @ 63 < IF 1 OS-PAGE-NO +! THEN ENDOF
+    ENDCASE
+  AGAIN ;
+
+: OS-SERVICE-DRAW ( -- )
+  PAGE ." System services / v1" CR CR
+  6 0 DO
+    OS-SERVICE-FIRST @ I + DUP SERVICE-COUNT < IF
+      DUP . SERVICE@ ?DUP IF CFA> ID. THEN CR
+    ELSE DROP THEN
+  LOOP
+  OS-FOOT ." LEFT/RIGHT CLEAR back" ;
+
+: OS-SERVICES ( -- )
+  BEGIN
+    OS-SERVICE-DRAW OS-KEY DUP OS-BACK? IF DROP EXIT THEN
+    CASE
+      LEFT OF OS-SERVICE-FIRST @ 6 >= IF 6 OS-SERVICE-FIRST -! THEN ENDOF
+      RIGHT OF OS-SERVICE-FIRST @ 6 + SERVICE-COUNT < IF
+        6 OS-SERVICE-FIRST +! THEN ENDOF
+    ENDCASE
+  AGAIN ;
+
+: OS-DRAW ( -- )
+  PAGE ." zkeme80 / Workbench" CR CR
+  OS-CHOICE @ 0 = OS-MARK ." Forth workspace" CR
+  OS-CHOICE @ 1 = OS-MARK ." Files" CR
+  OS-CHOICE @ 2 = OS-MARK ." Tasks" CR
+  OS-CHOICE @ 3 = OS-MARK ." Pages / memory" CR
+  OS-CHOICE @ 4 = OS-MARK ." System services" CR
+  OS-CHOICE @ 5 = OS-MARK ." Test suite" CR
+  OS-CHOICE @ 6 = OS-MARK ." Power off"
+  OS-FOOT ." UP/DOWN ENTER open" ;
+
+: MENU-DEMO ( -- )
+  BEGIN
+    OS-DRAW OS-KEY
+    CASE
+      UP OF OS-CHOICE @ IF 1 OS-CHOICE -! THEN ENDOF
+      DOWN OF OS-CHOICE @ 6 < IF 1 OS-CHOICE +! THEN ENDOF
+      9 OF OS-CHOICE @ CASE
+        0 OF LOAD-SHELL EXIT ENDOF
+        1 OF OS-FILES ENDOF
+        2 OF OS-TASKS ENDOF
+        3 OF OS-PAGES ENDOF
+        4 OF OS-SERVICES ENDOF
+        5 OF LOAD-TEST-SUITE EXIT ENDOF
+        6 OF POWEROFF ENDOF
+      ENDCASE ENDOF
+    ENDCASE
+  AGAIN ;
