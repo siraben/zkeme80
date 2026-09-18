@@ -61,7 +61,7 @@ def variable(ram: bytes, rom: bytes, name: str) -> int:
         if read(header + 3, length) == name.encode("ascii"):
             cfa = header + 4 + length
             pointer = word(cfa + 5)
-            if not 0x8400 <= pointer < 0xC000:
+            if not 0x8400 <= pointer < kernel_constant(rom, "DP-LIMIT"):
                 raise AssertionError(f"{name} has invalid VARIABLE address {pointer:#x}")
             return word(pointer)
         header = word(header)

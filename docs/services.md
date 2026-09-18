@@ -5,6 +5,11 @@ execution token or zero for an invalid ID; `OS-CALL` invokes it, throwing 20
 for an invalid ID. Service tokens and the dictionary reside outside the
 switchable source-page window.
 
+`MAP-FLASH ( page -- flag )` maps a flash page 0–63 into bank A, rejecting
+invalid 16-bit selectors without changing the bank. `SET-RAM-MEMA` remains a
+compatibility alias for the misleading original name. Most clients should
+borrow a bank through `WITH-PAGE` instead of leaving it changed.
+
 `WITH-PAGE ( xt page -- ior )` validates flash pages 0 through 63, runs the
 callback, and restores the prior raw bank selector after either return or
 `THROW`. Nested calls are supported. The callback must reside outside the
@@ -35,3 +40,15 @@ nested evaluation, parser limits, failed-definition cleanup, and interactive
 multiline compilation and workspace persistence. Run it with a headless TilEm
 binary via `--emulator` or `$TILEM`; use `nix develop --command` if needed for
 the emulator's dependencies.
+
+The dictionary grows through the two fixed RAM windows, from `H0` to the
+exclusive `DP-LIMIT` (`0xE000`). The top 8 KiB is reserved for the data stack;
+the return stack has its own reserved area below `H0`. `UNUSED` measures this
+actual dictionary budget. `ROOM`, `ALLOT`, `,`, `C,`, `CREATE`, and `DOES>` check
+capacity before their ordinary writes and throw 8 when it is exhausted.
+Negative `ALLOT` can reclaim space within the dictionary bounds. A missing
+`CREATE`/colon name throws 16. Raw memory stores and direct writes to `DP`
+remain sharp tools; these guards are not memory protection or stack isolation.
+
+`tests/test-memory.py` verifies these limits and distinct fixed RAM above
+`0xC000` with 62 target assertions.

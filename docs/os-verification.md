@@ -7,7 +7,8 @@ nix develop --command make build test
 nix develop --command tilem2 --rom zkeme80.rom
 ```
 
-The shell provides Guile, Python, ImageMagick, TilEm, Xvfb, and xdotool.
+The shell provides Guile, Python, ImageMagick, and TilEm; on Linux it also
+provides Xvfb and xdotool.
 The packaged TilEm is sufficient for interactive use. Automated target tests
 require the extended TilEm build that supplies `--headless`, `--macro`,
 `memdump`, and `scanstring` (the checkout used here is
@@ -29,7 +30,8 @@ leaving the production ROM and its journal unchanged. Each runner accepts
 | --- | --- |
 | ROM layout | 30 SRFI-64 assertions, including budgets and upgrade page selection |
 | Forth language | 266/266 original suite assertions; explicit unloading still works |
-| Core services | Scoped bank restoration, service IDs, nested evaluation, token bounds and source recovery |
+| RAM management | 62 target assertions: allocation bounds, exact-fit writes, signed release, missing names, distinct fixed RAM banks, and checked flash mapping |
+| Core services | 84 assertions: scoped bank restoration, service IDs, nested evaluation, token bounds and source recovery |
 | Workspace | Multiline definitions, failed-definition rollback, and definitions retained across desktop visits |
 | Scheduler | 64 target assertions; counters advance during desktop and shell idle waits |
 | Storage | 69 target assertions plus 12 cold-boot checks; independent record/checksum verification |
@@ -47,3 +49,9 @@ callers, token EOF remains visible to the next parser call, and overlong tokens
 raise a recoverable error instead of overwriting the token-pointer cell.
 These checks establish emulator behavior; physical flash timing and unexpected
 power loss during programming still need hardware qualification.
+
+A stock TilEm GUI was also exercised under Xvfb using mouse presses on its
+calculator skin: open Tasks, create a counter, and pause it. The screenshot
+shows the paused job and its retained run count:
+
+![Interactive emulator task inspector](workbench-emulator.png)
