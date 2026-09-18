@@ -1,0 +1,37 @@
+# Interactive probe of TO / +TO semantics via the shell.
+# Shell is the top-right menu button: RIGHT then ENTER from (0,0).
+set key_hold 0.25s
+set key_delay 0.06s
+key ON
+wait 10s
+key RIGHT
+wait 0.3s
+key ENTER
+wait 4s
+screenshot P0_shell.png
+scanstring "0 VALUE Q1"
+key ENTER
+wait 0.6s
+scanstring "5 TO Q1"
+key ENTER
+wait 0.6s
+screenshot P1_to.png
+scanstring "Q1 ."
+key ENTER
+wait 0.6s
+screenshot P2_read.png
+scanstring "2 Q1 +TO"
+key ENTER
+wait 0.6s
+screenshot P3_plusto.png
+scanstring "Q1 ."
+key ENTER
+wait 0.6s
+screenshot P4_read2.png
+scanstring ": M1 2 Q1 +TO ;"
+key ENTER
+wait 0.6s
+scanstring "M1 Q1 ."
+key ENTER
+wait 0.8s
+screenshot P5_compiled.png

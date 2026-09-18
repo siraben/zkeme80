@@ -1,0 +1,26 @@
+# Drive the complete on-demand test suite headlessly.
+#
+# The suite pauses at its introduction and final tally. Screenshots and RAM
+# dumps land beside this macro; the final key unloads the transient test words
+# and returns to the menu.
+set key_hold 0.25s
+set key_delay 0.05s
+key ON
+wait 10s
+key RIGHT
+wait 0.3s
+key DOWN
+wait 0.3s
+screenshot re/macros/MENU_BEFORE.png
+memdump re/macros/BEFORE_SUITE_RAM ram-logical
+key ENTER
+wait 2s
+screenshot re/macros/TEST_INTRO.png
+key ENTER
+wait 45s
+screenshot re/macros/TALLY.png
+memdump re/macros/SUITE_RAM ram-logical
+key ENTER
+wait 2s
+screenshot re/macros/BACK_AT_MENU.png
+memdump re/macros/AFTER_SUITE_RAM ram-logical

@@ -6,9 +6,13 @@ result
 zkeme80.8xu
 zkeme80.ram-labelmap.json
 *.sav
+*.zbs
+/build/
+zkeme80-precompiled.ram-labelmap.json
+zkeme80-precompiled.8xu
 __pycache__/
 *.py[cod]
-/debug/macros/*.png
-/debug/macros/SUITE_RAM
-/debug/macros/BEFORE_SUITE_RAM
-/debug/macros/AFTER_SUITE_RAM
+/re/macros/*.png
+/re/macros/SUITE_RAM
+/re/macros/BEFORE_SUITE_RAM
+/re/macros/AFTER_SUITE_RAM

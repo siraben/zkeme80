@@ -64,7 +64,8 @@ nix develop --command python3 tests/master-kernel.py \
 The runner uses disposable ROM/state copies. It verifies all 286 original
 assertions and that unloading the suite restores `DP`/`LATEST`. A separate
 fixture replaces only the final menu action in a disposable bootstrap page and
-loads checks from erased page 6. Its 151 assertions cover exact-fit and rejected
+loads checks from erased page 6. The optimizing compiler routes new execution
+tokens through the same checked comma operation as ordinary dictionary writes. Its 156 assertions cover exact-fit and rejected
 writes, signed release, malformed names, quoted EOF, manually adjusted `>IN`,
 DOVAR bodies, and page selector bounds. RAM counters, a completion marker, and
 recorded failure values determine success; screenshots are retained for review.

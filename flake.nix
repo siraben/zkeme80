@@ -24,7 +24,7 @@
         defaultPackage = self.packages.${system}.default;
 
         devShells.default = mkShell {
-          buildInputs = [ guile python3 ];
+          buildInputs = [ guile knightos-mktiupgrade python3 ];
         };
       }
     );
