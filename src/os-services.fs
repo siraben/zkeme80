@@ -23,13 +23,13 @@
 \ Compilation must stay inside its entry definition, even across [ and ].
 : (EVAL-CLEANUP) ( ior old-latest old-here old-state old-flags -- ior )
   >R
-  DUP STATE @ <> OVER IF
+  DUP STATE @ <> OVER R@ 32 AND OR IF
     3 PICK LATEST @ <> OR
     R@ 32 AND LATEST @ ?UNFINISHED <> OR
   ELSE 3 PICK (EVAL-PARTIAL?) OR THEN
   IF
     >R >R >R DUP 0= IF DROP 22 THEN R> R> R> 1
-  ELSE 3 PICK 0 <> OVER 0 <> AND THEN
+  ELSE 3 PICK 0 <> OVER R@ 32 AND OR 0 <> AND THEN
   IF
     R@ SWAP >R (EVAL-ROLLBACK) R>
   ELSE >R 2DROP R> THEN

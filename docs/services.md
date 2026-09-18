@@ -35,6 +35,8 @@ permitted if it stays inside the caller's definition. Closing that definition,
 even when followed by `]`, returns 22. A failed evaluation entered while
 compiling restores the entry dictionary pointer, latest word, and header flags,
 so partial generated code cannot corrupt the caller's unfinished definition.
+Bracket interpretation within a definition is part of that same compiler
+transaction even though `STATE` is zero; recovery restores that zero state.
 
 Evaluation is not a general transaction: completed definitions before an error
 that leaves no unfinished definition, arbitrary memory writes, output, and
