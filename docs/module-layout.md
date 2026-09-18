@@ -15,9 +15,10 @@ The current allocation is:
 | `storage` | resident | `os-services.fs`, `os-storage.fs` | 3 |
 | `desktop` | resident | `os-tasks.fs`, `os-catalog.fs`, `os-ui.fs`, `os-desktop.fs` | 4 |
 | `workbench` | resident | `bootstrap-flash5.fs` | 5 |
-| `tests` | tool | `bootstrap-flash4.fs` | 6 |
+| `tests` | tool | `bootstrap-flash4.fs` | 7 |
 
 Page 0 contains the native kernel. Page 2 supplies the initial fixed-RAM image.
+Page 6 is reserved for an optional verified bootstrap image.
 Page 8 belongs to the persistent object journal, pages 56–59 to the legacy
 swap sector, and pages 60–63 are reserved for unlock/boot support. Module
 allocation skips every reserved page. Adding or reordering a module can change
@@ -108,3 +109,16 @@ and writes the ROM and label map to the caller's current directory.
 source pages, and unlock support, and excludes the writable object journal.
 The upgrade tool `mktiupgrade` is required separately; `make -n upgrade` shows
 the generated page list without creating or installing an upgrade.
+
+## RAM ownership
+
+Fixed RAM contains the kernel variables, boot-copied UI helpers, return stack,
+and shared dictionary. `DP-LIMIT` is `0xF000`; the upper 4 KiB is reserved for
+the data stack (2048 cells). Flash workers use the low-RAM trampoline at
+`0x8000`, so they no longer claim the old `0xC000` scratch area.
+
+The resident workspace owns banked RAM page 2 (selector `0x82`) for its
+512-entry history and 4096-byte text ring. History wrappers map that page only
+while copying/editing history and restore the prior mapping on both normal
+and exceptional returns. Definitions, callbacks, and input buffers stay in
+fixed RAM. The buffers are volatile and are reinitialized logically at boot.

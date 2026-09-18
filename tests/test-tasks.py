@@ -47,7 +47,7 @@ def main():
         f"memdump {directory}/suite.ram ram-logical\n")
     ram = (directory / "suite.ram").read_bytes()
     failures, total = value(ram, "TASK-FAILURES"), value(ram, "TASK-TESTS")
-    assert total == 75 and failures == 0, (failures, total, directory)
+    assert total == 89 and failures == 0, (failures, total, directory)
     print(f"Scheduler: {total} target assertions passed")
 
     commands = f"""set key_hold 0.25s

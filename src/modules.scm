@@ -28,7 +28,7 @@
    (make-rom-module 'tests 'tool '("bootstrap-flash4.fs"))))
 
 ;; Kernel, fixed-RAM template, object journal, swap sector, and boot/unlock code.
-(define reserved-pages '(0 2 8 56 57 58 59 60 61 62 63))
+(define reserved-pages '(0 2 6 8 56 57 58 59 60 61 62 63))
 (define module-page-size #x4000)
 
 (define (validate-rom-modules modules)

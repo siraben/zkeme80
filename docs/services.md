@@ -57,7 +57,7 @@ binary via `--emulator` or `$TILEM`; use `nix develop --command` if needed for
 the emulator's dependencies.
 
 The dictionary grows through the two fixed RAM windows, from `H0` to the
-exclusive `DP-LIMIT` (`0xE000`). The top 8 KiB is reserved for the data stack;
+exclusive `DP-LIMIT` (`0xF000`). The top 4 KiB is reserved for the data stack;
 the return stack has its own reserved area below `H0`. `UNUSED` measures this
 actual dictionary budget. `ROOM`, `ALLOT`, `,`, `C,`, `CREATE`, and `DOES>` check
 capacity before their ordinary writes and throw 8 when it is exhausted.
@@ -70,4 +70,4 @@ Negative `ALLOT` can reclaim space within the dictionary bounds. A missing
 remain sharp tools; these guards are not memory protection or stack isolation.
 
 `tests/test-memory.py` verifies these limits and distinct fixed RAM above
-`0xC000` with 113 target assertions.
+`0xC000` with 154 target assertions.

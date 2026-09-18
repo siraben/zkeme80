@@ -10,7 +10,7 @@
                  (drop-right (module-source-bytes allocation layout reader) 1))))
 (define (empty-source file) "")
 
-(test-equal "current manifest allocation" '(1 3 4 5 6)
+(test-equal "current manifest allocation" '(1 3 4 5 7)
   (map rom-allocation-page module-layout))
 (test-equal "lookup by name" 5 (module-page 'workbench))
 (test-error "unknown module" (module-page 'missing))
@@ -43,7 +43,7 @@
                                (make-rom-module (string->symbol (format #f "mod~a" n))
                                                 'resident '("x.fs"))) (iota 8))))
        (layout (allocate-rom-modules many)))
-  (test-equal "allocation skips storage page" '(1 3 4 5 6 7 9 10 11)
+  (test-equal "allocation skips storage page" '(1 3 4 5 7 9 10 11 12)
     (map rom-allocation-page layout)))
 
 (let* ((layout (allocate-rom-modules (list core)))
@@ -64,7 +64,7 @@
                           (eq? 'workbench (rom-module-name (rom-allocation-module entry)))) layout))
        (tool (find (lambda (entry)
                     (eq? 'tests (rom-module-name (rom-allocation-module entry)))) layout)))
-  (test-equal "appended resident receives control past tool" "\n7 LOAD-MODULE\n"
+  (test-equal "appended resident receives control past tool" "\n9 LOAD-MODULE\n"
     (allocation-text workbench layout empty-source))
   (test-equal "only final resident starts desktop" "\nMENU-DEMO\n"
     (allocation-text (last layout) layout empty-source))
@@ -89,6 +89,6 @@
  module-layout)
 
 (test-equal "upgrade includes all code, excludes journal"
-  '(0 1 2 3 4 5 6 60) (rom-upgrade-pages))
+  '(0 1 2 3 4 5 7 60) (rom-upgrade-pages))
 (test-end "rom-modules")
 (exit (if (zero? (+ (test-runner-fail-count runner) (test-runner-xpass-count runner))) 0 1))

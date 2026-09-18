@@ -1,4 +1,4 @@
-ROM_PAGES = 00 01 02 03 04 05 06 3C
+ROM_PAGES = $(shell cd src && guile --no-auto-compile upgrade-pages.scm) 06
 PYTHON ?= python3
 TILEM_HEADLESS ?= tilem2
 BOOTSTRAP_RAM = build/bootstrap.ram
@@ -22,6 +22,10 @@ upgrade:
 	$(MAKE) -C src upgrade
 	cp src/zkeme80.8xu .
 
+test-modules:
+	guile --no-auto-compile tests/modules.scm
+	python3 tests/test-emulator-helpers.py
+
 test-build:
 	python3 tests/test-build.py
 
@@ -29,7 +33,7 @@ test-build:
 test-emulator: build
 	python3 tests/master-kernel.py
 
-test: build test-build
+test: build test-build test-modules
 	cd src && guile --no-auto-compile ../tests/assembler-test.scm
 	python3 -m unittest discover -s tests -p '*_test.py' -v
 	python3 -m unittest discover -s re -p 'test_*.py' -v

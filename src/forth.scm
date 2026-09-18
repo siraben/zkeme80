@@ -11,6 +11,7 @@
 ;; Immediate flag
 (define immediate 128)
 (define hidden 64)
+(define unfinished 32)
 
 (define next-inline
   `((ld a (de))
@@ -1329,63 +1330,50 @@
     (ld c a)
     ,@next
 
-    ;; Return one raw key event in A.  If a different key appears before
-    ;; the current key is fully released, preserve it for the next call.
-    ;; This handles normal key rollover without repeating a held key.
-    (label akey-read-event)
-    (ld a (akey-pending))
-    (or a)
-    (jr z akey-wait-event)
-    (push af)
-    (xor a)
-    (ld (akey-pending) a)
-    (pop af)
-    (jr akey-wait-release)
-    (label akey-wait-event)
-    (call wait-key)
-    (label akey-wait-release)
-    (ld e a)
-    (label akey-release-loop)
-    (call scan-key)
-    (or a)
-    (jr z akey-event-ready)
-    (cp e)
-    (jr z akey-release-loop)
-    (ld (akey-pending) a)
-    (label akey-event-ready)
-    (ld a e)
-    (ret)
-
-    ;; Read a key as an ASCII character.
-    ,@(defcode "AKEY" 0 'akey)
-    (ld (var-temp-cell) de)
-    (push bc)
-    (label akey-read)
+    ;; Unfiltered level scan for cooperative press/release waits.
+    ,@(defcode "(KEY-SCAN)" hidden 'key-scan)
     (ld a (display-dirty))
     (or a)
     (call nz flush-display-dirty)
-    (call akey-read-event)
-    ;; Alphabetic input is the default.  2ND selects the numeric/symbol
-    ;; table for the following key.
-    (cp 54)
-    (jr nz akey-alpha)
-    (call akey-read-event)
-    (ld de numeric-char-lookup-table)
-    (jr akey-lookup)
-    (label akey-alpha)
-    (ld de char-lookup-table)
-    (label akey-lookup)
-
-    (ld h 0)
-    (ld l a)
-    (ld b h)
-    (add hl de)
-    (ld c (hl))
-    (ld a c)
-    (or a)
-    (jr z akey-read)
-    (ld de (var-temp-cell))
+    (call scan-key)
+    (push bc)
+    (ld b 0)
+    (ld c a)
     ,@next
+
+    ;; Cooperative input waits. IDLE-XT is optional during early bootstrap.
+    ;; Keeping the wait in threaded Forth lets callbacks use ordinary CATCH,
+    ;; data/return stacks, and bank-safe services without an assembly bridge.
+    ,@(defword "IDLE" 0 'idle)
+    (dw (lit var-idle-xt @ ?dup 0jump idle-done execute))
+    (label idle-done)
+    (dw (exit))
+
+    ;; ( -- raw-key ) Wait for a fresh event and its release. A different
+    ;; key observed during release is retained for the next invocation.
+    ,@(defword "KEY-EVENT" 0 'akey-event)
+    (dw (lit akey-pending c@ ?dup 0jump akey-wait-event))
+    (dw (lit 0 lit akey-pending c! jump akey-wait-release))
+    (label akey-wait-event)
+    (dw (idle key-scan ?dup 0jump akey-wait-event))
+    (label akey-wait-release)
+    (dw (>r))
+    (label akey-release-loop)
+    (dw (idle key-scan dup r@ = 0jump akey-event-ready))
+    (dw (drop jump akey-release-loop))
+    (label akey-event-ready)
+    (dw (lit akey-pending c! r> exit))
+
+    ;; Alphabetic input is default; 2ND shifts precisely the next event.
+    ,@(defword "AKEY" 0 'akey)
+    (dw (akey-event dup lit 54 = 0jump akey-alpha))
+    (dw (drop akey-event to-numeric jump akey-ready))
+    (label akey-alpha)
+    (dw (to-ascii))
+    (label akey-ready)
+    (dw (dup 0jump akey-retry exit))
+    (label akey-retry)
+    (dw (drop jump akey))
 
     ,@(defword "KEY" 0 'key)
     (dw (akey exit))
@@ -2397,7 +2385,7 @@
 
     ;; Invalidate all cached NFAs after an operation such as FORGET that can
     ;; make previously valid dictionary addresses unreachable.
-    ,@(defcode "(CLEAR-FIND-CACHE)" hidden 'clear-find-cache)
+    ,@(defcode "CLEAR-FIND-CACHE" 0 'clear-find-cache)
     (push bc)
     (push de)
     (ld hl find-cache)
@@ -2675,6 +2663,9 @@
     (jp nz tru)
     (jp fal)
 
+    ,@(defword "?UNFINISHED" 0 '?unfinished)
+    (dw (lit 2 + c@ lit ,unfinished and exit))
+
     ;; STATE is 0 while interpreting.
     ,@(defcode "[" immediate 'lbrac)
     (ld hl var-state)
@@ -2697,11 +2688,11 @@
     (dw (lit 0 create-room lit 0 lit loop-compile-depth !))
     (dw (dp @ lit compile-start-dp ! latest @ lit compile-start-latest !))
     (dw (create_ latest @))
-    (dw (hidden rbrac exit))
+    (dw (dup hidden lit 2 + dup c@ lit ,unfinished or swap c! rbrac exit))
 
     ,@(defword ";" immediate 'semicolon)
     (dw (lit exit comma))
-    (dw (latest @ hidden))
+    (dw (latest @ dup hidden lit 2 + dup c@ lit ,(- 255 unfinished) and swap c!))
     (dw (lit 0 lit compile-start-dp ! lbrac exit))
 
     ,@(defword "CONSTANT" 0 'constant)
@@ -2790,7 +2781,7 @@
     ;; A normal semicolon clears the marker; errors and premature source end
     ;; leave it set to the dictionary state captured by colon.
     (dw (lit compile-start-dp @ ?dup 0jump quit-no-rollback))
-    (dw (lit compile-start-latest @ latest ! dp !))
+    (dw (lit compile-start-latest @ latest ! dp ! clear-find-cache))
     (dw (lit 0 lit compile-start-dp !))
     (label quit-no-rollback)
     (dw (lit 0 state ! lit 0 handler ! lit 0 lit loop-compile-depth ! exit))
@@ -3702,6 +3693,52 @@
     ;; Map Flash page N into memory bank A ($4000-$7FFF).
     ;; Addresses 16#4000 to 16#7fff
     ;; ( n -- flag )
+    ;; ( addr len -- flag ) True when every byte is erased flash (FF).
+    ,@(defcode "FF?" 0 'all-erased)
+    (pop hl)
+    (label all-erased-loop)
+    (ld a b)
+    (or c)
+    (jp z tru)
+    (ld a (hl))
+    (cp #xff)
+    (jp nz fal)
+    (inc hl)
+    (dec bc)
+    (jr all-erased-loop)
+
+    ;; Raw bank selector access; WITH-PAGE supplies the checked public API.
+    ,@(defcode "BANK@" 0 'bank-fetch)
+    (push bc)
+    (in a (6))
+    (ld b 0)
+    (ld c a)
+    ,@next
+
+    ,@(defcode "(BANK!)" 0 'bank-store)
+    (ld a c)
+    (out (6) a)
+    (pop bc)
+    ,@next
+
+    ;; Program one flash byte with the existing RAM-resident writer.
+    ;; ( byte mapped-address -- )
+    ,@(defcode "(FLASH-C!)" 0 'flash-c-store)
+    ,@bc-to-hl
+    (pop bc)
+    (ld a c)
+    (push de)
+    (push hl)
+    (push af)
+    (call unlock-flash)
+    (pop af)
+    (pop hl)
+    (call write-flash-byte)
+    (call lock-flash)
+    (pop de)
+    (pop bc)
+    ,@next
+
     ,@(defcode "MAP-FLASH" 0 'map-flash)
     (ld a b)
     (or a)
@@ -3802,6 +3839,18 @@
     ,@(defvar "CURRENT-ERROR-HANDLER" 'current-error-handler 0)
     ;; Handles input-device EOF and may arrange the next input source.
     ,@(defvar "CURRENT-EOF-HANDLER" 'current-eof-handler 0)
+    ,@(defvar "IDLE-XT" 'idle-xt 0)
+    ,@(defconst "CP-DP" 'cp-dp 'compile-start-dp)
+    ,@(defconst "CP-LATEST" 'cp-latest 'compile-start-latest)
+    ,@(defconst "CP-LOOPS" 'cp-loops 'loop-compile-depth)
+    ,@(defconst "CP-CONTEXTS" 'cp-contexts 'loop-compile-contexts)
+    ,@(defconst "CP-BODY" 'cp-body 'current-definition-body)
+    ,@(concat-map (lambda (entry)
+                    (let ((name (symbol->string (rom-module-name (rom-allocation-module entry)))))
+                      (defconst (string-append "MODULE-" (string-upcase name))
+                                (string->symbol (string-append "module-" name))
+                                (rom-allocation-page entry))))
+                  module-layout)
     ,@(defconst "H0" 'h0 'dp-start)
     ,@(defconst "DP-LIMIT" 'dp-limit dictionary-limit)
     ,@(defconst "OS-END" 'os-end-forth 'os-end)

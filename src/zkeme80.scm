@@ -2,8 +2,9 @@
 (load "macros.scm")
 
 (define swap-sector #x38)
-;; Flash workers use the low-RAM trampoline; reserve E000..FFFF for the stack.
-(define dictionary-limit #xe000)
+;; The flash trampoline is at 8000; reserve F000..FFFF for the data stack.
+(define dictionary-limit #xf000)
+(load "modules.scm")
 (load "forth.scm")
 (load "header.scm")
 (load "boot.scm")
@@ -90,23 +91,8 @@
 
     ,(fill-up-to #xff #x4000)
 
-    (label bootstrap-flash1)
-    ,@(include-file-as-bytes "bootstrap-flash1.fs")
-
+    ,@(module-source (car module-layout))
     ,(fill-up-to #xff #x8000)
-
-    (label bootstrap-flash2)
-    ,@(include-file-as-bytes "bootstrap-flash2.fs")
-
-
-    ,(lambda ()
-       (format #t "Start of Forth data: 0x")
-       (PRINT-PC)
-       (format #t "~a bytes left for page 2.\n" (- #x8400 *pc*))
-       '())
-
-
-
     ,(fill-up-to #xff #x8402)
 
     ;; We start the Forth data here.
@@ -239,7 +225,7 @@
     (dw ,(make-list 128 0))
     (label return-stack-start)
 
-    ;; The remaining page-2 image is padding; dictionary RAM spans to DP-LIMIT.
+    ;; Free space until #xc000
     (label dp-start)
     ,(lambda ()
        (format #t "~a bytes left for HERE.\n" (- dictionary-limit *pc*))
@@ -247,29 +233,18 @@
 
     ,(fill-up-to #x0 #xc000)
 
-    ,@(include-file-as-bytes "bootstrap-flash3.fs")
-    ,(fill-up-to #xff #x10000)
-
-    ,@(include-file-as-bytes "bootstrap-flash4.fs")
-    ,(fill-up-to #xff #x14000)
-
-    ,@(include-file-as-bytes "bootstrap-flash5.fs")
-
-    ,(lambda ()
-       (format #t "End of Forth data: 0x")
-       (PRINT-PC)
-       (format #t "~a bytes left for page 4.\n" (- #x18000 *pc*))
-       '())
-
-    ,(fill-up-to #xff #x18000)
-
-    ;; Optional, verified post-bootstrap dictionary image.  Ordinary builds
-    ;; leave page 6 erased and take the text-bootstrap fallback.
-    (label bootstrap-image-page)
-    ,@(let ((image (getenv "ZKEME80_BOOTSTRAP_IMAGE")))
-        (if image
-            (include-binary-as-bytes image)
-            '()))
+    ;; Emit resident/tool pages and reserve page 6 for verified images.
+    ,@(concat-map
+       (lambda (page)
+         (let ((entry (find (lambda (e) (= (rom-allocation-page e) page)) module-layout)))
+           (append
+            (cond (entry (module-source entry))
+                  ((= page 6)
+                   (let ((image (getenv "ZKEME80_BOOTSTRAP_IMAGE")))
+                     (if image (include-binary-as-bytes image) '())))
+                  (else '()))
+            (list (fill-up-to #xff (* (+ page 1) #x4000))))))
+       (iota (- (max 6 (apply max (map rom-allocation-page module-layout))) 2) 3))
 
     ,(fill-up-to #xff #xf0000)
 

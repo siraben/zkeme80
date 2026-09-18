@@ -6,7 +6,7 @@
 \ Callback and source must live outside the banked window (4000-7fff).
 \ Return the callback's CATCH status, restoring the original selector.
 : WITH-PAGE ( xt page -- ior )
-  DUP 63 > IF 2DROP 10 EXIT THEN
+  DUP 64 U< 0= IF 2DROP 10 EXIT THEN
   BANK@ >R (BANK!) CATCH R> (BANK!)
 ;
 
@@ -18,7 +18,7 @@
   REPEAT 2DROP 0
 ;
 : (EVAL-ROLLBACK) ( old-latest old-here old-flags -- )
-  >R DP ! DUP LATEST ! 2+ R> SWAP C!
+  >R DP ! DUP LATEST ! 2+ R> SWAP C! CLEAR-FIND-CACHE
 ;
 \ Compilation must stay inside its entry definition, even across [ and ].
 : (EVAL-CLEANUP) ( ior old-latest old-here old-state old-flags -- ior )
@@ -41,11 +41,17 @@
 \ Reject unfinished definitions and discard their partial dictionary entries.
 : EVALUATE0 ( zaddr -- ior )
   INPUT-PTR @ >R BASE @ >R
+  CP-DP @ >R CP-LATEST @ >R CP-LOOPS @ >R CP-BODY @ >R
+  \ Reserve only active DO contexts, retaining nested evaluation frames.
+  CP-LOOPS @ 4 * DUP RP@ SWAP - RP!
+  CP-CONTEXTS RP@ 2 PICK CMOVE >R
   LATEST @ 2+ C@ >R
   STATE @ >R HERE >R LATEST @ >R
-  INPUT-PTR ! ['] INTERPRET CATCH
-  ?DUP IF THEN
+  DUP BEGIN DUP C@ WHILE 1+ REPEAT OVER -
+  ['] EVALUATE CATCH DUP IF >R 2DROP R> THEN
   R> R> R> R> (EVAL-CLEANUP)
+  R> DUP RP@ CP-CONTEXTS ROT CMOVE RP@ + RP!
+  R> CP-BODY ! R> CP-LOOPS ! R> CP-LATEST ! R> CP-DP !
   R> BASE ! R> INPUT-PTR !
 ;
 
@@ -54,10 +60,10 @@ VARIABLE IO-ADDR
 VARIABLE IO-LEN
 : IO-ARGS ( offset addr len -- ) IO-LEN ! IO-ADDR ! IO-OFF ! ;
 : IO-VALID? ( -- flag )
-  IO-OFF @ STORAGE-SIZE > IF 0 EXIT THEN
-  IO-LEN @ STORAGE-SIZE IO-OFF @ - > IF 0 EXIT THEN
-  IO-ADDR @ 33792 < IF 0 EXIT THEN
-  IO-LEN @ 65535 IO-ADDR @ - > IF 0 EXIT THEN 1
+  STORAGE-SIZE IO-OFF @ U< IF 0 EXIT THEN
+  STORAGE-SIZE IO-OFF @ - IO-LEN @ U< IF 0 EXIT THEN
+  IO-ADDR @ 33792 U< IF 0 EXIT THEN
+  65535 IO-ADDR @ - IO-LEN @ U< IF 0 EXIT THEN 1
 ;
 : (STORAGE-READ)
   IO-OFF @ MEMA + IO-ADDR @ IO-LEN @ CMOVE
@@ -87,7 +93,7 @@ VARIABLE IO-LEN
 : (STORAGE-BLANK?) IO-OFF @ MEMA + IO-LEN @ FF? ;
 : STORAGE-BLANK? ( offset len -- flag ior )
   IO-LEN ! IO-OFF !
-  IO-OFF @ STORAGE-SIZE > IF 0 10 EXIT THEN
-  IO-LEN @ STORAGE-SIZE IO-OFF @ - > IF 0 10 EXIT THEN
+  STORAGE-SIZE IO-OFF @ U< IF 0 10 EXIT THEN
+  STORAGE-SIZE IO-OFF @ - IO-LEN @ U< IF 0 10 EXIT THEN
   ['] (STORAGE-BLANK?) STORAGE-PAGE WITH-PAGE
 ;

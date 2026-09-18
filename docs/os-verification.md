@@ -30,11 +30,11 @@ leaving the production ROM and its journal unchanged. Each runner accepts
 | Check | Evidence |
 | --- | --- |
 | ROM layout / harness | 30 SRFI-64 assertions and 10 Python regressions, including budgets, upgrade selection, appended resident startup, and invalid page writes |
-| Forth language | 266/266 original suite assertions; explicit unloading still works |
-| RAM / parser | 113 target assertions: allocation bounds, atomic defining words, exact-fit strings, quoted EOF, missing/unknown names, fixed RAM banks, and checked flash mapping |
-| Core services | 128 assertions: scoped banks, service IDs, nested evaluation, token bounds, file-load stack balance, unfinished definitions, and caller compilation recovery |
+| Forth language | 288/288 ANS and shell assertions; explicit unloading still works |
+| RAM / parser | 154 target assertions: allocation bounds, atomic defining words, exact-fit strings, quoted EOF, missing/unknown names, fixed RAM banks, and checked flash mapping |
+| Core services | 133 assertions: scoped banks, service IDs, nested evaluation, token bounds, file-load stack balance, unfinished definitions, and caller compilation recovery |
 | Workspace | Multiline and bracketed definitions, error/exit rollback, deliberately hidden completed words, and definitions retained across desktop visits |
-| Scheduler | 75 target assertions, including bank changes on normal/error returns; counters advance during desktop and shell idle waits |
+| Scheduler | 89 target assertions, including bank changes on normal/error returns; counters advance during desktop and shell idle waits |
 | Storage | 74 target assertions, 12 cold-boot checks, and 12 damaged-payload checks; independent flash record verification |
 | Desktop | Empty/multiple objects, source load/error feedback, selection and paging bounds, task lifecycle, page restoration, service paging, and 29 exact LCD comparisons |
 | Shell rendering | Five exact 96x64 pixel comparisons, including error recovery |
@@ -70,11 +70,21 @@ source loading, workspace execution, and the system inspectors:
 
 ![Interactive emulator task inspector](workbench-emulator.png)
 
-## Integration with current master
+## Integration and memory layout
 
-This feature branch extends the older shell kernel at `9d77cd5`. Its 266-case
-language suite predates the ANS94 CORE work merged to master as `77105f5`.
-The branch is a draft integration: reconcile counted strings, parser/source
-contracts, `FIND`, true flags, signed arithmetic, and `KEY`/`RAW-KEY`, then
-preserve and pass master's 286-case conformance suite before merging. The
-emulator results above validate this branch, not that pending ABI port.
+The branch is rebased onto the current shell/tooling stack after master merged
+#12. The kernel keeps counted strings, standard `FIND` and `EVALUATE`, canonical
+flags, signed arithmetic, checked dictionary writes, and `MAP-FLASH`.
+`EVALUATE0` adds transactional workspace cleanup around standard bounded
+evaluation; it restores compiler checkpoints and active loop contexts.
+
+The renderer and tables are copied from the page-2 initializer into fixed RAM
+at boot. The dictionary ends at `0xF000`, leaving 4 KiB for the data stack.
+The 512-entry/4096-byte shell history lives in banked RAM page 2, with scoped
+mapping that restores the foreground page. Flash source page 6 remains
+reserved for the tooling branch's optional precompiled image format.
+
+The workbench uses text bootstrap. Its resident dictionary spans both fixed
+RAM banks, so the current single-RAM-page precompiled snapshot format does not
+support this configuration. Do not use `make precompiled-rom` for the workbench
+until its image format captures both banks and resident service state.

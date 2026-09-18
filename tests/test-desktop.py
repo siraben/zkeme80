@@ -205,12 +205,12 @@ def populated_scenario(args, output):
     scenario.keys(*("RIGHT",) * 65)
     scenario.snapshot("page-last", OS_PAGE_NO=63)
     scenario.keys("DOWN", "ENTER")
-    scenario.snapshot("page-last-hex", OS_PAGE_NO=63, OS_PAGE_MODE=1)
+    scenario.snapshot("page-last-hex", OS_PAGE_NO=63, OS_PAGE_MODE=65535)
     scenario.keys("ENTER")
     scenario.keys(*("LEFT",) * 65)
     scenario.snapshot("page-first", OS_PAGE_NO=0)
     scenario.keys("UP", "ENTER")
-    scenario.snapshot("page-first-hex", OS_PAGE_NO=0, OS_PAGE_MODE=1)
+    scenario.snapshot("page-first-hex", OS_PAGE_NO=0, OS_PAGE_MODE=65535)
     scenario.keys("ENTER")
     scenario.keys("CLEAR", "DOWN", "ENTER", "LEFT")
     scenario.snapshot("services", OS_CHOICE=4, OS_SERVICE_FIRST=0)
@@ -316,7 +316,7 @@ def check_pixels(empty, populated):
             model.text(3, y, f"{first + row} ").text(16, y, call)
         model.compare(populated, name)
 
-    page_names = {0: "kernel", 2: "RAM init", 8: "objects"}
+    page_names = {0: "kernel", 2: "RAM init", 6: "image", 8: "objects"}
     for module, label in (("CORE", "core"), ("STORAGE", "storage"),
                           ("DESKTOP", "desktop"), ("WORKBENCH", "forth"),
                           ("TESTS", "tests")):

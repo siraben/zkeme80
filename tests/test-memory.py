@@ -22,8 +22,8 @@ def main():
     output = (args.output or Path(tempfile.mkdtemp(prefix="zkeme80-memory-"))).resolve()
     output.mkdir(parents=True, exist_ok=True)
     rom = args.rom.read_bytes()
-    source = (ROOT / "tests/os-memory.fs").read_text()
-    source += '\nPAGE MEM-FAILURES @ . ." failures / " MEM-CHECKS @ . CR\n'
+    source = ": TEST-BANK@ BANK@ ;\n" + (ROOT / "tests/master-memory.fs").read_text()
+    source += '\nPAGE FAILURES @ . ." failures / " CHECKS @ . CR\n'
     source += ': MEM-HOLD BEGIN AGAIN ; MEM-HOLD\n'
     image, state, macro = (output / name for name in ("memory.rom", "memory.sav", "memory.macro"))
     image.write_bytes(inject(rom, source))
@@ -39,8 +39,8 @@ def main():
     (output / "memory.log").write_text(process.stdout)
     assert process.returncode == 0, f"emulator failed: {output}/memory.log"
     ram = (output / "memory.ram").read_bytes()
-    assert variable(ram, rom, "MEM-DONE") == 51966, f"test did not finish: {output}"
-    checks, failures = variable(ram, rom, "MEM-CHECKS"), variable(ram, rom, "MEM-FAILURES")
+    assert variable(ram, rom, "DONE") == 51966, f"test did not finish: {output}"
+    checks, failures = variable(ram, rom, "CHECKS"), variable(ram, rom, "FAILURES")
     assert checks >= 40 and failures == 0, (checks, failures, output)
     print(f"Memory bounds: {checks} target assertions passed")
     print(f"Emulator artifacts: {output}")
