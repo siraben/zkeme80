@@ -52,6 +52,16 @@
     (nop)
     (rst #x38)))
 
+;; These helpers execute only after boot installs their page-2 image in fixed
+;; RAM. Keep dictionary headers in page 0; moving cold rendering code and data
+;; leaves room there for the native Forth kernel and shell primitives.
+(define resident-ui-asm
+  `(,@font-asm
+    ,@text-asm
+    ,@forth-char-lookup-table
+    (label bootstrap-fs)
+    ,@(include-file-as-bytes "boot.fs")))
+
 (define zkeme80
   `((ram-range #x8000 #xc000)
     ,(equ 'flash-executable-ram #x8000)
@@ -69,11 +79,6 @@
     ,@display-asm
     ,@keyboard-asm
     ,@math-asm
-    ,@font-asm
-    ,@text-asm
-
-    (label bootstrap-fs)
-    ,@(include-file-as-bytes "boot.fs")
 
     (label os-end)
     ,(lambda ()
@@ -220,6 +225,16 @@
     (dw (0))
     (label display-dirty)
     (db (0))
+
+    (label resident-ui-start)
+    ,@resident-ui-asm
+    (label resident-ui-end)
+    ,(lambda ()
+       (add-label! 'resident-ui-source
+                   (- (resolve-label 'resident-ui-start) #x4000))
+       (add-label! 'resident-ui-size
+                   (- *pc* (resolve-label 'resident-ui-start)))
+       '())
 
     (dw ,(make-list 128 0))
     (label return-stack-start)

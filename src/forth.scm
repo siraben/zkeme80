@@ -4004,7 +4004,6 @@
     ,@forth-math-words
     ,@forth-memory-words
     ,@forth-graphics-words
-    ,@forth-char-lookup-table
     ,@forth-misc-words
     ,@forth-vars
     ,@forth-meta-words
