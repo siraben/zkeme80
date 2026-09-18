@@ -6,8 +6,7 @@ for an invalid ID. Service tokens and the dictionary reside outside the
 switchable source-page window.
 
 `MAP-FLASH ( page -- flag )` maps a flash page 0–63 into bank A, rejecting
-invalid 16-bit selectors without changing the bank. `SET-RAM-MEMA` remains a
-compatibility alias for the misleading original name. Most clients should
+invalid 16-bit selectors without changing the bank. Most clients should
 borrow a bank through `WITH-PAGE` instead of leaving it changed.
 
 `WITH-PAGE ( xt page -- ior )` validates flash pages 0 through 63, runs the
@@ -44,11 +43,11 @@ transaction even though `STATE` is zero; recovery restores that zero state.
 
 Evaluation is not a general transaction: completed definitions before an error
 that leaves no unfinished definition, arbitrary memory writes, output, and
-flash updates are retained. Numeric input currently accepts decimal digits;
-`BASE` controls numeric output. Tokens may contain at most 31 bytes; longer
-tokens return 19 without overflowing the parser buffer.
-An unterminated quoted string returns 18. Missing parsed names return 16;
-an unresolved name required by a defining or lookup word returns 1.
+flash updates are retained. Numeric input and output honor `BASE`. Defining
+names are limited to 31 bytes; longer defining names throw `-19`.
+An unterminated quoted string returns `-18`. Missing defining names return
+`-16`; unresolved names return `-13`. Standard `EVALUATE` retains its ANS
+source and compiler-state contracts.
 
 `tests/test-core.py` exercises service lookup, bank restoration, invalid bounds,
 nested evaluation, parser limits, failed-definition cleanup, and interactive
@@ -60,13 +59,13 @@ The dictionary grows through the two fixed RAM windows, from `H0` to the
 exclusive `DP-LIMIT` (`0xF000`). The top 4 KiB is reserved for the data stack;
 the return stack has its own reserved area below `H0`. `UNUSED` measures this
 actual dictionary budget. `ROOM`, `ALLOT`, `,`, `C,`, `CREATE`, and `DOES>` check
-capacity before their ordinary writes and throw 8 when it is exhausted.
+capacity before their ordinary writes and throw `-8` when it is exhausted.
 `VARIABLE`, `CONSTANT`, and `VALUE` reserve their complete definitions before
-changing the dictionary. Both compiled and interpreted `S"` check space for
-the string and its terminator before copying any bytes; unterminated quotes
+changing the dictionary. Both compiled and interpreted `S"` check space before copying any bytes.
+Only compiled strings have a private terminator; unterminated quotes
 stop at EOF. Interpreted string results remain transient.
 Negative `ALLOT` can reclaim space within the dictionary bounds. A missing
-`CREATE`/colon name throws 16. Raw memory stores and direct writes to `DP`
+`CREATE`/colon name throws `-16`. Raw memory stores and direct writes to `DP`
 remain sharp tools; these guards are not memory protection or stack isolation.
 
 `tests/test-memory.py` verifies these limits and distinct fixed RAM above

@@ -46,8 +46,9 @@ uppercase because the Forth shell is uppercase-oriented.
 The native dictionary remains in fixed flash page 0. Boot copies the renderer,
 font, key tables, and initial source from a named page-2 image into fixed RAM
 before entering Forth. The dictionary starts above those helpers and ends at
-`0xE000`; the top 8 KiB remain available for the data stack. This accommodates
-the full history rings without reducing their advertised capacity.
+`0xF000`; the top 4 KiB remain available for the data stack. The full history
+rings occupy banked RAM page 2, with scoped access that restores the
+foreground mapping. See [RAM ownership](module-layout.md#ram-ownership).
 
 `PAUSE` waits for a fresh physical key press, so the key that opened a menu
 page cannot also dismiss its introduction.

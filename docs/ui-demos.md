@@ -1,6 +1,7 @@
 # Workbench walkthroughs
 
-These are live LCD recordings from the headless
+These recordings were refreshed after rebasing onto the ANS shell/tooling
+stack and merged master correctness fixes. They are live LCD recordings from the headless
 [TilEm fork](https://github.com/siraben/tilem-headless), enlarged four times
 with nearest-neighbor sampling. Boot is trimmed; the remaining frames retain
 their recorded order and timing. No UI elements or text are composited onto

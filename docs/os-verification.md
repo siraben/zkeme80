@@ -37,12 +37,13 @@ leaving the production ROM and its journal unchanged. Each runner accepts
 | Scheduler | 89 target assertions, including bank changes on normal/error returns; counters advance during desktop and shell idle waits |
 | Storage | 74 target assertions, 12 cold-boot checks, and 12 damaged-payload checks; independent flash record verification |
 | Desktop | Empty/multiple objects, source load/error feedback, selection and paging bounds, task lifecycle, page restoration, service paging, and 29 exact LCD comparisons |
-| Shell rendering | Five exact 96x64 pixel comparisons, including error recovery |
+| Shell editing | Thirteen cursor/full-buffer states, 512-entry and 4096-byte history boundaries, eviction, compiler rollback, and persistent definitions |
 
 For the original language suite, choose **Test suite** in the workbench or run
-`tests/full-suite.macro` using the extended emulator. The screen-model check
-uses `tests/shell-screen.macro` followed by
-`nix develop --command python3 tests/verify-shell-screen.py`.
+`tests/full-suite.macro` using the extended emulator. The resident editor check uses `tests/shell-editing.macro` followed by
+`nix develop --command python3 tests/verify-shell-editing.py`. It verifies
+cursor state, the full line buffer, history capacity/eviction, compiler
+rollback, and retained definitions after `BYE`.
 
 Raw `key` commands in the extended emulator require explicit `wait` commands
 after release. Its `key_delay` setting only spaces characters in typed strings;
