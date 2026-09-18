@@ -18,6 +18,7 @@ def main() -> None:
     parser.add_argument(
         "--labelmap", type=Path, default=Path("src/zkeme80.ram-labelmap.json")
     )
+    parser.add_argument("--rom", type=Path, default=Path("src/zkeme80.rom"))
     args = parser.parse_args()
 
     labelmap = json.loads(args.labelmap.read_text())
@@ -181,6 +182,14 @@ def main() -> None:
         position = offset(variable)
         if before_shell[position : position + 2] != after_shell[position : position + 2]:
             raise RuntimeError(f"shell exit did not restore {variable}")
+    resident_start = labels["resident-ui-start"]
+    resident_end = labels["resident-ui-end"]
+    rom = args.rom.read_bytes()
+    if before_shell[resident_start - ram_base:resident_end - ram_base] != rom[
+        resident_start:resident_end
+    ]:
+        raise RuntimeError("boot did not install the complete resident UI image")
+    print("resident UI: boot RAM matches the assembled page-2 helper image")
     loaded_dp = read_u16(shell_loaded, offset("var-dp"))
     if not loaded_dp < 0xE000:
         raise RuntimeError(f"shell transient dictionary crossed RAM limit: {loaded_dp:#06x}")
