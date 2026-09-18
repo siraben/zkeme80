@@ -35,10 +35,9 @@ and compiler-state behavior are unchanged.
 
 `MAP-FLASH ( page -- flag )` selects flash page 0–63 in bank A and returns
 canonical true (`-1`). Invalid 16-bit values return false without changing the
-bank. `SET-RAM-MEMA` remains an alias for existing bootstrap/application code;
-despite its historical name, those callers require flash pages.
+bank. Bootstrap and application code use `MAP-FLASH` directly.
 
-The old implementation examined only the low byte, so `256 SET-RAM-MEMA`
+The old implementation examined only the low byte, so page selector `256`
 selected page zero. It also used flash aliases `64+n`; the new operation writes
 the flash selector directly. Callers borrowing a page remain responsible for
 restoring it before reading their original banked source again.
