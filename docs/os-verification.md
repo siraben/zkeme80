@@ -35,7 +35,7 @@ leaving the production ROM and its journal unchanged. Each runner accepts
 | Workspace | Multiline definitions, failed-definition rollback, and definitions retained across desktop visits |
 | Scheduler | 64 target assertions; counters advance during desktop and shell idle waits |
 | Storage | 69 target assertions plus 12 cold-boot checks; independent record/checksum verification |
-| Desktop | Nonempty file preview/paging, task pause/resume, page restoration, service paging and repeated navigation |
+| Desktop | Empty/multiple objects, source load/error feedback, selection and paging bounds, task lifecycle, page restoration, service paging, and 29 exact LCD comparisons |
 | Shell rendering | Five exact 96x64 pixel comparisons, including error recovery |
 
 For the original language suite, choose **Test suite** in the workbench or run
@@ -52,6 +52,18 @@ power loss during programming still need hardware qualification.
 
 A stock TilEm GUI was also exercised under Xvfb using mouse presses on its
 calculator skin: open Tasks, create a counter, and pause it. The screenshot
-shows the paused job and its retained run count:
+shows the redesigned task list with a paused job and its retained run count.
+
+See the [recorded walkthroughs](ui-demos.md) for reproducible LCD GIFs of
+source loading, workspace execution, and the system inspectors:
 
 ![Interactive emulator task inspector](workbench-emulator.png)
+
+## Integration with current master
+
+This feature branch extends the older shell kernel at `9d77cd5`. Its 266-case
+language suite predates the ANS94 CORE work merged to master as `77105f5`.
+The branch is a draft integration: reconcile counted strings, parser/source
+contracts, `FIND`, true flags, signed arithmetic, and `KEY`/`RAW-KEY`, then
+preserve and pass master's 286-case conformance suite before merging. The
+emulator results above validate this branch, not that pending ABI port.
