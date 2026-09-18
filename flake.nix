@@ -12,10 +12,11 @@
           default = pkgs.writeShellScriptBin "runit" ''
             exec ${pkgs.tilem}/bin/tilem2 -r ${zkeme80}/zkeme80.rom
           '';
-          zkeme80 = runCommand "zkeme80.rom" { buildInputs = [ guile ]; } ''
-            cp -r ${./.}/src/* .
+          zkeme80 = runCommand "zkeme80.rom" { nativeBuildInputs = [ guile python3 gnumake ]; } ''
+            cp -r ${./.}/src ${./.}/tests .
+            cp ${./.}/Makefile ${./.}/build.scm ${./.}/0A.key .
             chmod -R +w .
-            guile --no-auto-compile -c '(use-modules (ice-9 format)) (load "zkeme80.scm") (make-rom+map "zkeme80.rom" "zkeme80.ram-labelmap.json")'
+            make test-build build
             mkdir $out
             cp zkeme80.rom zkeme80.ram-labelmap.json $out/
           '';
@@ -23,7 +24,7 @@
         defaultPackage = self.packages.${system}.default;
 
         devShells.default = mkShell {
-          buildInputs = [ guile ];
+          buildInputs = [ guile python3 ];
         };
       }
     );

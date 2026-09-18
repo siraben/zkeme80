@@ -88,17 +88,28 @@ of the operating system is of my own design.
 
 ## Building and running the operating system
 ### Using the Makefile
-Running `make build` should make generate a file called `zkeme80.rom`
+Running `make build` generates a file called `zkeme80.rom`
 in the same directory.  Simply pass that file to an emulator such as
 [jsTIfied](https://www.cemetech.net/projects/jstified/) (works in the
 browser) and start playing around!
 
-Running just `make` builds and runs the project, but assumes that you
+Running `make all` builds and runs the project, but assumes that you
 have already properly built `tilem` and can run it with `tilem2` on
 the shell, and have Guile installed.  Be warned, though, `tilem` is
 tricky to build and you have to enable all sorts of flags and install
 dependencies.  If anyone knows a good emulator for macOS, please let
 me know.
+
+`guile --no-auto-compile /path/to/zkeme80/build.scm` also builds the ROM
+and RAM label map, writing both into the current directory. Source files
+are resolved relative to the script, so this works outside the checkout.
+
+`nix develop --command make test-build` checks both build entry points
+and the upgrade packager's inputs. These checks also run in the Nix build.
+The packager check uses a stub; it does not verify signing or installation
+on a calculator. With `mktiupgrade` installed, `make upgrade` packages
+pages 00–05 and 3C using the included key and writes `zkeme80.8xu` in the
+repository root.
 
 ### Using the Nix package manager (macOS or Linux)
 If you're using the Nix package manager, just clone the repository and
