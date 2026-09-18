@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -55,8 +56,7 @@ class BuildTests(unittest.TestCase):
             tools = Path(temporary) / "tools"
             tools.mkdir()
             packager = tools / "mktiupgrade"
-            packager.write_text('''#!/usr/bin/env python3
-from pathlib import Path
+            packager.write_text(f"#!{sys.executable}\n" + '''from pathlib import Path
 import sys
 args = sys.argv[1:]
 assert args[:4] == ["-k", "../0A.key", "--device", "TI-84+"]
