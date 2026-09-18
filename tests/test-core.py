@@ -23,9 +23,14 @@ def run(args, output, name, source, commands):
     macro.write_text(commands)
     state = output / f"{name}.sav"
     state.write_text("MODEL = ti84p\n")
-    subprocess.run([args.emulator, "--headless", "--full-speed", "--rom", str(image),
-                    "--state-file", str(state), "--reset", "--macro", str(macro)],
-                   check=True, timeout=90, env={**os.environ, "DISPLAY": args.display})
+    process = subprocess.run(
+        [args.emulator, "--headless", "--full-speed", "--rom", str(image),
+         "--state-file", str(state), "--reset", "--macro", str(macro)],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        timeout=90, env={**os.environ, "DISPLAY": args.display},
+    )
+    (output / f"{name}.log").write_text(process.stdout)
+    assert process.returncode == 0, f"emulator failed; inspect {output / (name + '.log')}"
 
 
 def main():

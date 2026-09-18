@@ -2,10 +2,22 @@
 
 ## Current implementation
 
-Flash page 5 now starts an interactive Forth REPL.  Alphabetic input is
-the default; press `2ND` before a digit or arithmetic symbol.  `DEL`
-backspaces, `HELP` prints the on-device summary, and `BYE` unloads the
-transient shell words and returns to the menu.
+The manifest's resident `workbench` module supplies the interactive Forth
+REPL; it is loaded once at boot. Alphabetic input is the default; press `2ND`
+before a digit or arithmetic symbol. `DEL` backspaces, `HELP` prints the
+on-device summary, and `BYE` returns to the desktop. Dictionary definitions
+survive leaving and reentering the workspace. They remain volatile across a
+reset; use the [object store](storage.md) to save reloadable source.
+
+`FILES` lists stored objects, `TASKS` lists cooperative jobs, and `SERVICES`
+opens the system service browser. The input loop yields to cooperative jobs
+while waiting for keys. Long-running words must call `YIELD` explicitly if
+background jobs should continue; no timer forcibly preempts Forth execution.
+
+An interpreter error clears compilation state and rolls back an unfinished
+definition to the saved dictionary boundary. Ordinary completed definitions
+are retained. This is recovery for interactive mistakes, not protection from
+arbitrary memory writes or forgetting words still referenced by tasks.
 
 The editor accepts up to 128 bytes and wraps across display rows.  Left and
 right move through the complete buffer, including across visual row

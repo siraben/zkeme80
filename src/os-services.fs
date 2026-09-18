@@ -10,12 +10,27 @@
   BANK@ >R (BANK!) CATCH R> (BANK!)
 ;
 
-\ Nested zero-terminated input, preserving the caller's source and radix.
-\ INTERPRET returns its status instead of jumping into the outer QUIT loop.
+\ Keep the complete evaluation frame on the return stack for nested calls.
+\ A source must finish in the compilation state in which it started.
+: (EVAL-CLEANUP) ( ior old-latest old-here old-state -- ior )
+  DUP STATE @ <> IF
+    >R >R >R DUP 0= IF DROP 22 THEN R> R> R>
+  THEN
+  >R
+  2 PICK IF
+    R@ 0= STATE @ 0 <> AND IF DP ! LATEST ! ELSE 2DROP THEN
+  ELSE 2DROP THEN
+  R> STATE !
+;
+
+\ Nested zero-terminated input, preserving source, radix, and compiler state.
+\ Reject unfinished definitions and discard their partial dictionary entries.
 : EVALUATE0 ( zaddr -- ior )
   INPUT-PTR @ >R BASE @ >R
+  STATE @ >R HERE >R LATEST @ >R
   INPUT-PTR ! ['] INTERPRET CATCH
   ?DUP IF THEN
+  R> R> R> (EVAL-CLEANUP)
   R> BASE ! R> INPUT-PTR !
 ;
 

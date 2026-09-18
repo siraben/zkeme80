@@ -34,18 +34,40 @@ where speed isn't completely essential so a balance must be striken.
 So when doubt, write it in the language that more succinctly expresses
 the behavior of the word.
 
-## No files
-This Forth implementation will implement a block-based system, where
-each block is 1024 bytes.  This keeps things simple.  The user can
-specify exactly when to save their work and which block to load.
-Furthermore, this allows the ability for the user to extend the
-system.  Searching within blocks can be implemented, and it would be
-trivial to enumerate the list of blocks.  Block names can be aliased
-via constants as well, so the initial block might serve as the block
-that allows the user to choose which block to load next, and so on.
+## Named objects on block storage
 
-This also allows for relatively easy facilities later on to backup and
-restore state, single the only mutable state will be in the blocks.
+The original plan exposed only numbered 1024-byte blocks. The current system
+adds a flat, case-sensitive namespace and text, source, and binary types over
+1024-byte flash records. Programs share objects by name rather than depending
+on their physical address. `FS-PUT` explicitly saves a new revision and
+`FS-LOAD` explicitly evaluates source through the normal interpreter.
+
+The append-only journal commits each record after writing its contents. It
+has finite capacity and no automatic compaction yet; replacements and deletion
+markers also consume records. See [storage](storage.md) for the format, result
+codes, and buffer-lifetime rules. Conventional 1024-byte Forth source screens
+and a source editor remain possible interfaces above the storage mechanism.
+
+## A shared resident workspace
+
+Leaving the shell keeps the dictionary, objects, and task records available to
+the desktop and other applications. RAM remains volatile across resets; saved
+source is the reproducible form of a definition. Cooperative jobs execute one
+callback at a time when input polling or an application calls `YIELD`. They
+must return promptly and preserve the shared interpreter's conventions.
+Exceptions stop a failed job, but arbitrary memory writes or infinite loops
+are outside that protection. See [tasks](tasks.md).
+
+## Modules and physical pages
+
+The ROM manifest in `src/modules.scm` names logical modules and lists their
+source files in dependency order. It assigns flash pages while skipping
+reserved regions, joins each module's source with one EOF, generates module
+page constants, and generates transitions between resident modules. A module
+must fit one 16 KiB source page; split a larger source group into named modules.
+This removes page numbers from ordinary module consumers without pretending
+that a source-page budget is also a compiled dictionary-space budget. See the
+[module guide](module-layout.md) and [architecture roadmap](os-design.md).
 
 ## No security
 Security is hard.  So let's not have any.  It is unlikely that the

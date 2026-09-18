@@ -4,7 +4,6 @@ set key_delay 0.06s
 key ON
 wait 10s
 memdump /tmp/zkeme80-shell-before.ram ram-logical
-key RIGHT
 wait 0.3s
 key ENTER
 wait 2s

@@ -1,0 +1,49 @@
+# Building and testing the workbench
+
+Build and run the Scheme layout checks in the pinned development environment:
+
+```sh
+nix develop --command make build test
+nix develop --command tilem2 --rom zkeme80.rom
+```
+
+The shell provides Guile, Python, ImageMagick, TilEm, Xvfb, and xdotool.
+The packaged TilEm is sufficient for interactive use. Automated target tests
+require the extended TilEm build that supplies `--headless`, `--macro`,
+`memdump`, and `scanstring` (the checkout used here is
+`~/Git/tilem-headless`). Point `TILEM` at that build explicitly:
+
+```sh
+export TILEM=/path/to/extended/tilem2
+export DISPLAY=:99
+nix develop --command Xvfb :99 -screen 0 1024x768x24 -nolisten tcp &
+nix develop --command make test-emulator
+```
+
+All Python runners use disposable ROM/state copies. They locate named module
+constants in the built kernel and select an erased scratch source page,
+leaving the production ROM and its journal unchanged. Each runner accepts
+`--output /tmp/example` to retain screenshots, RAM dumps, and replay macros.
+
+| Check | Evidence |
+| --- | --- |
+| ROM layout | 30 SRFI-64 assertions, including budgets and upgrade page selection |
+| Forth language | 266/266 original suite assertions; explicit unloading still works |
+| Core services | Scoped bank restoration, service IDs, nested evaluation, token bounds and source recovery |
+| Workspace | Multiline definitions, failed-definition rollback, and definitions retained across desktop visits |
+| Scheduler | 64 target assertions; counters advance during desktop and shell idle waits |
+| Storage | 69 target assertions plus 12 cold-boot checks; independent record/checksum verification |
+| Desktop | Nonempty file preview/paging, task pause/resume, page restoration, service paging and repeated navigation |
+| Shell rendering | Five exact 96x64 pixel comparisons, including error recovery |
+
+For the original language suite, choose **Test suite** in the workbench or run
+`tests/full-suite.macro` using the extended emulator. The screen-model check
+uses `tests/shell-screen.macro` followed by
+`nix develop --command python3 tests/verify-shell-screen.py`.
+
+The target runs also found and fixed inherited interpreter problems: the
+return stack now begins at its reserved address, `INTERPRET` returns to nested
+callers, token EOF remains visible to the next parser call, and overlong tokens
+raise a recoverable error instead of overwriting the token-pointer cell.
+These checks establish emulator behavior; physical flash timing and unexpected
+power loss during programming still need hardware qualification.
