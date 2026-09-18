@@ -11,7 +11,7 @@ previously incompatible behavior of signed comparisons and arithmetic,
 division, flags, counted strings and dictionary lookup, defining words,
 loops and `LEAVE`, parsing and input sources, exception exits, memory
 movement, numeric output, and character input.  The on-device regression
-suite's final verified tally is 286/286, recorded by the headless TilEm
+suite's final verified tally is 288/288, recorded by the headless TilEm
 macro together with a logical RAM dump while the result screen waits for a
 key.  The macro then acknowledges the result, checks that the transient
 dictionary is reclaimed, and returns to the main menu.
@@ -61,10 +61,14 @@ NUL terminator within the mapped flash page; it is not a general bounded
 string interface.
 
 `EXPECT` is retained as the obsolescent line-editor interface and records
-the received count in `SPAN`; `ACCEPT` is the portable interface.  The
-editor's visual behavior depends on the TI-84+ display and keypad.  Its
-cursor and boundary regressions require a dedicated emulator scenario and
-are not counted by the stack-only suite yet.
+the received count in `SPAN`; it and portable `ACCEPT` complete at their
+requested capacity.  The calculator-specific `EDIT-LINE` extension retains
+cursor navigation and deletion after reaching capacity so a full shell field
+can still be corrected.  It also exposes the optional `EDIT-HISTORY` vector;
+the transient shell uses it for UP/DOWN recall without changing portable
+`EXPECT` or `ACCEPT`.  Their wrapped visual behavior depends on the TI-84+
+display and keypad and is covered by the dedicated shell emulator scenarios
+rather than the stack-only suite.
 
 ## Scope of the claim
 

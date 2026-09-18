@@ -1,0 +1,19 @@
+# Minimal modifier probe used with tilem_trace.py --print-keys.
+set key_hold 0.25s
+key ON
+wait 10s
+key RIGHT
+wait 0.3s
+key ENTER
+wait 2s
+key 2ND
+wait 0.5s
+key 2
+wait 0.5s
+scanstring " "
+key 2ND
+wait 0.5s
+key 3
+wait 0.5s
+screenshot /tmp/zkeme80-shell-numeric.png
+memdump /tmp/zkeme80-shell-numeric.ram ram-logical

@@ -4,6 +4,12 @@
 ![OS screenshot](screenshot.png)
 ![OS animation](demo.gif)
 
+The interactive Forth shell supports wrapped 128-byte editing, a filled block
+cursor, 512-slot command history, shifted numeric and symbol input, error
+recovery, transcript scrolling, and a clean return to the menu:
+
+![Interactive Forth shell](docs/shell-demo.gif)
+
 **TLDR:** `assembler.scm` is the assembler, `zkeme80.scm` is the OS.
 To build the rom, run `make build`.  There are no dependencies apart
 from a recent version of Guile, supporting the modules `bytevectors`
@@ -112,7 +118,7 @@ pages 00–05 and 3C using the included key and writes `zkeme80.8xu` in the
 repository root.
 
 The [kernel correctness checks](docs/kernel-correctness.md) document dictionary
-bounds, checked flash mapping, and how to run the 286-case ANS suite plus
+bounds, checked flash mapping, and how to run the 288-case ANS and key-map suite plus
 156 boundary regressions in an extended TilEm emulator.
 
 `make precompiled-rom TILEM_HEADLESS=/path/to/tilem2` captures and verifies the
@@ -121,6 +127,19 @@ post-bootstrap dictionary, then writes it to Flash page `06` in
 before execution; an absent or invalid image falls back to the text bootstrap.
 The [precompiled-bootstrap guide](docs/precompiled-bootstrap.md) documents the
 format, smoke test, and upgrade target.
+
+The project launcher gives TilEm isolated typewriter-style bindings for
+the interactive shell.  In particular, host `a`, `s`, and `t` type `A`, `S`,
+and `T` instead of using TilEm's stock calculator-function shortcuts.  All
+printable ASCII keyboard keys are mapped; letters normalize to uppercase.
+To launch a built ROM manually with the same mappings, run:
+
+```shell
+sh debug/run-tilem.sh debug/tilem-keybindings.ini tilem2 -r zkeme80.rom
+```
+
+This does not replace your personal TilEm configuration.  Invoking `tilem2`
+directly continues to use TilEm's stock calculator-function shortcuts.
 
 ### Using the Nix package manager (macOS or Linux)
 If you're using the Nix package manager, just clone the repository and

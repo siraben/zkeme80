@@ -50,6 +50,15 @@
                       (out (#x10) a)))
                   '(5 1 3 #x17 #xb #xef))
 
+    ;; Page 2 stores the fixed-RAM rendering helpers and tables at their
+    ;; execution addresses. Install them before the first Forth output.
+    (ld a 2)
+    (out (6) a)
+    (ld hl resident-ui-source)
+    (ld de resident-ui-start)
+    (ld bc resident-ui-size)
+    (ldir)
+
     ;; "main", after everything has been set up.
     ;; Just go straight to the Forth portion!
     ,@forth-asm

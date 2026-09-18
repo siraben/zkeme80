@@ -1,0 +1,18 @@
+# Drive the full on-demand test suite to its terminal tally.
+set key_hold 0.25s
+set key_delay 0.05s
+key ON
+wait 10s
+key RIGHT
+wait 0.3s
+key DOWN
+wait 0.3s
+key ENTER
+wait 2s
+key ENTER
+wait 45s
+screenshot /tmp/zkeme80-suite-tally.png
+memdump /tmp/zkeme80-suite.ram ram-logical
+key ENTER
+wait 2s
+screenshot /tmp/zkeme80-suite-menu.png

@@ -2,8 +2,8 @@
 (load "macros.scm")
 
 (define swap-sector #x38)
-;; Flash programming uses scratch RAM at C000; keep the dictionary below it.
-(define dictionary-limit #xc000)
+;; Flash workers use the low-RAM trampoline; reserve E000..FFFF for the stack.
+(define dictionary-limit #xe000)
 (load "forth.scm")
 (load "header.scm")
 (load "boot.scm")
@@ -52,12 +52,23 @@
     (nop)
     (rst #x38)))
 
+;; These helpers execute only after boot installs their page-2 image in fixed
+;; RAM. Keep dictionary headers in page 0; moving cold rendering code and data
+;; leaves room there for the native Forth kernel and shell primitives.
+(define resident-ui-asm
+  `(,@font-asm
+    ,@text-asm
+    ,@forth-char-lookup-table
+    (label bootstrap-fs)
+    ,@(include-file-as-bytes "boot.fs")))
+
 (define zkeme80
   `((ram-range #x8000 #xc000)
     ,(equ 'flash-executable-ram #x8000)
     ,(equ 'flash-executable-ram-size 100)
     ,(equ 'flash-operation-status #x80ff)
     ,(equ 'screen-buffer #x8100)
+    ,(equ 'screen-buffer-scroll-source (+ #x8100 72))
     ,(equ 'swap-sector #x38)
 
     ,@header-asm
@@ -68,11 +79,6 @@
     ,@display-asm
     ,@keyboard-asm
     ,@math-asm
-    ,@font-asm
-    ,@text-asm
-
-    (label bootstrap-fs)
-    ,@(include-file-as-bytes "boot.fs")
 
     (label os-end)
     ,(lambda ()
@@ -117,6 +123,10 @@
     (label keyboard-last-key)
     (db (0))
 
+    ;; Remaining byte count for the batched native TYPE renderer.
+    (label type-count)
+    (dw (0))
+
     ;; Transient input buffer.
     (label input-buffer)
     ;; PROMPT may receive 128 characters; keep one extra byte for the
@@ -148,8 +158,16 @@
     (dw (0))
     (label expect-ptr)
     (dw (0))
+    (label expect-edit-ptr)
+    (dw (0))
     (label expect-count)
     (dw (0))
+    (label expect-capacity)
+    (dw (0))
+    ;; Nonzero only for the shell editor extension, which keeps accepting
+    ;; navigation/deletion after the input field reaches capacity.
+    (label expect-full-edit)
+    (db (0))
     (label expect-col-save)
     (dw (0))
     (label expect-row-save)
@@ -162,11 +180,25 @@
     (label loop-compile-contexts)
     (db ,(make-list 64 0))
 
+    ;; Transaction boundary for a colon definition.  QUIT restores these
+    ;; values if compilation ends through an error or premature source end.
+    (label compile-start-dp)
+    (dw (0))
+    (label compile-start-latest)
+    (dw (0))
+
+    ;; Raw key observed while the previous AKEY was being released.
+    (label akey-pending)
+    (db (0))
+
     (label ddd-data)
     (db (0))
 
     (label prompt-space)
     (db ,(make-list 128 0))
+    ;; Dedicated guard byte for the public 128-byte PBUF/editor boundary.
+    (label prompt-space-canary)
+    (db (0))
 
     ;; One pending bootstrap source.  main initializes this to 1 and the
     ;; string device clears it after installing the source; later REFILLs
@@ -194,10 +226,20 @@
     (label display-dirty)
     (db (0))
 
+    (label resident-ui-start)
+    ,@resident-ui-asm
+    (label resident-ui-end)
+    ,(lambda ()
+       (add-label! 'resident-ui-source
+                   (- (resolve-label 'resident-ui-start) #x4000))
+       (add-label! 'resident-ui-size
+                   (- *pc* (resolve-label 'resident-ui-start)))
+       '())
+
     (dw ,(make-list 128 0))
     (label return-stack-start)
 
-    ;; Free space until #xc000
+    ;; The remaining page-2 image is padding; dictionary RAM spans to DP-LIMIT.
     (label dp-start)
     ,(lambda ()
        (format #t "~a bytes left for HERE.\n" (- dictionary-limit *pc*))

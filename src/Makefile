@@ -4,7 +4,7 @@ ROM_PAGES = 00 01 02 03 04 05 3C
 .PHONY: all build upgrade
 
 all: build
-	tilem2 -r zkeme80.rom
+	sh ../debug/run-tilem.sh ../debug/tilem-keybindings.ini tilem2 -r zkeme80.rom
 
 build:
 	guile --no-auto-compile -c '$(GUILE_BUILD)'

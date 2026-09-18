@@ -123,10 +123,6 @@ suite.  Shutting down." CR
 
 : LSHIFT ?DUP IF 0 DO 2* LOOP THEN ;
 
-: TYPE ( c-addr u -- )
-  ?DUP IF 0 DO DUP C@ EMIT 1+ LOOP THEN DROP
-;
-
 : UNLOOP    ( -- , r: i limit -- : remove limit and i from  )
         R>           ( save our return address )
         RDROP        ( pop off i )

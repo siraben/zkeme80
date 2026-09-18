@@ -1,0 +1,53 @@
+# Capture stable states for comparison with the local terminal model.
+set key_hold 0.25s
+set key_delay 0.08s
+
+key ON
+wait 10s
+key RIGHT
+wait 0.5s
+key ENTER
+wait 10s
+screenshot /tmp/zkeme80-shell-model-start.png
+
+# Exercise visual wrapping and cursor movement across the display-row edge.
+scanstring "AAAAAAAAAAAAAAAAAAAAAA"
+wait 0.5s
+screenshot /tmp/zkeme80-shell-model-wrap.png
+key LEFT
+wait 0.5s
+screenshot /tmp/zkeme80-shell-model-wrap-left.png
+key DEL
+wait 0.5s
+screenshot /tmp/zkeme80-shell-model-wrap-backspace.png
+key ENTER
+wait 1s
+
+scanstring "HELP"
+wait 0.3s
+key ENTER
+wait 1s
+
+# The first replacement character must not expose HELP's stale suffix.
+scanstring "S"
+wait 0.5s
+screenshot /tmp/zkeme80-shell-model-replace.png
+
+scanstring "TAR"
+wait 0.5s
+screenshot /tmp/zkeme80-shell-model-input.png
+
+key ENTER
+wait 1s
+screenshot /tmp/zkeme80-shell-model-result.png
+
+scanstring "NOPE"
+wait 0.5s
+key ENTER
+wait 1s
+screenshot /tmp/zkeme80-shell-model-error.png
+
+scanstring "BYE"
+wait 0.3s
+key ENTER
+wait 2s

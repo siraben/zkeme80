@@ -1,0 +1,62 @@
+# Paced walkthrough used to render the README's interactive shell demo.
+set key_hold 0.25s
+set key_delay 0.08s
+
+key ON
+wait 10s
+key RIGHT
+wait 0.5s
+key ENTER
+wait 2s
+
+# Show the built-in usage summary.
+scanstring "HELP"
+wait 0.3s
+key ENTER
+wait 2.5s
+
+# Correct STAX to STAR with DEL before evaluating it.
+scanstring "STAX"
+wait 0.7s
+key DEL
+wait 0.7s
+scanstring "R"
+wait 0.3s
+key ENTER
+wait 2s
+
+# Alphabetic mode is the default; 2ND shifts one numeric/symbol key.
+key 2ND
+wait 0.5s
+key 2
+wait 0.5s
+scanstring " "
+key 2ND
+wait 0.5s
+key 3
+wait 0.5s
+scanstring " "
+key 2ND
+wait 0.5s
+key ADD
+wait 0.5s
+scanstring " ."
+wait 0.5s
+key ENTER
+wait 2.5s
+
+# Recover from an unknown word and prove that the REPL remains usable.
+scanstring "NOPE"
+wait 0.5s
+key ENTER
+wait 2.5s
+scanstring "STAR"
+wait 0.5s
+key ENTER
+wait 2s
+
+# Restore the menu and the pre-shell dictionary/input state.
+scanstring "BYE"
+wait 0.5s
+key ENTER
+wait 3s
