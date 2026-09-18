@@ -13,7 +13,7 @@ The current allocation is:
 | --- | --- | --- | --- |
 | `core` | resident | `bootstrap-flash1.fs` | 1 |
 | `storage` | resident | `os-services.fs`, `os-storage.fs` | 3 |
-| `desktop` | resident | `os-tasks.fs`, `os-catalog.fs`, `os-desktop.fs` | 4 |
+| `desktop` | resident | `os-tasks.fs`, `os-catalog.fs`, `os-ui.fs`, `os-desktop.fs` | 4 |
 | `workbench` | resident | `bootstrap-flash5.fs` | 5 |
 | `tests` | tool | `bootstrap-flash4.fs` | 6 |
 
@@ -96,6 +96,12 @@ exact-fit and overflowing sources, one-EOF multi-file composition, the real
 module source sizes, and activation after appending a resident beyond a tool.
 Build the complete image with `make build`; interactive emulator checks remain
 necessary for Forth compilation and runtime behavior.
+
+`make test` also checks the disposable emulator ROM injector without starting
+TilEm. The Nix ROM derivation runs both portable test suites before assembly, so
+the build-only CI job exercises them. `guile --no-auto-compile build.scm` is an
+alternative entry point that resolves source files relative to the repository
+and writes the ROM and label map to the caller's current directory.
 
 `make upgrade` derives its code-page list from this same manifest through
 `rom-upgrade-pages`. It includes the kernel, RAM template, all resident/tool

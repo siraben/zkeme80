@@ -116,6 +116,8 @@ def main():
             keys("ENTER")
             pause(2)
             snapshot("task-paused")
+            pause(1)
+            snapshot("task-still-paused")
             keys("ENTER")
             pause(1.5)
             snapshot("task-resumed")
@@ -161,6 +163,8 @@ def main():
         else:
             assert value("task-ready", "OS-CHOICE") == 2
             assert value("task-paused", "TASK-COUNT") > 0
+            assert value("task-still-paused", "TASK-COUNT") == value("task-paused", "TASK-COUNT"), \
+                "paused task continued running"
             assert value("task-resumed", "TASK-COUNT") > value("task-paused", "TASK-COUNT")
             assert value("pages", "OS-CHOICE") == 3
             assert value("page-next", "OS-PAGE-NO") == 1

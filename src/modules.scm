@@ -2,7 +2,7 @@
              (srfi srfi-9)
              (ice-9 format)
              (ice-9 regex)
-             (ice-9 textual-ports)
+             ((ice-9 textual-ports) #:prefix textual:)
              (rnrs bytevectors))
 
 ;; Source modules and physical allocations are distinct: consumers use names.
@@ -80,7 +80,7 @@
     (if entry (rom-allocation-page entry) (error "Unknown ROM module" name))))
 
 (define (read-module-file file)
-  (call-with-input-file file get-string-all))
+  (call-with-input-file file textual:get-string-all #:encoding "UTF-8"))
 
 ;; A module has one EOF, regardless of how many source files it contains.
 ;; Activation follows the final resident, so appending residents is safe.

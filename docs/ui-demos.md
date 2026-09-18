@@ -49,7 +49,9 @@ stock TilEm package does not supply the headless recording extensions.
 
 The recorder checks RAM snapshots to confirm fixture initialization,
 object pagination, source loading, actual execution of `GREET`, resumed
-task progress, and page/service navigation. Original recordings, input
+task progress, no progress during a separate paused interval, and page/service
+navigation. Injection follows the resident boot chain, so modules appended after
+the workbench still initialize before the fixture runs. Original recordings, input
 macros, screenshots, RAM snapshots, and timing/size metadata remain under
 `--output`. By default, the scaled GIFs and cover image are written to
 `docs/`; use `--assets` to choose another destination.
