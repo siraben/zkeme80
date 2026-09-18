@@ -9,4 +9,4 @@ build:
 	guile --no-auto-compile -c '$(GUILE_BUILD)'
 
 upgrade: build
-	mktiupgrade -k 0A.key --device TI-84+ zkeme80.rom zkeme80.8xu 00 01 02 03 3C
+	mktiupgrade -k ../0A.key --device TI-84+ zkeme80.rom zkeme80.8xu 00 01 02 03 04 05 3C
