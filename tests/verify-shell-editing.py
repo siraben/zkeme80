@@ -31,7 +31,7 @@ def main() -> None:
         values: dict[str, int] = {}
         header = read_u16(data, offset("var-latest"))
         for _ in range(1024):
-            if not ram_base <= header < 0xC000:
+            if not ram_base <= header < 0xE000:
                 break
             header_offset = header - ram_base
             name_length = data[header_offset + 2] & 0x1F
@@ -182,11 +182,11 @@ def main() -> None:
         if before_shell[position : position + 2] != after_shell[position : position + 2]:
             raise RuntimeError(f"shell exit did not restore {variable}")
     loaded_dp = read_u16(shell_loaded, offset("var-dp"))
-    if not loaded_dp < 0xC000:
+    if not loaded_dp < 0xE000:
         raise RuntimeError(f"shell transient dictionary crossed RAM limit: {loaded_dp:#06x}")
     print(
         "shell lifecycle: DP/LATEST and input/editor vectors restored; "
-        f"{0xC000 - loaded_dp} transient bytes remain"
+        f"{0xE000 - loaded_dp} transient bytes remain"
     )
 
 

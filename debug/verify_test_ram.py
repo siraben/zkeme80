@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 RAM_BASE = 0x8000
-RAM_LIMIT = 0xC000
+RAM_LIMIT = 0xE000
 
 
 def main() -> int:

@@ -1,13 +1,15 @@
 # Dictionary and page-mapping correctness
 
-These fixes build on master's ANS94 kernel. The existing 286-case suite remains
-unchanged; the additional target suite covers allocation and mapping failures.
+These fixes build on master's ANS94 kernel. The suite includes its 286 original
+assertions plus two shell key-map checks; additional target tests cover allocation
+and mapping failures.
 
 ## Allocation contracts
 
-`DP-LIMIT` is the exclusive dictionary end, `0xC000`. This retains the existing
-RAM layout: flash programming routines use scratch memory starting at that
-address. `UNUSED` derives its result from the same limit.
+`DP-LIMIT` is the exclusive dictionary end, `0xE000`. Flash programming uses
+a low-RAM trampoline, leaving the dictionary free to span both mapped RAM
+banks. The top 8 KiB remain reserved for the data stack. `UNUSED` derives its
+result from the same limit.
 
 `ROOM ( u -- )` checks an unsigned byte count against the space from `HERE` to
 `DP-LIMIT`, including validating that `HERE` is within the dictionary. It throws
@@ -61,7 +63,7 @@ nix develop --command python3 tests/master-kernel.py \
   --display :99 --output /tmp/zkeme80-master-checks
 ```
 
-The runner uses disposable ROM/state copies. It verifies all 286 original
+The runner uses disposable ROM/state copies. It verifies all 288 suite
 assertions and that unloading the suite restores `DP`/`LATEST`. A separate
 fixture replaces only the final menu action in a disposable bootstrap page and
 loads checks from erased page 6. The optimizing compiler routes new execution

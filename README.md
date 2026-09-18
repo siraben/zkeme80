@@ -118,7 +118,7 @@ pages 00–05 and 3C using the included key and writes `zkeme80.8xu` in the
 repository root.
 
 The [kernel correctness checks](docs/kernel-correctness.md) document dictionary
-bounds, checked flash mapping, and how to run the 286-case ANS suite plus
+bounds, checked flash mapping, and how to run the 288-case ANS and key-map suite plus
 156 boundary regressions in an extended TilEm emulator.
 
 `make precompiled-rom TILEM_HEADLESS=/path/to/tilem2` captures and verifies the

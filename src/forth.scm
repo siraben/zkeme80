@@ -3111,7 +3111,8 @@
 
 (define forth-meta-words
   `(,@(defword "PAUSE" 0 'pause)
-    (dw (key drop exit))
+    ;; A modal pause requires a fresh physical press, including noncharacters.
+    (dw (raw-key drop exit))
 
     ;; Pictured numeric output uses a private descending buffer at the end of
     ;; PROMPT-SPACE.  HLD is separate from TEMP-CELL because UM/MOD uses the

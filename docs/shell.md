@@ -25,6 +25,17 @@ and punctuation.  The project TilEm launcher maps every printable desktop
 ASCII key into those physical key sequences; desktop letters normalize to
 uppercase because the Forth shell is uppercase-oriented.
 
+## Memory and input integration
+
+The native dictionary remains in fixed flash page 0. Boot copies the renderer,
+font, key tables, and initial source from a named page-2 image into fixed RAM
+before entering Forth. The dictionary starts above those helpers and ends at
+`0xE000`; the top 8 KiB remain available for the data stack. This accommodates
+the full history rings without reducing their advertised capacity.
+
+`PAUSE` waits for a fresh physical key press, so the key that opened a menu
+page cannot also dismiss its introduction.
+
 ## Roadmap
 
 A good shell is the heart of an operating system.  Let's make

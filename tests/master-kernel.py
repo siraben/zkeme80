@@ -70,7 +70,7 @@ def check_memory(ram, labelmap):
     labels = {entry["name"]: entry["addr"] for entry in labelmap["labels"]}
 
     def cell(address):
-        if not 0x8000 <= address < 0xBFFF:
+        if not 0x8000 <= address < 0xDFFF:
             raise AssertionError(f"invalid test data address {address:#x}")
         offset = address - 0x8000
         return int.from_bytes(ram[offset:offset + 2], "little")
@@ -79,7 +79,7 @@ def check_memory(ram, labelmap):
     fields = {}
     seen = set()
     header = cell(labels["var-latest"])
-    while 0x8000 <= header < 0xC000 and header not in seen:
+    while 0x8000 <= header < 0xE000 and header not in seen:
         seen.add(header)
         offset = header - 0x8000
         length = ram[offset + 2] & 31
