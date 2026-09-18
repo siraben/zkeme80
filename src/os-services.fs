@@ -10,11 +10,11 @@
   BANK@ >R (BANK!) CATCH R> (BANK!)
 ;
 
-\ Brackets can leave STATE at zero inside an unfinished hidden definition.
+\ Brackets can leave STATE at zero inside an unfinished definition.
 \ Inspect all entries since the checkpoint, including those below later words.
 : (EVAL-PARTIAL?) ( old-latest -- flag )
   LATEST @ BEGIN 2DUP <> OVER 0 <> AND WHILE
-    DUP ?HIDDEN IF 2DROP 1 EXIT THEN @
+    DUP ?UNFINISHED IF 2DROP 1 EXIT THEN @
   REPEAT 2DROP 0
 ;
 \ A source must finish in the compilation state in which it started.

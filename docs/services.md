@@ -24,7 +24,9 @@ the data stack through `CATCH` and returns its exception code.
 Source must finish in the compilation state in which evaluation began. A
 source entered while interpreting must finish its definitions; otherwise it
 returns 22. Opening `[` does not make an unfinished definition complete:
-new hidden entries are also checked, including entries below later definitions.
+new unfinished entries are also checked, including entries below later definitions.
+The unfinished flag is distinct from visibility, so completed private words
+can remain hidden.
 An error that leaves such a source unfinished rolls its dictionary
 back to the entry `HERE`/`LATEST` snapshots. This discards partial definitions
 and any other definitions added in the same failed evaluation. Successful,
