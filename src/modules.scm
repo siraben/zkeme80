@@ -23,7 +23,7 @@
   (list
    (make-rom-module 'core 'resident '("bootstrap-flash1.fs"))
    (make-rom-module 'storage 'resident '("os-services.fs" "os-storage.fs"))
-   (make-rom-module 'desktop 'resident '("os-tasks.fs" "os-catalog.fs" "os-desktop.fs"))
+   (make-rom-module 'desktop 'resident '("os-tasks.fs" "os-catalog.fs" "os-ui.fs" "os-desktop.fs"))
    (make-rom-module 'workbench 'resident '("bootstrap-flash5.fs"))
    (make-rom-module 'tests 'tool '("bootstrap-flash4.fs"))))
 

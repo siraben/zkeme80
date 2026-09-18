@@ -1,59 +1,77 @@
-\ Resident system navigator. All views share the cooperative key event loop.
+\ Resident navigator: views use the same yielding key loop as the workspace.
 VARIABLE OS-CHOICE
 VARIABLE OS-PAGE-NO
+VARIABLE OS-PAGE-MODE
 VARIABLE OS-TASK-ID
 VARIABLE OS-SERVICE-FIRST
 VARIABLE OS-FILE-NO
 VARIABLE OS-FILE-OFFSET
-0 OS-CHOICE ! 0 OS-PAGE-NO !
+VARIABLE OS-NOTICE
+0 OS-CHOICE ! 0 OS-PAGE-NO ! 0 OS-PAGE-MODE !
 1 OS-TASK-ID ! 0 OS-SERVICE-FIRST !
-0 OS-FILE-NO ! 0 OS-FILE-OFFSET !
-
+0 OS-FILE-NO ! 0 OS-FILE-OFFSET ! 0 OS-NOTICE !
 : OS-KEY ( -- key ) KEY-EVENT ;
-
 : OS-BACK? ( key -- flag ) DUP 15 = SWAP 50 = OR ;
-: OS-FOOT ( -- ) 0 57 AT-XY ;
-: OS-WAIT ( -- ) OS-KEY DROP ;
-: OS-MARK ( flag -- ) IF 62 ELSE 32 THEN EMIT ;
-
-: OS-PRINTABLE ( c -- c )
-  DUP 32 < OVER 126 > OR IF DROP 46 THEN ;
 
 : OS-FILE-TEXT ( -- )
   OS-FILE-NO @ FS-NTH IF
-    2DROP FS-GET IF DROP 2DROP ." Read error" ELSE
-      DROP DUP IF DUP 1- 128 / 128 * ELSE 0 THEN
+    2DROP FS-GET IF DROP 2DROP 2 12 AT-XY ." Read error" ELSE
+      DROP DUP IF DUP 1- 96 / 96 * ELSE 0 THEN
       OS-FILE-OFFSET @ MIN DUP OS-FILE-OFFSET !
-      ROT OVER + -ROT - 128 MIN
+      ROT OVER + -ROT - 96 MIN
       ?DUP IF 0 DO
-        I 16 MOD 0= IF CR THEN DUP I + C@ OS-PRINTABLE EMIT
-      LOOP THEN DROP
+        2 I 16 MOD 5 * + I 16 / 7 * 12 + AT-XY
+        DUP I + C@ OS-PRINTABLE EMIT
+      LOOP ELSE 2 12 AT-XY ." Empty object" THEN DROP
     THEN
   ELSE 2DROP 2DROP THEN ;
-
+: OS-FILE-LOAD ( -- )
+  OS-FILE-NO @ FS-NTH IF
+    2 = IF DROP FS-LOAD IF 4 ELSE 3 THEN OS-NOTICE !
+    ELSE DROP 2DROP THEN
+  ELSE 2DROP 2DROP THEN ;
 : OS-FILE-VIEW ( -- )
-  0 OS-FILE-OFFSET !
+  0 OS-FILE-OFFSET ! 0 OS-NOTICE !
   BEGIN
-    PAGE OS-FILE-TEXT 0 0 AT-XY ." Object offset " OS-FILE-OFFSET @ .
-    OS-FOOT ." LEFT/RIGHT CLEAR back"
+    OS-FILE-NO @ FS-NTH IF 2DROP OS-TITLE
+    ELSE 2DROP 2DROP S" OBJECT" OS-TITLE THEN OS-FILE-TEXT
+    OS-FOOT OS-NOTICE @ CASE
+      3 OF ." Loaded / CLR back" ENDOF
+      4 OF ." Load error / CLR back" ENDOF
+      0 OF OS-FILE-NO @ FS-NTH IF
+        2 = >R DROP 2DROP R> IF ." <> page ENT load CLR"
+        ELSE ." <> page CLR back" THEN
+        ELSE 2DROP 2DROP THEN ENDOF
+    ENDCASE
     OS-KEY DUP OS-BACK? IF DROP EXIT THEN
     CASE
-      LEFT OF OS-FILE-OFFSET @ 128 >= IF 128 OS-FILE-OFFSET -! THEN ENDOF
-      RIGHT OF 128 OS-FILE-OFFSET +! ENDOF
+      LEFT OF OS-FILE-OFFSET @ 96 >= IF 96 OS-FILE-OFFSET -! THEN ENDOF
+      RIGHT OF 96 OS-FILE-OFFSET +! ENDOF
+      9 OF OS-FILE-LOAD ENDOF
     ENDCASE
   AGAIN ;
-
+: OS-FILE-KIND ( type -- )
+  CASE 1 OF 84 ENDOF 2 OF 70 ENDOF 3 OF 66 ENDOF
+    63 SWAP ENDCASE EMIT ;
 : OS-FILE-DRAW ( -- )
-  PAGE ." Files / flash" CR
-  ." Objects " FS-COUNT . CR
-  ." Free slots " FS-FREE . CR CR
-  OS-FILE-NO @ FS-NTH IF
-    ." Type " . ." Bytes " . CR TYPE
-  ELSE 2DROP 2DROP ." No object" THEN CR CR
-  ." ENTER views contents" CR
-  ." FS-PUT saves in shell"
-  OS-FOOT ." UP/DOWN CLEAR back" ;
-
+  FS-COUNT DUP IF 1- OS-FILE-NO @ MIN THEN OS-FILE-NO !
+  S" FILES" OS-TITLE
+  2 11 AT-XY FS-COUNT OS-NUM ." objects " FS-FREE OS-NUM ." free"
+  FS-COUNT IF
+    4 0 DO
+      OS-FILE-NO @ 4 / 4 * I + DUP FS-COUNT < IF
+        DUP FS-NTH IF
+          4 I 8 * 20 + AT-XY OS-FILE-KIND DROP
+          14 I 8 * 20 + AT-XY OS-LABEL
+        ELSE 2DROP 2DROP THEN
+        OS-FILE-NO @ = IF I 8 * 20 + OS-SELECT THEN
+      ELSE DROP THEN
+    LOOP
+    2 50 AT-XY OS-FILE-NO @ 1+ OS-NUM ." / " FS-COUNT OS-NUM
+  ELSE 8 27 AT-XY ." No saved objects"
+    8 38 AT-XY ." Save with FS-PUT"
+  THEN
+  OS-FOOT ." ^v ENT view CLR back" ;
 : OS-FILES ( -- )
   BEGIN
     OS-FILE-DRAW OS-KEY DUP OS-BACK? IF DROP EXIT THEN
@@ -70,64 +88,97 @@ VARIABLE OS-FILE-OFFSET
     2 OF ." paused" ENDOF 3 OF ." stopped" ENDOF
     4 OF ." failed" ENDOF 5 OF ." waiting" ENDOF
   ENDCASE ;
-
 : OS-TASK-DRAW ( -- )
-  PAGE ." Cooperative tasks" CR CR
-  ." Task " OS-TASK-ID @ . CR
-  OS-TASK-ID @ TASK-INFO
-  ." Error: " . CR ." Runs: " . CR OS-TASK-STATE CR
-  ." Demo count: " TASK-COUNT @ . CR
-  ." ENTER run/pause" CR
-  ." RIGHT new demo" CR
-  OS-FOOT ." UP/DN task CLEAR back" ;
-
+  S" TASKS / STEPS" OS-TITLE
+  TASK-LIMIT 0 DO
+    4 I 8 * 13 + AT-XY I 1+ OS-NUM
+    I 1+ TASK-INFO DROP SWAP
+    15 I 8 * 13 + AT-XY OS-TASK-STATE
+    68 I 8 * 13 + AT-XY OS-NUM
+    I 1+ OS-TASK-ID @ = IF I 8 * 13 + OS-SELECT THEN
+  LOOP
+  2 47 AT-XY OS-NOTICE @ 1 = IF ." Task table full" ELSE
+    OS-TASK-ID @ TASK-INFO ." Error " OS-NUM 2DROP
+    ." >new <stop"
+  THEN
+  OS-FOOT ." ^v ENT run/pause CLR" ;
 : OS-TASKS ( -- )
+  0 OS-NOTICE !
   BEGIN
     OS-TASK-DRAW OS-KEY DUP OS-BACK? IF DROP EXIT THEN
     CASE
       UP OF OS-TASK-ID @ 1 > IF 1 OS-TASK-ID -! THEN ENDOF
       DOWN OF OS-TASK-ID @ TASK-LIMIT < IF 1 OS-TASK-ID +! THEN ENDOF
-      RIGHT OF TASK-DEMO ?DUP IF OS-TASK-ID ! THEN ENDOF
+      RIGHT OF TASK-DEMO ?DUP IF OS-TASK-ID ! 0 ELSE 1 THEN OS-NOTICE ! ENDOF
+      LEFT OF OS-TASK-ID @ TASK-STOP DROP ENDOF
+      10 OF OS-TASK-ID @ TASK-FREE DROP 0 OS-NOTICE ! ENDOF
       9 OF OS-TASK-ID @ TASK-INFO 2DROP 1 = IF
         OS-TASK-ID @ TASK-PAUSE ELSE OS-TASK-ID @ TASK-RUN
         THEN DROP ENDOF
     ENDCASE
   AGAIN ;
 
+: OS-PAGE-USED? ( page -- flag )
+  DUP 0= OVER 2 = OR OVER STORAGE-PAGE = OR
+  OVER 56 >= OR SWAP
+  DUP MODULE-CORE = OVER MODULE-STORAGE = OR
+  OVER MODULE-DESKTOP = OR OVER MODULE-WORKBENCH = OR
+  SWAP MODULE-TESTS = OR OR ;
+: OS-PAGE-NAME ( -- )
+  OS-PAGE-NO @ CASE
+    0 OF ." kernel" ENDOF 2 OF ." RAM init" ENDOF
+    MODULE-CORE OF ." core" ENDOF
+    MODULE-STORAGE OF ." storage" ENDOF
+    MODULE-DESKTOP OF ." desktop" ENDOF
+    MODULE-WORKBENCH OF ." forth" ENDOF
+    MODULE-TESTS OF ." tests" ENDOF
+    STORAGE-PAGE OF ." objects" ENDOF
+    DUP 56 >= IF ." system" ELSE ." unused" THEN
+  ENDCASE ;
+: OS-PAGE-MAP ( -- )
+  64 0 DO
+    3 I 8 MOD 6 * + 12 I 8 / 5 * +
+    I OS-PAGE-USED? IF 4 3 RECT-OR ELSE 1 1 RECT-OR THEN
+    I OS-PAGE-NO @ = IF
+      2 I 8 MOD 6 * + 11 I 8 / 5 * + 6 5 RECT-XOR
+    THEN
+  LOOP
+  54 12 AT-XY ." Page " OS-PAGE-NO @ OS-NUM
+  54 22 AT-XY OS-PAGE-NAME
+  54 34 AT-XY ." Free RAM"
+  54 43 AT-XY UNUSED OS-NUM
+  54 50 38 1 RECT-OR ;
 : OS-PAGE-TEXT ( -- )
-  32 0 DO
-    I 16 MOD 0= IF CR THEN
-    MEMA I + C@ OS-PRINTABLE EMIT
+  6 0 DO
+    3 I 7 * 12 + AT-XY I 4 * OS-BYTE ." : "
+    4 0 DO MEMA J 4 * + I + C@ OS-BYTE SPACE LOOP
   LOOP ;
-
 : OS-PAGE-DRAW ( -- )
-  PAGE ." Memory / flash pages" CR
-  ." Dictionary free " UNUSED . CR
-  ." Bank A selector " BANK@ . CR
-  ." Flash page " OS-PAGE-NO @ . CR
-  ['] OS-PAGE-TEXT OS-PAGE-NO @ WITH-PAGE DROP CR CR
-  ." Core " MODULE-CORE . ." Tests " MODULE-TESTS . CR
-  ." Workspace " MODULE-WORKBENCH .
-  OS-FOOT ." LEFT/RIGHT CLEAR back" ;
-
+  S" MEMORY" OS-TITLE
+  OS-PAGE-MODE @ IF
+    ['] OS-PAGE-TEXT OS-PAGE-NO @ WITH-PAGE DROP
+  ELSE OS-PAGE-MAP THEN
+  OS-FOOT ." <> page ENT map/hex" ;
 : OS-PAGES ( -- )
   BEGIN
     OS-PAGE-DRAW OS-KEY DUP OS-BACK? IF DROP EXIT THEN
     CASE
       LEFT OF OS-PAGE-NO @ IF 1 OS-PAGE-NO -! THEN ENDOF
       RIGHT OF OS-PAGE-NO @ 63 < IF 1 OS-PAGE-NO +! THEN ENDOF
+      UP OF OS-PAGE-NO @ 8 >= IF 8 OS-PAGE-NO -! ELSE 0 OS-PAGE-NO ! THEN ENDOF
+      DOWN OF OS-PAGE-NO @ 8 + 63 MIN OS-PAGE-NO ! ENDOF
+      9 OF OS-PAGE-MODE @ 0= OS-PAGE-MODE ! ENDOF
     ENDCASE
   AGAIN ;
-
 : OS-SERVICE-DRAW ( -- )
-  PAGE ." System services / v1" CR CR
+  S" SYSTEM CALLS / V1" OS-TITLE
   6 0 DO
     OS-SERVICE-FIRST @ I + DUP SERVICE-COUNT < IF
-      DUP . SERVICE@ ?DUP IF CFA> ID. THEN CR
+      3 I 7 * 12 + AT-XY DUP OS-NUM
+      16 I 7 * 12 + AT-XY SERVICE@ ?DUP IF CFA> ID. THEN
     ELSE DROP THEN
   LOOP
-  OS-FOOT ." LEFT/RIGHT CLEAR back" ;
-
+  OS-FOOT ." <> browse CLR back" ;
 : OS-SERVICES ( -- )
   BEGIN
     OS-SERVICE-DRAW OS-KEY DUP OS-BACK? IF DROP EXIT THEN
@@ -137,18 +188,27 @@ VARIABLE OS-FILE-OFFSET
         6 OS-SERVICE-FIRST +! THEN ENDOF
     ENDCASE
   AGAIN ;
-
+: OS-ITEM ( index -- )
+  CASE
+    0 OF ." Forth workspace" ENDOF
+    1 OF ." Files" ENDOF
+    2 OF ." Tasks" ENDOF
+    3 OF ." Pages / memory" ENDOF
+    4 OF ." System calls" ENDOF
+    5 OF ." Test suite" ENDOF
+    6 OF ." Power off" ENDOF
+  ENDCASE ;
+: OS-FIRST ( -- index ) OS-CHOICE @ 4 > IF OS-CHOICE @ 4 - ELSE 0 THEN ;
 : OS-DRAW ( -- )
-  PAGE ." zkeme80 / Workbench" CR CR
-  OS-CHOICE @ 0 = OS-MARK ." Forth workspace" CR
-  OS-CHOICE @ 1 = OS-MARK ." Files" CR
-  OS-CHOICE @ 2 = OS-MARK ." Tasks" CR
-  OS-CHOICE @ 3 = OS-MARK ." Pages / memory" CR
-  OS-CHOICE @ 4 = OS-MARK ." System services" CR
-  OS-CHOICE @ 5 = OS-MARK ." Test suite" CR
-  OS-CHOICE @ 6 = OS-MARK ." Power off"
-  OS-FOOT ." UP/DOWN ENTER open" ;
-
+  S" ZKEME80 / WORKBENCH" OS-TITLE
+  2 11 AT-XY UNUSED OS-NUM ." B free / " FS-COUNT OS-NUM ." files"
+  5 0 DO
+    OS-FIRST I +
+    4 I 7 * 20 + AT-XY DUP 1+ OS-NUM
+    15 I 7 * 20 + AT-XY DUP OS-ITEM
+    OS-CHOICE @ = IF I 7 * 20 + OS-SELECT THEN
+  LOOP
+  OS-FOOT ." ^v select ENT open" ;
 : MENU-DEMO ( -- )
   BEGIN
     OS-DRAW OS-KEY
