@@ -98,12 +98,21 @@ VARIABLE FS-BUSY
   FS-FIND DUP 65535 = IF DROP 43 EXIT THEN
   FS-HEADER FS-HEAD 2+ C@ 0= IF 43 EXIT THEN
   0 FS-LEN ! 0 FS-KIND ! 0 FS-SRC ! FS-APPEND ;
+\ File loads are commands, with no data-stack results. CATCH discards any
+\ excess results on error so repeated desktop loads cannot grow its stack.
+: (FS-EVALUATE) ( zaddr -- )
+  DEPTH 1- >R EVALUATE0
+  ?DUP IF R> DROP THROW THEN
+  DEPTH R> <> IF 0 4 - THROW THEN
+;
 : FS-LOAD ( name namelen -- ior )
   FS-GET ?DUP IF >R DROP 2DROP R> EXIT THEN
   2 <> IF 2DROP 41 EXIT THEN
   DUP FS-MAX >= IF 2DROP 41 EXIT THEN
   OVER + 0 SWAP C!
-  1 FS-BUSY ! EVALUATE0 0 FS-BUSY ! ;
+  1 FS-BUSY ! ['] (FS-EVALUATE) CATCH
+  DUP IF >R DROP R> THEN
+  0 FS-BUSY ! ;
 : FS-LIVE? ( slot -- flag )
   DUP FS-CANDIDATE ! FS-HEADER
   FS-VALID? 0= IF 0 EXIT THEN

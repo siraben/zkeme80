@@ -25,6 +25,12 @@ success. Definitions loaded from source use the normal Forth dictionary.
 Only explicit `FS-LOAD` evaluates source; browsing or fetching an object does
 not execute it.
 
+Loaded source must leave the data-stack depth unchanged. `FS-LOAD` returns
+only its status: excess result cells are discarded and reported as -4
+(65532 in unsigned output). Use `EVALUATE0` directly when source should
+return stack values. Definitions and other completed side effects are retained
+when a loaded source reports an error; loading is not a transaction.
+
 | Word | Stack effect | Meaning |
 | --- | --- | --- |
 | `FS-PUT` | `( data len name namelen type -- ior )` | Append or replace an object |
@@ -48,6 +54,7 @@ return 45 until its evaluation finishes. Directory listing remains available.
 | Result | Meaning |
 | --- | --- |
 | 0 | Success |
+| -4 | Loaded source changed the data-stack depth |
 | 40 | Empty or oversized name |
 | 41 | Invalid type or length; loading a non-source object |
 | 42 | Journal full |
@@ -118,4 +125,6 @@ nix develop --command python3 tests/test-storage.py --emulator /path/to/tilem2 -
 The runner only modifies temporary ROM copies. It checks the Forth assertion
 counters, decodes and verifies the resulting flash journal independently,
 and starts a second emulator with that flash image to verify persistence after
-a cold boot. `--full` also verifies journal exhaustion preserves older files.
+a cold boot. A separate boot with a damaged payload checks checksum error
+reporting and access to unaffected objects. `--full` also verifies journal
+exhaustion preserves older files.

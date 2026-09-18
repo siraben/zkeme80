@@ -10,20 +10,26 @@
   BANK@ >R (BANK!) CATCH R> (BANK!)
 ;
 
-\ Keep the complete evaluation frame on the return stack for nested calls.
+\ Brackets can leave STATE at zero inside an unfinished hidden definition.
+\ Inspect all entries since the checkpoint, including those below later words.
+: (EVAL-PARTIAL?) ( old-latest -- flag )
+  LATEST @ BEGIN 2DUP <> OVER 0 <> AND WHILE
+    DUP ?HIDDEN IF 2DROP 1 EXIT THEN @
+  REPEAT 2DROP 0
+;
 \ A source must finish in the compilation state in which it started.
 : (EVAL-CLEANUP) ( ior old-latest old-here old-state -- ior )
-  DUP STATE @ <> IF
-    >R >R >R DUP 0= IF DROP 22 THEN R> R> R>
-  THEN
   >R
-  2 PICK IF
-    R@ 0= STATE @ 0 <> AND IF DP ! LATEST ! ELSE 2DROP THEN
+  R@ STATE @ <> R@ 0= IF 2 PICK (EVAL-PARTIAL?) OR THEN
+  IF
+    R@ 0= IF DP ! LATEST ! ELSE 2DROP THEN
+    DUP 0= IF DROP 22 THEN
   ELSE 2DROP THEN
   R> STATE !
 ;
 
 \ Nested zero-terminated input, preserving source, radix, and compiler state.
+\ Keep the complete evaluation frame on the return stack for nested calls.
 \ Reject unfinished definitions and discard their partial dictionary entries.
 : EVALUATE0 ( zaddr -- ior )
   INPUT-PTR @ >R BASE @ >R

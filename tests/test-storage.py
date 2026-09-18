@@ -114,8 +114,34 @@ S" TEST/EMPTY" FS-GET 0= FS-ASSERT 1 = FS-ASSERT 0= FS-ASSERT DROP
 S" TEST/SOURCE" FS-LOAD 0= FS-ASSERT
 FS-TEST-VALUE @ 123 = FS-ASSERT
 """
-        run(args.emulator, persisted, reboot + DONE, output, "reboot")
-        print("flash format, interrupted-write recovery, and cold-boot persistence passed")
+        # Keep the pristine boot chain: persisted also contains the first
+        # run's injected test program, which must not execute on cold boot.
+        reboot_rom = bytearray(rom)
+        reboot_rom[8 * PAGE : 9 * PAGE] = persisted[8 * PAGE : 9 * PAGE]
+        run(args.emulator, bytes(reboot_rom), reboot + DONE, output, "reboot")
+        # A committed payload with one changed bit must produce a checked
+        # read error, while unrelated source and deletion records still work.
+        corrupted = bytearray(reboot_rom)
+        for slot in range(16):
+            start = 8 * PAGE + slot * 1024
+            if corrupted[start + 8 : start + 14] == b"TEST/B":
+                corrupted[start + 32] ^= 1
+                break
+        else:
+            raise AssertionError("missing checksum corruption fixture")
+        checksum = f"""
+VARIABLE FS-TEST-FAILURES VARIABLE FS-TEST-CHECKS VARIABLE FS-TEST-VALUE
+0 FS-TEST-FAILURES ! 0 FS-TEST-CHECKS ! 0 FS-TEST-VALUE !
+: FS-ASSERT 1 FS-TEST-CHECKS +! 0= IF 1 FS-TEST-FAILURES +! THEN ;
+FS-COUNT {len(expected)} = FS-ASSERT
+FS-FREE {0 if args.full else 9} = FS-ASSERT
+S" TEST/B" FS-GET 44 = FS-ASSERT 0= FS-ASSERT 0= FS-ASSERT 0= FS-ASSERT
+S" TEST/A" FS-GET 43 = FS-ASSERT 0= FS-ASSERT 0= FS-ASSERT 0= FS-ASSERT
+S" TEST/SOURCE" FS-LOAD 0= FS-ASSERT
+FS-TEST-VALUE @ 123 = FS-ASSERT
+"""
+        run(args.emulator, bytes(corrupted), checksum + DONE, output, "checksum")
+        print("flash format, interrupted writes, cold boot, and corrupt-payload handling passed")
         if args.output:
             print(f"emulator artifacts: {output}")
     except Exception:

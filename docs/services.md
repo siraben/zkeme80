@@ -23,17 +23,21 @@ the data stack through `CATCH` and returns its exception code.
 
 Source must finish in the compilation state in which evaluation began. A
 source entered while interpreting must finish its definitions; otherwise it
-returns 22. An error that leaves such a source compiling rolls its dictionary
+returns 22. Opening `[` does not make an unfinished definition complete:
+new hidden entries are also checked, including entries below later definitions.
+An error that leaves such a source unfinished rolls its dictionary
 back to the entry `HERE`/`LATEST` snapshots. This discards partial definitions
 and any other definitions added in the same failed evaluation. Successful,
 balanced definitions remain available. Evaluation from compilation state is
 permitted if the source ends in that same state.
 
 Evaluation is not a general transaction: completed definitions before an error
-that leaves the compiler interpreting, arbitrary memory writes, output, and
+that leaves no unfinished definition, arbitrary memory writes, output, and
 flash updates are retained. Numeric input currently accepts decimal digits;
 `BASE` controls numeric output. Tokens may contain at most 31 bytes; longer
 tokens return 19 without overflowing the parser buffer.
+An unterminated quoted string returns 18. Missing parsed names return 16;
+an unresolved name required by a defining or lookup word returns 1.
 
 `tests/test-core.py` exercises service lookup, bank restoration, invalid bounds,
 nested evaluation, parser limits, failed-definition cleanup, and interactive
