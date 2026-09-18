@@ -56,7 +56,7 @@ def inject_checks(rom):
     source = "HERE " + " ".join(f"{byte} C," for byte in code)
     source += " CONSTANT TEST-BANK-CODE\n: TEST-BANK@ TEST-BANK-CODE EXECUTE ;\n"
     source += (ROOT / "tests/master-memory.fs").read_text()
-    core = core[:-len(trailer)] + (b"\n: START-CHECKS 6 SET-RAM-MEMA DROP "
+    core = core[:-len(trailer)] + (b"\n: START-CHECKS 6 MAP-FLASH DROP "
                                    b"MEMA CSTRING-SOURCE ; START-CHECKS\n")
     image = bytearray(rom)
     for page, payload in ((1, core), (6, source.encode("ascii"))):

@@ -2729,10 +2729,6 @@
     (ld bc 0)
     ,@next
 
-    ;; Historical name retained for bootstrap and application compatibility.
-    ,@(defword "SET-RAM-MEMA" 0 'set-ram-mema)
-    (dw (map-flash exit))
-
     ;; Advance past a counted-string length byte and return its count.
     ;; ( c-addr1 -- c-addr2 u )
     ,@(defcode "COUNT" 0 'count)
