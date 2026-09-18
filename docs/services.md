@@ -61,9 +61,13 @@ exclusive `DP-LIMIT` (`0xE000`). The top 8 KiB is reserved for the data stack;
 the return stack has its own reserved area below `H0`. `UNUSED` measures this
 actual dictionary budget. `ROOM`, `ALLOT`, `,`, `C,`, `CREATE`, and `DOES>` check
 capacity before their ordinary writes and throw 8 when it is exhausted.
+`VARIABLE`, `CONSTANT`, and `VALUE` reserve their complete definitions before
+changing the dictionary. Both compiled and interpreted `S"` check space for
+the string and its terminator before copying any bytes; unterminated quotes
+stop at EOF. Interpreted string results remain transient.
 Negative `ALLOT` can reclaim space within the dictionary bounds. A missing
 `CREATE`/colon name throws 16. Raw memory stores and direct writes to `DP`
 remain sharp tools; these guards are not memory protection or stack isolation.
 
 `tests/test-memory.py` verifies these limits and distinct fixed RAM above
-`0xC000` with 62 target assertions.
+`0xC000` with 113 target assertions.

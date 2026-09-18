@@ -1,6 +1,7 @@
 # Building and testing the workbench
 
-Build and run the Scheme layout checks in the pinned development environment:
+Build and run the portable layout and emulator-helper checks in the pinned
+development environment:
 
 ```sh
 nix develop --command make build test
@@ -28,13 +29,13 @@ leaving the production ROM and its journal unchanged. Each runner accepts
 
 | Check | Evidence |
 | --- | --- |
-| ROM layout | 30 SRFI-64 assertions, including budgets and upgrade page selection |
+| ROM layout / harness | 30 SRFI-64 assertions and 10 Python regressions, including budgets, upgrade selection, appended resident startup, and invalid page writes |
 | Forth language | 266/266 original suite assertions; explicit unloading still works |
-| RAM management | 62 target assertions: allocation bounds, exact-fit writes, signed release, missing names, distinct fixed RAM banks, and checked flash mapping |
-| Core services | 84 assertions: scoped bank restoration, service IDs, nested evaluation, token bounds and source recovery |
-| Workspace | Multiline definitions, failed-definition rollback, and definitions retained across desktop visits |
-| Scheduler | 64 target assertions; counters advance during desktop and shell idle waits |
-| Storage | 69 target assertions plus 12 cold-boot checks; independent record/checksum verification |
+| RAM / parser | 113 target assertions: allocation bounds, atomic defining words, exact-fit strings, quoted EOF, missing/unknown names, fixed RAM banks, and checked flash mapping |
+| Core services | 128 assertions: scoped banks, service IDs, nested evaluation, token bounds, file-load stack balance, unfinished definitions, and caller compilation recovery |
+| Workspace | Multiline and bracketed definitions, error/exit rollback, deliberately hidden completed words, and definitions retained across desktop visits |
+| Scheduler | 75 target assertions, including bank changes on normal/error returns; counters advance during desktop and shell idle waits |
+| Storage | 74 target assertions, 12 cold-boot checks, and 12 damaged-payload checks; independent flash record verification |
 | Desktop | Empty/multiple objects, source load/error feedback, selection and paging bounds, task lifecycle, page restoration, service paging, and 29 exact LCD comparisons |
 | Shell rendering | Five exact 96x64 pixel comparisons, including error recovery |
 
@@ -43,10 +44,20 @@ For the original language suite, choose **Test suite** in the workbench or run
 uses `tests/shell-screen.macro` followed by
 `nix develop --command python3 tests/verify-shell-screen.py`.
 
+Raw `key` commands in the extended emulator require explicit `wait` commands
+after release. Its `key_delay` setting only spaces characters in typed strings;
+using it alone can merge repeated navigation keys. Desktop and recording
+runners now supply release intervals.
+
 The target runs also found and fixed inherited interpreter problems: the
 return stack now begins at its reserved address, `INTERPRET` returns to nested
 callers, token EOF remains visible to the next parser call, and overlong tokens
 raise a recoverable error instead of overwriting the token-pointer cell.
+The adversarial cases also cover strings crossing dictionary bounds, failed
+defining words, nested evaluators that close their caller’s definition, file
+loads that leave unwanted stack results, and callbacks that change banks.
+Unfinished definitions have a separate header flag, so ordinary private words
+are not mistaken for failed compilations.
 These checks establish emulator behavior; physical flash timing and unexpected
 power loss during programming still need hardware qualification.
 
