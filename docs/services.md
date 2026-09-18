@@ -20,6 +20,10 @@ the caller's input pointer, numeric base, and compilation state. Its frame
 uses the return stack, so evaluation can nest. Normal program results remain
 on the data stack beneath the returned status. A thrown exception restores
 the data stack through `CATCH` and returns its exception code.
+The source buffer must remain valid throughout evaluation. Interpretive `S"`
+uses temporary storage at `HERE`, which compilation can overwrite; compile
+the string in a helper word or copy it into a separate buffer before evaluating
+source that adds dictionary entries. `FS-LOAD` already uses a separate buffer.
 
 Source must finish in the compilation state in which evaluation began. A
 source entered while interpreting must finish its definitions; otherwise it
