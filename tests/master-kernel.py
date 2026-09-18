@@ -91,7 +91,7 @@ def main():
     labelmap = json.loads(args.labelmap.read_text())
     (output / "labels.json").write_text(json.dumps(labelmap))
     if args.only != "boundaries":
-        macro = (ROOT / "tests/workbench-suite.macro").read_text()
+        macro = (ROOT / "tests/full-suite.macro").read_text()
         macro = macro.replace("debug/macros/", str(output) + "/")
         run_emulator(args, output, "suite", rom, macro)
         subprocess.run(

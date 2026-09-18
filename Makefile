@@ -7,7 +7,7 @@ BOOTSTRAP_STREAM = build/bootstrap.zbs
 PRECOMPILED_ROM = zkeme80-precompiled.rom
 PRECOMPILED_LABELMAP = zkeme80-precompiled.ram-labelmap.json
 
-.PHONY: test-build test-emulator all build test upgrade bootstrap-capture bootstrap-pack \
+.PHONY: test-modules test-build test-emulator all build test upgrade bootstrap-capture bootstrap-pack \
 	bootstrap-image bootstrap-verify bootstrap-self-test bootstrap-stream \
 	precompiled-rom precompiled-smoke precompiled-upgrade
 
@@ -32,6 +32,10 @@ test-build:
 # Requires a TilEm build with --headless and --macro; set TILEM to its path.
 test-emulator: build
 	python3 tests/master-kernel.py
+	python3 tests/test-core.py
+	python3 tests/test-storage.py
+	python3 tests/test-tasks.py
+	python3 tests/test-desktop.py
 
 test: build test-build test-modules
 	cd src && guile --no-auto-compile ../tests/assembler-test.scm

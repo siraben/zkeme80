@@ -69,4 +69,4 @@ Negative `ALLOT` can reclaim space within the dictionary bounds. A missing
 remain sharp tools; these guards are not memory protection or stack isolation.
 
 `tests/test-memory.py` verifies these limits and distinct fixed RAM above
-`0xC000` with 154 target assertions.
+`0xC000` with 156 target assertions.

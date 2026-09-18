@@ -1,5 +1,5 @@
 \ Shared 96x64 chrome. Glyphs are five pixels high; keep a blank row between.
-: OS-NUM ( u -- ) BASE @ >R DECIMAL . R> BASE ! ;
+: OS-NUM ( u -- ) BASE @ >R DECIMAL U. R> BASE ! ;
 : OS-PRINTABLE ( c -- c )
   DUP 32 < OVER 126 > OR IF DROP 46 THEN ;
 : OS-LABEL ( addr len -- )

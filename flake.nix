@@ -26,7 +26,8 @@
         defaultPackage = self.packages.${system}.default;
 
         devShells.default = mkShell {
-          buildInputs = [ guile knightos-mktiupgrade python3 imagemagick ];
+          buildInputs = [ guile knightos-mktiupgrade python3 imagemagick tilem ]
+            ++ lib.optionals stdenv.isLinux [ xorg.xorgserver xdotool ];
         };
       }
     );

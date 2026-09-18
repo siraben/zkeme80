@@ -31,7 +31,7 @@ leaving the production ROM and its journal unchanged. Each runner accepts
 | --- | --- |
 | ROM layout / harness | 30 SRFI-64 assertions and 10 Python regressions, including budgets, upgrade selection, appended resident startup, and invalid page writes |
 | Forth language | 288/288 ANS and shell assertions; explicit unloading still works |
-| RAM / parser | 154 target assertions: allocation bounds, atomic defining words, exact-fit strings, quoted EOF, missing/unknown names, fixed RAM banks, and checked flash mapping |
+| RAM / parser | 156 target assertions: allocation bounds, atomic defining words, exact-fit strings, quoted EOF, missing/unknown names, fixed RAM banks, and checked flash mapping |
 | Core services | 133 assertions: scoped banks, service IDs, nested evaluation, token bounds, file-load stack balance, unfinished definitions, and caller compilation recovery |
 | Workspace | Multiline and bracketed definitions, error/exit rollback, deliberately hidden completed words, and definitions retained across desktop visits |
 | Scheduler | 89 target assertions, including bank changes on normal/error returns; counters advance during desktop and shell idle waits |
