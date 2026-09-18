@@ -106,6 +106,69 @@ memdump {output}/persisted.ram ram-logical
         assert variable(ram, rom, "CORE-VALUE") == expected, (name, output)
         assert int.from_bytes(ram[state_offset:state_offset + 2], "little") == 0
     print("Multiline compilation, parser error recovery, and BYE/reenter persistence passed")
+    # BRACKET is the same state transition as `[`, which the physical
+    # keyboard currently cannot enter. Keep the prompt/refill path real.
+    source = """
+VARIABLE CORE-ROLLBACK-DP
+VARIABLE CORE-ROLLBACK-LATEST
+: BOUNDARY
+  HERE CORE-ROLLBACK-DP ! LATEST @ CORE-ROLLBACK-LATEST ! ;
+: BRACKET 0 STATE ! ; IMMEDIATE
+MENU-DEMO
+"""
+    commands = f"""set key_hold 0.08s
+set key_delay 0.04s
+key ON
+wait 8s
+key ENTER
+scanstring "BOUNDARY"
+key ENTER
+scanstring ": BROKEN BRACKET"
+key ENTER
+wait 0.2s
+memdump {output}/bracket-open.ram ram-logical
+scanstring "NOPE"
+key ENTER
+wait 0.2s
+memdump {output}/bracket-recovered.ram ram-logical
+scanstring ": BROKEN BRACKET"
+key ENTER
+scanstring ": NESTED STAR ;"
+key ENTER
+scanstring "NOPE"
+key ENTER
+wait 0.2s
+memdump {output}/nested-recovered.ram ram-logical
+scanstring ": BROKEN BRACKET"
+key ENTER
+scanstring "BYE"
+key ENTER
+wait 0.2s
+memdump {output}/bracket-exit.ram ram-logical
+key ENTER
+wait 0.2s
+memdump {output}/bracket-reopened.ram ram-logical
+"""
+    run(args, output, "bracket-workspace", source, commands)
+    opened = (output / "bracket-open.ram").read_bytes()
+    dp_offset = kernel_constant(rom, "DP") - 0x8000
+    assert int.from_bytes(opened[dp_offset:dp_offset + 2], "little") > variable(
+        opened, rom, "CORE-ROLLBACK-DP"), "bracket fixture did not begin a definition"
+    assert int.from_bytes(opened[state_offset:state_offset + 2], "little") == 0
+    for name in ("bracket-recovered", "nested-recovered", "bracket-exit",
+                 "bracket-reopened"):
+        ram = (output / f"{name}.ram").read_bytes()
+        for pointer, checkpoint in (("DP", "CORE-ROLLBACK-DP"),
+                                    ("LATEST", "CORE-ROLLBACK-LATEST")):
+            offset = kernel_constant(rom, pointer) - 0x8000
+            actual = int.from_bytes(ram[offset:offset + 2], "little")
+            expected = variable(ram, rom, checkpoint)
+            assert actual == expected, (name, pointer, actual, expected, output)
+        assert int.from_bytes(ram[state_offset:state_offset + 2], "little") == 0
+    for name, running in (("bracket-exit", 0), ("bracket-reopened", 1)):
+        ram = (output / f"{name}.ram").read_bytes()
+        assert variable(ram, rom, "SHELL-RUNNING") == running, (name, output)
+    print("Bracket interpretation, nested-definition rollback, and compiler exit passed")
     print(f"Emulator artifacts: {output}")
 
 
