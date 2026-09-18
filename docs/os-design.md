@@ -39,23 +39,33 @@ that never returns.
 
 ## Using the desktop
 
+The 96×64 desktop uses a shared inverse title bar, a separate status line,
+selected rows, and a ruled footer with controls. The home view scrolls through
+seven entries in a five-row window; inspectors keep the same visual structure.
 UP/DOWN selects an entry and ENTER opens it. CLEAR or MODE returns from an
 inspector. Keyboard polling calls `YIELD`, so scheduled callbacks make progress
 while a foreground view waits for input. A held key generates one event until
 it is released. Views refresh after a navigation event.
 
 * **Forth workspace:** enter the interpreter; `BYE` returns to the workbench.
-* **Files:** UP/DOWN selects a live named object and displays its type and byte
-  length. ENTER previews its contents; LEFT/RIGHT moves by 128 bytes. The viewer
+* **Files:** a scrolling catalog shows four live named objects at a time,
+  with `T` for text, `F` for Forth source, and `B` for binary. UP/DOWN selects an object. ENTER previews its contents
+  in six rows of 16 bytes; LEFT/RIGHT moves by 96 bytes and stops at the first
+  and last chunk. Empty objects have an explicit empty state. The viewer
   replaces control bytes with dots, so reading an object does not execute it.
-* **Tasks:** UP/DOWN chooses a slot, RIGHT creates a counter demo, and ENTER
-  toggles a ready task to paused or starts an occupied task. The inspector shows
-  attempt count and the last error. Use `TASK-FREE` in the shell to
-  reclaim a slot.
-* **Pages / memory:** shows remaining dictionary space, the current raw bank
-  selector, and a 32-byte preview of a flash page. LEFT/RIGHT browses pages.
-  The original bank mapping is restored before the view resumes polling.
-* **System services:** lists the numeric service IDs and the actual dictionary
+  For a source object, ENTER in the preview explicitly loads it into the live
+  dictionary and reports success or an evaluation error.
+* **Tasks:** all four cooperative slots appear together with their state and
+  attempt count. UP/DOWN chooses a slot, RIGHT creates a counter demo, and ENTER
+  toggles a ready task to paused or starts an occupied task. The detail line
+  reports the selected task’s last error and explains when the table is full.
+  LEFT stops the selected task and DEL frees its slot for reuse.
+* **Pages / memory:** an overview maps all 64 flash pages; filled cells mark
+  system, module, and object-storage pages, and dots mark unused pages. LEFT/RIGHT moves
+  one page and UP/DOWN moves a row; navigation clamps at pages 0 and 63. ENTER
+  switches between the map and the selected page’s byte view. The original bank
+  mapping is restored before the view resumes polling.
+* **System calls:** lists the numeric service IDs and the actual dictionary
   names resolved by `SERVICE@`; LEFT/RIGHT changes the listing page.
 * **Test suite:** runs the interpreter regression suite.
 
