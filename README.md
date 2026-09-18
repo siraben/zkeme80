@@ -111,6 +111,10 @@ on a calculator. With `mktiupgrade` installed, `make upgrade` packages
 pages 00–05 and 3C using the included key and writes `zkeme80.8xu` in the
 repository root.
 
+The [kernel correctness checks](docs/kernel-correctness.md) document dictionary
+bounds, checked flash mapping, and how to run the 286-case ANS suite plus
+151 boundary regressions in an extended TilEm emulator.
+
 ### Using the Nix package manager (macOS or Linux)
 If you're using the Nix package manager, just clone the repository and
 run the following to compile and build the assembler, operating
