@@ -5,11 +5,8 @@
                   #:encoding "UTF-8")))))
 
 (define (include-binary-as-bytes filename)
-  (let* ((port (open-file filename "rb"))
-         (bytes (get-bytevector-all port))
-         (expr `((db ,(bytevector->u8-list bytes)))))
-    (close-port port)
-    expr))
+  `((db ,(bytevector->u8-list
+           (call-with-input-file filename get-bytevector-all #:binary #t)))))
 
 ;; Immediate flag
 (define immediate 128)
@@ -1829,10 +1826,9 @@
 
     (label compile-xt-emit)
     (ld bc (compile-xt-current))
-    (call _comma)
-    (pop bc)
     (ld de (compile-xt-saved-ip))
-    ,@next-inline
+    ;; Share comma's dictionary bounds check before emitting a fresh cell.
+    (jp comma)
 
     ,@(defword "LITERAL" immediate 'literal)
     (dw (tick lit compile-xt comma exit))
