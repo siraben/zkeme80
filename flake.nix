@@ -18,7 +18,7 @@
             cp -r ${./.}/src ${./.}/tests .
             cp ${./.}/Makefile ${./.}/build.scm ${./.}/0A.key .
             chmod -R +w .
-            make test-build build
+            make test-build test-modules build
             mkdir $out
             cp zkeme80.rom zkeme80.ram-labelmap.json $out/
           '';
@@ -26,7 +26,8 @@
         defaultPackage = self.packages.${system}.default;
 
         devShells.default = mkShell {
-          buildInputs = [ guile knightos-mktiupgrade python3 imagemagick ];
+          buildInputs = [ guile knightos-mktiupgrade python3 imagemagick tilem ]
+            ++ lib.optionals stdenv.isLinux [ xorg.xorgserver xdotool ];
         };
       }
     );

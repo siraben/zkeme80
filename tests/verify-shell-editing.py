@@ -7,6 +7,8 @@ import argparse
 import json
 from pathlib import Path
 
+from emulator import kernel_constant
+
 
 def read_u16(data: bytes, offset: int) -> int:
     return data[offset] | data[offset + 1] << 8
@@ -20,6 +22,7 @@ def main() -> None:
     )
     parser.add_argument("--rom", type=Path, default=Path("src/zkeme80.rom"))
     args = parser.parse_args()
+    dictionary_limit = kernel_constant(args.rom.read_bytes(), "DP-LIMIT")
 
     labelmap = json.loads(args.labelmap.read_text())
     labels = {entry["name"]: entry["addr"] for entry in labelmap["labels"]}
@@ -32,7 +35,7 @@ def main() -> None:
         values: dict[str, int] = {}
         header = read_u16(data, offset("var-latest"))
         for _ in range(1024):
-            if not ram_base <= header < 0xE000:
+            if not ram_base <= header < dictionary_limit:
                 break
             header_offset = header - ram_base
             name_length = data[header_offset + 2] & 0x1F
@@ -171,17 +174,9 @@ def main() -> None:
         args.actual_dir / "zkeme80-shell-edit-shell-loaded.ram"
     ).read_bytes()
     after_shell = (args.actual_dir / "zkeme80-shell-edit-after-shell.ram").read_bytes()
-    for variable in (
-        "var-dp",
-        "var-latest",
-        "var-current-input-device",
-        "var-current-error-handler",
-        "var-current-eof-handler",
-        "var-edit-history",
-    ):
-        position = offset(variable)
-        if before_shell[position : position + 2] != after_shell[position : position + 2]:
-            raise RuntimeError(f"shell exit did not restore {variable}")
+    if read_u16(after_shell, offset("var-dp")) <= read_u16(before_shell, offset("var-dp")):
+        raise RuntimeError("resident workspace discarded user definitions on BYE")
+    print("resident workspace: user definitions retained after BYE")
     resident_start = labels["resident-ui-start"]
     resident_end = labels["resident-ui-end"]
     rom = args.rom.read_bytes()
@@ -191,11 +186,11 @@ def main() -> None:
         raise RuntimeError("boot did not install the complete resident UI image")
     print("resident UI: boot RAM matches the assembled page-2 helper image")
     loaded_dp = read_u16(shell_loaded, offset("var-dp"))
-    if not loaded_dp < 0xE000:
-        raise RuntimeError(f"shell transient dictionary crossed RAM limit: {loaded_dp:#06x}")
+    if not loaded_dp < dictionary_limit:
+        raise RuntimeError(f"workspace dictionary crossed RAM limit: {loaded_dp:#06x}")
     print(
-        "shell lifecycle: DP/LATEST and input/editor vectors restored; "
-        f"{0xE000 - loaded_dp} transient bytes remain"
+        "resident shell: "
+        f"{dictionary_limit - loaded_dp} workspace bytes remain"
     )
 
 

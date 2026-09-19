@@ -16,3 +16,5 @@ __pycache__/
 /re/macros/SUITE_RAM
 /re/macros/BEFORE_SUITE_RAM
 /re/macros/AFTER_SUITE_RAM
+
+/rom-modules.log

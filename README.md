@@ -114,19 +114,16 @@ are resolved relative to the script, so this works outside the checkout.
 and the upgrade packager's inputs. These checks also run in the Nix build.
 The packager check uses a stub; it does not verify signing or installation
 on a calculator. With `mktiupgrade` installed, `make upgrade` packages
-pages 00–05 and 3C using the included key and writes `zkeme80.8xu` in the
+the pages selected by `src/modules.scm` using the included key and writes `zkeme80.8xu` in the
 repository root.
 
 The [kernel correctness checks](docs/kernel-correctness.md) document dictionary
-bounds, checked flash mapping, and how to run the 288-case ANS and key-map suite plus
+bounds, checked flash mapping, and how to run the 288-case ANS suite plus
 156 boundary regressions in an extended TilEm emulator.
 
-`make precompiled-rom TILEM_HEADLESS=/path/to/tilem2` captures and verifies the
-post-bootstrap dictionary, then writes it to Flash page `06` in
-`zkeme80-precompiled.rom`. The calculator checks the layout and payload CRC
-before execution; an absent or invalid image falls back to the text bootstrap.
-The [precompiled-bootstrap guide](docs/precompiled-bootstrap.md) documents the
-format, smoke test, and upgrade target.
+The workbench uses text bootstrap. The tooling branch's optional precompiled
+snapshot format currently supports one fixed RAM bank and cannot capture all
+resident workbench state; see [verification limits](docs/os-verification.md).
 
 The project launcher gives TilEm isolated typewriter-style bindings for
 the interactive shell.  In particular, host `a`, `s`, and `t` type `A`, `S`,
@@ -236,3 +233,13 @@ file) that the assembler accepts, so to add new instructions the
 current workflow is to look at relevant portions of the Z80 data sheet
 and write new cases in the pattern matcher.  Adding such an encoding
 would allow the assembler to be retargeted.
+
+### Resident workbench
+
+The launcher opens a persistent Forth workspace, named-object browser,
+cooperative task inspector, flash page map, and service catalog. The workspace
+retains definitions and command history across desktop visits.
+
+See [module layout and RAM ownership](docs/module-layout.md),
+[service contracts](docs/services.md), and
+[emulator verification](docs/os-verification.md).

@@ -1,0 +1,11 @@
+\ Stable service IDs for ABI v1; append entries, never renumber them.
+HERE
+' PAGE , ' EMIT , ' KEYC , ' UNUSED , ' YIELD ,
+' FS-LIST , ' FS-GET , ' FS-PUT , ' FS-DELETE , ' FS-LOAD ,
+' WITH-PAGE , ' TASK-NEW , ' TASK-PAUSE , ' TASK-RUN , ' TASK-STOP ,
+CONSTANT SERVICE-TABLE
+15 CONSTANT SERVICE-COUNT
+: SERVICE@ ( id -- xt|0 )
+  DUP SERVICE-COUNT U< IF CELLS SERVICE-TABLE + @ ELSE DROP 0 THEN ;
+: OS-CALL ( args id -- results )
+  SERVICE@ ?DUP IF EXECUTE ELSE 20 THROW THEN ;

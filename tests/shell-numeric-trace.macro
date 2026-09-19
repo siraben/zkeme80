@@ -2,7 +2,6 @@
 set key_hold 0.25s
 key ON
 wait 10s
-key RIGHT
 wait 0.3s
 key ENTER
 wait 2s

@@ -1,0 +1,127 @@
+\ Cooperative services: callbacks ( context -- ) must return promptly.
+\ State: 0 free, 1 runnable, 2 paused, 3 stopped, 4 failed, 5 waiting.
+\ Records: xt, context, state, attempted steps, last error, wait passes.
+\ No unfinished application definition may lend its compiler to a callback.
+\ This resident checkpoint bounds the scan, including bracket interpretation
+\ and unfinished entries hidden below subsequently completed definitions.
+LATEST @ CONSTANT TASK-DICTIONARY
+4 CONSTANT TASK-LIMIT
+12 CONSTANT /TASK
+HERE TASK-LIMIT /TASK * ALLOT CONSTANT TASK-TABLE
+VARIABLE TASK-BUSY
+VARIABLE TASK-CURRENT
+VARIABLE TASK-DEPTH
+VARIABLE TASK-COUNT
+
+: TASK-RECORD ( id -- addr|0 )
+  DUP 1 TASK-LIMIT 1+ WITHIN
+  IF 1- /TASK * TASK-TABLE + ELSE DROP 0 THEN
+;
+: TASK-USED ( id -- addr|0 )
+  TASK-RECORD DUP IF DUP 4 + @ 0= IF DROP 0 THEN THEN
+;
+: TASK-ID ( -- id|0 ) TASK-CURRENT @ ;
+: TASK-CLEAR ( addr -- )
+  6 0 DO 0 OVER I CELLS + ! LOOP DROP
+;
+\ Context cells are opaque: conservatively treat values in reclaimed
+\ dictionary storage as addresses, as well as checking the callback xt.
+: TASK-REFERENCES? ( first last addr -- flag )
+  >R 2DUP R@ @ -ROT WITHIN
+  -ROT R> CELL+ @ -ROT WITHIN OR
+;
+: TASK-RECLAIM ( first last -- )
+  TASK-LIMIT 0 DO
+    I 1+ TASK-USED ?DUP IF
+      >R 2DUP R@ TASK-REFERENCES? IF R@ TASK-CLEAR THEN R> DROP
+    THEN
+  LOOP 2DROP
+;
+: TASK-INIT ( -- )
+  TASK-LIMIT 0 DO I 1+ TASK-RECORD TASK-CLEAR LOOP
+  0 TASK-BUSY ! 0 TASK-CURRENT ! 0 TASK-COUNT !
+;
+: TASK-NEW ( xt context -- id|0 )
+  OVER 0= IF 2DROP 0 EXIT THEN
+  TASK-LIMIT 0 DO
+    I 1+ TASK-RECORD DUP 4 + @ 0= IF
+      DUP TASK-CLEAR >R
+      R@ CELL+ ! R@ ! 1 R> 4 + !
+      I 1+ UNLOOP EXIT
+    THEN DROP
+  LOOP 2DROP 0
+;
+: TASK-STATE! ( state id -- flag )
+  TASK-USED DUP IF 4 + ! 1 ELSE DROP DROP 0 THEN
+;
+: TASK-RUN ( id -- flag )
+  TASK-USED DUP IF
+    0 OVER 8 + ! 0 OVER 10 + ! 1 SWAP 4 + ! 1
+  ELSE DROP 0 THEN
+;
+: TASK-PAUSE ( id -- flag ) 2 SWAP TASK-STATE! ;
+: TASK-STOP ( id -- flag ) 3 SWAP TASK-STATE! ;
+: TASK-FREE ( id -- flag )
+  DUP TASK-ID = IF DROP 0 EXIT THEN
+  TASK-USED DUP IF TASK-CLEAR 1 ELSE DROP 0 THEN
+;
+: TASK-SLEEP ( passes id -- flag )
+  TASK-USED DUP IF
+    >R DUP R@ 10 + ! IF 5 ELSE 1 THEN R> 4 + ! 1
+  ELSE DROP DROP 0 THEN
+;
+: TASK-INFO ( id -- state runs error )
+  TASK-USED DUP IF
+    DUP 4 + @ SWAP DUP 6 + @ SWAP 8 + @
+  ELSE DROP 0 0 0 THEN
+;
+: TASK-CONTEXT ( id -- context|0 )
+  TASK-USED DUP IF CELL+ @ THEN
+;
+: TASK-CALL ( -- )
+  DEPTH TASK-DEPTH !
+  TASK-ID TASK-RECORD DUP CELL+ @ SWAP @ EXECUTE
+  DEPTH TASK-DEPTH @ = 0= IF 0 4 - THROW THEN
+;
+: TASK-STEP ( id -- )
+  DUP TASK-CURRENT ! TASK-RECORD
+  1 OVER 6 + +! DROP
+  BASE @ >R STATE @ >R INPUT-PTR @ >R SOURCE 2>R >IN @ >R BANK@ >R
+  ['] TASK-CALL WITH-COMPILER
+  R> (BANK!) R> 2R> SOURCE! >IN ! R> INPUT-PTR ! R> STATE ! R> BASE !
+  DUP IF TASK-ID TASK-USED ?DUP IF
+    8 + ! 4 TASK-ID TASK-STATE! DROP
+  ELSE DROP THEN
+  ELSE DROP THEN
+  0 TASK-CURRENT !
+;
+: TASK-TICK ( id -- )
+  DUP TASK-RECORD 4 + @ 5 = IF
+    DUP TASK-RECORD 10 + DUP @ 1- DUP ROT !
+    0= IF 1 OVER TASK-STATE! DROP THEN
+    DROP EXIT
+  THEN
+  DUP TASK-RECORD 4 + @ 1 = IF TASK-STEP ELSE DROP THEN
+;
+: YIELD ( -- )
+  TASK-BUSY @ IF EXIT THEN
+  STATE @ IF EXIT THEN
+  TASK-DICTIONARY (EVAL-PARTIAL?) IF EXIT THEN
+  1 TASK-BUSY !
+  TASK-LIMIT 0 DO I 1+ TASK-TICK LOOP
+  0 TASK-BUSY !
+;
+: TASKS ( -- )
+  ." ID STATE STEPS" CR
+  TASK-LIMIT 0 DO
+    I 1+ TASK-USED IF
+      I 1+ DUP . TASK-INFO DROP SWAP . . CR
+    THEN
+  LOOP
+;
+: TASK-COUNTER ( context -- ) 1 SWAP +! ;
+: TASK-DEMO ( -- id|0 ) ['] TASK-COUNTER TASK-COUNT TASK-NEW ;
+
+TASK-INIT
+' TASK-RECLAIM RECLAIM-XT !
+' YIELD IDLE-XT !

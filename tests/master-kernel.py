@@ -13,6 +13,8 @@ import subprocess
 import sys
 import tempfile
 
+from emulator import inject
+
 ROOT = Path(__file__).resolve().parents[1]
 PAGE = 16384
 
@@ -36,41 +38,17 @@ def run_emulator(args, output, name, rom, macro):
 
 
 def inject_checks(rom):
-    """Replace only master's final page-1 menu action; use erased page 6."""
-    if len(rom) != 64 * PAGE or rom[6 * PAGE:7 * PAGE] != b"\xff" * PAGE:
-        raise ValueError("expected master's 1MiB layout with erased page 6")
-    core = rom[PAGE:2 * PAGE].split(b"\0", 1)[0]
-    trailer = b"\nMENU-DEMO\n"
-    if not core.endswith(trailer):
-        raise ValueError("bootstrap page 1 has no final MENU-DEMO")
-
-    # Read NEXT from H0's native constant stub, then emit a test-only bank
-    # inspector: PUSH BC; IN A,(6); LD B,0; LD C,A; JP NEXT. No new OS API.
-    marker = b"\x02H0\0\xc5\x01"
-    if rom[:PAGE].count(marker) != 1:
-        raise ValueError("missing or ambiguous H0 constant stub")
-    offset = rom.index(marker) + len(marker) + 2
-    if rom[offset] != 0xC3:
-        raise ValueError("unexpected H0 constant epilogue")
-    code = b"\xc5\xdb\x06\x06\x00\x4f\xc3" + rom[offset + 1:offset + 3]
-    source = "HERE " + " ".join(f"{byte} C," for byte in code)
-    source += " CONSTANT TEST-BANK-CODE\n: TEST-BANK@ TEST-BANK-CODE EXECUTE ;\n"
+    """Append bounds checks after every resident using the declared layout."""
+    source = ": TEST-BANK@ BANK@ ;\n"
     source += (ROOT / "tests/master-memory.fs").read_text()
-    core = core[:-len(trailer)] + (b"\n: START-CHECKS 6 MAP-FLASH DROP "
-                                   b"MEMA CSTRING-SOURCE ; START-CHECKS\n")
-    image = bytearray(rom)
-    for page, payload in ((1, core), (6, source.encode("ascii"))):
-        if len(payload) >= PAGE or b"\0" in payload:
-            raise ValueError("test source must fit one terminated flash page")
-        image[page * PAGE:(page + 1) * PAGE] = (payload + b"\0").ljust(PAGE, b"\xff")
-    return bytes(image)
+    return inject(rom, source)
 
 
 def check_memory(ram, labelmap):
     labels = {entry["name"]: entry["addr"] for entry in labelmap["labels"]}
 
     def cell(address):
-        if not 0x8000 <= address < 0xDFFF:
+        if not 0x8000 <= address < 0xEFFF:
             raise AssertionError(f"invalid test data address {address:#x}")
         offset = address - 0x8000
         return int.from_bytes(ram[offset:offset + 2], "little")
@@ -79,7 +57,7 @@ def check_memory(ram, labelmap):
     fields = {}
     seen = set()
     header = cell(labels["var-latest"])
-    while 0x8000 <= header < 0xE000 and header not in seen:
+    while 0x8000 <= header < 0xF000 and header not in seen:
         seen.add(header)
         offset = header - 0x8000
         length = ram[offset + 2] & 31
@@ -113,7 +91,7 @@ def main():
     labelmap = json.loads(args.labelmap.read_text())
     (output / "labels.json").write_text(json.dumps(labelmap))
     if args.only != "boundaries":
-        macro = (ROOT / "debug/macros/run-test-suite.macro").read_text()
+        macro = (ROOT / "tests/full-suite.macro").read_text()
         macro = macro.replace("debug/macros/", str(output) + "/")
         run_emulator(args, output, "suite", rom, macro)
         subprocess.run(

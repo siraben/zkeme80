@@ -2,10 +2,26 @@
 
 ## Current implementation
 
-Flash page 5 now starts an interactive Forth REPL.  Alphabetic input is
-the default; press `2ND` before a digit or arithmetic symbol.  `DEL`
-backspaces, `HELP` prints the on-device summary, and `BYE` unloads the
-transient shell words and returns to the menu.
+The manifest's resident `workbench` module supplies the interactive Forth
+REPL; it is loaded once at boot. Alphabetic input is the default; press `2ND`
+before a digit or arithmetic symbol. `DEL` backspaces, `HELP` prints the
+on-device summary, and `BYE` returns to the desktop. Dictionary definitions
+survive leaving and reentering the workspace. They remain volatile across a
+reset; use the [object store](storage.md) to save reloadable source.
+
+`FILES` lists stored objects, `TASKS` lists cooperative jobs, and `SERVICES`
+opens the system service browser. The input loop yields to cooperative jobs
+while waiting for keys. Long-running words must call `YIELD` explicitly if
+background jobs should continue; no timer forcibly preempts Forth execution.
+
+An interpreter error clears compilation state and rolls back an unfinished
+definition to the saved dictionary boundary, including errors during `[ ... ]`
+interpretation within a definition. Definitions completed before that saved
+boundary are retained. Deliberately hiding a completed word with `HIDDEN`
+does not mark it unfinished. Leaving with `BYE` during bracket interpretation
+also discards the unfinished definition. This is recovery for interactive
+mistakes, not protection from arbitrary memory writes or forgetting words
+still referenced by tasks.
 
 The editor accepts up to 128 bytes and wraps across display rows.  Left and
 right move through the complete buffer, including across visual row
@@ -30,8 +46,9 @@ uppercase because the Forth shell is uppercase-oriented.
 The native dictionary remains in fixed flash page 0. Boot copies the renderer,
 font, key tables, and initial source from a named page-2 image into fixed RAM
 before entering Forth. The dictionary starts above those helpers and ends at
-`0xE000`; the top 8 KiB remain available for the data stack. This accommodates
-the full history rings without reducing their advertised capacity.
+`0xF000`; the top 4 KiB remain available for the data stack. The full history
+rings occupy banked RAM page 2, with scoped access that restores the
+foreground mapping. See [RAM ownership](module-layout.md#ram-ownership).
 
 `PAUSE` waits for a fresh physical key press, so the key that opened a menu
 page cannot also dismiss its introduction.

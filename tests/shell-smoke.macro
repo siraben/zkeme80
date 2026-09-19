@@ -1,10 +1,9 @@
-# Boot, enter the top-right shell, exercise its editor/REPL, then exit.
+# Boot, enter the Forth workspace, exercise its editor/REPL, then exit.
 set key_hold 0.25s
 set key_delay 0.06s
 
 key ON
 wait 10s
-key RIGHT
 wait 0.3s
 key ENTER
 wait 10s

@@ -4,7 +4,6 @@ set key_delay 0.08s
 
 key ON
 wait 10s
-key RIGHT
 wait 0.5s
 key ENTER
 wait 2s

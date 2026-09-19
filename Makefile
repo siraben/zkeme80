@@ -1,4 +1,4 @@
-ROM_PAGES = 00 01 02 03 04 05 06 3C
+ROM_PAGES = $(shell cd src && guile --no-auto-compile upgrade-pages.scm) 06
 PYTHON ?= python3
 TILEM_HEADLESS ?= tilem2
 BOOTSTRAP_RAM = build/bootstrap.ram
@@ -7,7 +7,7 @@ BOOTSTRAP_STREAM = build/bootstrap.zbs
 PRECOMPILED_ROM = zkeme80-precompiled.rom
 PRECOMPILED_LABELMAP = zkeme80-precompiled.ram-labelmap.json
 
-.PHONY: test-build test-emulator all build test upgrade bootstrap-capture bootstrap-pack \
+.PHONY: test-modules test-build test-emulator all build test upgrade bootstrap-capture bootstrap-pack \
 	bootstrap-image bootstrap-verify bootstrap-self-test bootstrap-stream \
 	precompiled-rom precompiled-smoke precompiled-upgrade
 
@@ -22,14 +22,22 @@ upgrade:
 	$(MAKE) -C src upgrade
 	cp src/zkeme80.8xu .
 
+test-modules:
+	guile --no-auto-compile tests/modules.scm
+	python3 tests/test-emulator-helpers.py
+
 test-build:
 	python3 tests/test-build.py
 
 # Requires a TilEm build with --headless and --macro; set TILEM to its path.
 test-emulator: build
 	python3 tests/master-kernel.py
+	python3 tests/test-core.py
+	python3 tests/test-storage.py
+	python3 tests/test-tasks.py
+	python3 tests/test-desktop.py
 
-test: build test-build
+test: build test-build test-modules
 	cd src && guile --no-auto-compile ../tests/assembler-test.scm
 	python3 -m unittest discover -s tests -p '*_test.py' -v
 	python3 -m unittest discover -s re -p 'test_*.py' -v

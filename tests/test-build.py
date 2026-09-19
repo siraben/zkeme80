@@ -64,7 +64,7 @@ assert Path(args[1]).is_file()
 rom = Path(args[4]).read_bytes()
 assert len(rom) == 1024 * 1024
 pages = [int(page, 16) for page in args[6:]]
-assert pages == [0, 1, 2, 3, 4, 5, 60]
+assert pages == [0, 1, 2, 3, 4, 5, 7, 60]
 for page in pages:
     assert rom[page * 16384:(page + 1) * 16384] != bytes([255]) * 16384
 Path(args[5]).write_bytes(b"verified upgrade inputs")

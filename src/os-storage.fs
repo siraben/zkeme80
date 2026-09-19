@@ -1,0 +1,151 @@
+\ Named, typed objects in an append-only flash journal. No implicit erase.
+\ Page 8 contains sixteen 1024-byte records; commit byte is written last.
+\ All addresses returned by this module are transient until the next FS call.
+1024 CONSTANT FS-RECORD
+16 CONSTANT FS-SLOTS
+992 CONSTANT FS-MAX
+HERE 1024 ALLOT CONSTANT FS-BUF
+HERE 32 ALLOT CONSTANT FS-HEAD
+HERE 16 ALLOT CONSTANT FS-NAME
+HERE 16 ALLOT CONSTANT FS-LIVE
+VARIABLE FS-DIRTY
+VARIABLE FS-NLEN
+VARIABLE FS-LAST
+VARIABLE FS-SLOT
+VARIABLE FS-SRC
+VARIABLE FS-LEN
+VARIABLE FS-KIND
+VARIABLE FS-CANDIDATE
+VARIABLE FS-INDEX
+VARIABLE FS-COMMIT
+VARIABLE FS-BUSY
+90 FS-COMMIT !
+0 FS-BUSY !
+1 FS-DIRTY !
+
+: FS-ZERO ( addr n -- )
+  ?DUP IF 0 DO 0 OVER I + C! LOOP THEN DROP ;
+: FS-READ ( offset addr n -- ) STORAGE-READ THROW ;
+: FS-HEADER ( slot -- ) FS-RECORD * FS-HEAD 32 FS-READ ;
+: FS-VALID? ( -- flag )
+  FS-HEAD C@ 90 = FS-HEAD 1+ C@ 1 = AND
+  FS-HEAD 2+ C@ 4 < AND
+  FS-HEAD 3 + C@ DUP 0 > SWAP 17 < AND AND
+  FS-HEAD 4 + @ FS-MAX 1+ U< AND ;
+: FS-NAME! ( addr n -- ior )
+  DUP 0= OVER 17 U< 0= OR IF 2DROP 40 EXIT THEN
+  DUP FS-NLEN ! FS-NAME SWAP CMOVE 0 ;
+: FS-NAME= ( -- flag )
+  FS-HEAD 3 + C@ FS-NLEN @ <> IF 0 EXIT THEN
+  FS-NLEN @ 0 DO
+    FS-HEAD 8 + I + C@ FS-NAME I + C@ <>
+    IF 0 UNLOOP EXIT THEN
+  LOOP 1 ;
+: FS-FIND ( -- slot|65535 )
+  65535 FS-LAST !
+  FS-SLOTS 0 DO
+    I FS-HEADER FS-VALID? IF
+      FS-NAME= IF I FS-LAST ! THEN
+    THEN
+  LOOP FS-LAST @ ;
+: FS-BLANK? ( slot -- flag )
+  FS-RECORD * FS-RECORD STORAGE-BLANK? THROW ;
+: FS-FREE ( -- n )
+  0 FS-SLOTS 0 DO I FS-BLANK? IF 1+ THEN LOOP ;
+: FS-ALLOC ( -- slot|65535 )
+  FS-SLOTS 0 DO I FS-BLANK? IF I UNLOOP EXIT THEN LOOP
+  65535 ;
+: FS-CHECKSUM ( -- n )
+  0 6 2 DO FS-BUF I + C@ + LOOP
+  FS-BUF 4 + @ 32 + 8 DO FS-BUF I + C@ + LOOP ;
+: FS-APPEND ( -- ior )
+  FS-ALLOC DUP 65535 = IF DROP 42 EXIT THEN FS-SLOT !
+  \ Move before clearing the header: FS-GET's buffer can be saved again.
+  FS-LEN @ IF
+    FS-SRC @ FS-BUF 32 + FS-LEN @
+    FS-SRC @ FS-BUF 32 + U< IF CMOVE> ELSE CMOVE THEN
+  THEN
+  FS-BUF 32 FS-ZERO
+  FS-BUF 32 + FS-LEN @ + FS-MAX FS-LEN @ - FS-ZERO
+  255 FS-BUF C! 1 FS-BUF 1+ C!
+  FS-KIND @ FS-BUF 2+ C! FS-NLEN @ FS-BUF 3 + C!
+  FS-LEN @ FS-BUF 4 + !
+  FS-NAME FS-BUF 8 + FS-NLEN @ CMOVE
+  FS-CHECKSUM FS-BUF 6 + !
+  1 FS-DIRTY !
+  FS-BUF 1+ FS-SLOT @ FS-RECORD * 1+ 1023 STORAGE-WRITE
+  ?DUP IF EXIT THEN
+  FS-COMMIT FS-SLOT @ FS-RECORD * 1 STORAGE-WRITE ;
+: FS-PUT ( data len name namelen type -- ior )
+  FS-BUSY @ IF DROP 2DROP 2DROP 45 EXIT THEN
+  FS-KIND ! FS-NAME! ?DUP IF >R 2DROP R> EXIT THEN
+  FS-LEN ! FS-SRC !
+  FS-KIND @ DUP 0= SWAP 4 U< 0= OR
+  FS-LEN @ FS-MAX 1+ U< 0= OR IF 41 EXIT THEN
+  FS-KIND @ 2 = FS-LEN @ FS-MAX = AND IF 41 EXIT THEN
+  FS-APPEND ;
+: FS-GET ( name namelen -- data len type ior )
+  FS-BUSY @ IF 2DROP 0 0 0 45 EXIT THEN
+  FS-NAME! ?DUP IF >R 0 0 0 R> EXIT THEN
+  FS-FIND DUP 65535 = IF DROP 0 0 0 43 EXIT THEN
+  FS-RECORD * FS-BUF 1024 FS-READ
+  FS-BUF 2+ C@ 0= IF 0 0 0 43 EXIT THEN
+  FS-CHECKSUM FS-BUF 6 + @ <> IF 0 0 0 44 EXIT THEN
+  FS-BUF 32 + FS-BUF 4 + @ FS-BUF 2+ C@ 0 ;
+\ A revision identifies one committed record for the current journal lifetime.
+\ Records are never reused; future compaction must preserve this distinction.
+: FS-VERSION ( name namelen -- revision ior )
+  FS-BUSY @ IF 2DROP 0 45 EXIT THEN
+  FS-NAME! ?DUP IF 0 SWAP EXIT THEN
+  FS-FIND DUP 65535 = IF DROP 0 43 EXIT THEN
+  DUP FS-HEADER FS-HEAD 2+ C@ 0= IF DROP 0 43 ELSE 0 THEN ;
+: FS-DELETE ( name namelen -- ior )
+  FS-BUSY @ IF 2DROP 45 EXIT THEN
+  FS-NAME! ?DUP IF EXIT THEN
+  FS-FIND DUP 65535 = IF DROP 43 EXIT THEN
+  FS-HEADER FS-HEAD 2+ C@ 0= IF 43 EXIT THEN
+  0 FS-LEN ! 0 FS-KIND ! 0 FS-SRC ! FS-APPEND ;
+\ File loads are commands, with no data-stack results. CATCH discards any
+\ excess results on error so repeated desktop loads cannot grow its stack.
+: (FS-EVALUATE) ( zaddr -- )
+  DEPTH 1- >R EVALUATE0
+  ?DUP IF R> DROP THROW THEN
+  DEPTH R> <> IF 0 4 - THROW THEN
+;
+: FS-LOAD ( name namelen -- ior )
+  FS-GET ?DUP IF >R DROP 2DROP R> EXIT THEN
+  2 <> IF 2DROP 41 EXIT THEN
+  DUP FS-MAX U< 0= IF 2DROP 41 EXIT THEN
+  OVER + 0 SWAP C!
+  1 FS-BUSY ! ['] (FS-EVALUATE) CATCH
+  DUP IF >R DROP R> THEN
+  0 FS-BUSY ! ;
+: FS-LIVE? ( slot -- flag )
+  DUP FS-CANDIDATE ! FS-HEADER
+  FS-VALID? 0= IF 0 EXIT THEN
+  FS-HEAD 2+ C@ 0= IF 0 EXIT THEN
+  FS-HEAD 8 + FS-HEAD 3 + C@ FS-NAME! DROP
+  FS-FIND FS-CANDIDATE @ =
+  FS-CANDIDATE @ FS-HEADER ;
+: FS-RESCAN ( -- ) 1 FS-DIRTY ! ;
+: FS-DIRECTORY ( -- )
+  FS-DIRTY @ IF
+    FS-SLOTS 0 DO I FS-LIVE? FS-LIVE I + C! LOOP
+    0 FS-DIRTY !
+  THEN ;
+: FS-NTH ( index -- name namelen size type flag )
+  FS-INDEX ! FS-DIRECTORY
+  FS-SLOTS 0 DO FS-LIVE I + C@ IF
+    FS-INDEX @ 0= IF
+      I FS-HEADER
+      FS-HEAD 8 + FS-HEAD 3 + C@ FS-HEAD 4 + @
+      FS-HEAD 2+ C@ 1 UNLOOP EXIT
+    THEN 0 1- FS-INDEX +!
+  THEN LOOP 0 0 0 0 0 ;
+: FS-COUNT ( -- n )
+  FS-DIRECTORY
+  0 FS-SLOTS 0 DO FS-LIVE I + C@ IF 1+ THEN LOOP ;
+: FS-LIST ( -- )
+  FS-SLOTS 0 DO I FS-NTH IF
+    . . TYPE CR
+  ELSE DROP DROP 2DROP UNLOOP EXIT THEN LOOP ;
