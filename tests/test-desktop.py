@@ -252,6 +252,55 @@ def lifecycle_scenario(args, output):
     return scenario
 
 
+def file_identity_scenarios(args, output):
+    seed = r'''
+: DESKTOP-IDENTITY-SEED
+  S" 1 DESKTOP-LOADED !" S" A" 2 FS-PUT DESKTOP-FS-IOR +!
+  S" 2 DESKTOP-LOADED !" S" B" 2 FS-PUT DESKTOP-FS-IOR +! ;
+DESKTOP-IDENTITY-SEED
+VARIABLE DESKTOP-MUTATED
+0 DESKTOP-MUTATED !
+: DESKTOP-DELETE
+  DROP S" A" FS-DELETE DESKTOP-FS-IOR +!
+  1 DESKTOP-MUTATED ! TASK-ID TASK-STOP DROP ;
+: DESKTOP-REPLACE
+  DROP S" 3 DESKTOP-LOADED !" S" A" 2 FS-PUT DESKTOP-FS-IOR +!
+  1 DESKTOP-MUTATED ! TASK-ID TASK-STOP DROP ;
+: DESKTOP-REKIND
+  DROP S" 3 DESKTOP-LOADED !" S" A" 1 FS-PUT DESKTOP-FS-IOR +!
+  1 DESKTOP-MUTATED ! TASK-ID TASK-STOP DROP ;
+12345 DESKTOP-READY !
+'''
+    # The task runs in the key wait after A was drawn. An ordinal lookup
+    # would now open B, although ENTER was pressed on the displayed A.
+    directory = Scenario(args, output, "directory-identity", SETUP + seed + r'''
+' DESKTOP-DELETE 0 TASK-NEW DROP OS-FILES
+''')
+    directory.snapshot("deleted", DESKTOP_MUTATED=1, DESKTOP_LOADED=0)
+    directory.keys("ENTER")
+    directory.snapshot("refreshed", DESKTOP_LOADED=0)
+    directory.keys("ENTER", "ENTER")
+    directory.snapshot("confirmed-b", DESKTOP_LOADED=2)
+    directory.run()
+    ScreenModel().frame("FILES", "^v ENT view CLR back").compare(
+        directory, "refreshed", ((0, 0, 96, 8), (0, 55, 96, 9)))
+
+    for operation, loaded in (("DELETE", 0), ("REPLACE", 3), ("REKIND", 0)):
+        preview = Scenario(args, output, f"preview-{operation.lower()}",
+                           SETUP + seed + f'''
+0 OS-FILE-NO ! OS-FILE-PIN
+' DESKTOP-{operation} 0 TASK-NEW DROP OS-FILE-VIEW
+''')
+        preview.snapshot("mutated", DESKTOP_MUTATED=1, DESKTOP_LOADED=0)
+        preview.keys("ENTER")
+        preview.snapshot("changed", OS_NOTICE=5, DESKTOP_LOADED=0)
+        preview.keys("ENTER")
+        preview.snapshot("confirmed", DESKTOP_LOADED=loaded)
+        preview.run()
+        ScreenModel().frame("A", "Changed / CLR back").compare(
+            preview, "changed", ((0, 0, 96, 8), (0, 54, 96, 10)))
+
+
 def check_pixels(empty, populated):
     labels = ("Workspace", "Files", "Tasks", "Memory",
               "Services", "Tests", "Power off")
@@ -392,9 +441,11 @@ def main():
     populated = populated_scenario(args, output)
     check_pixels(empty, populated)
     lifecycle_scenario(args, output)
+    file_identity_scenarios(args, output)
     print("Desktop: empty/multiple files, preview bounds, source load/error, task lifecycle,")
     print("full task table, page 0/63 bounds, service first/final pages and home bounds passed")
     print("Bank mapping stayed restored at every scheduling point")
+    print("File selection stayed pinned across deletion, replacement, and type changes")
     print(f"Screenshots, pixel models and RAM snapshots: {output}")
 
 

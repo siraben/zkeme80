@@ -35,6 +35,7 @@ when a loaded source reports an error; loading is not a transaction.
 | --- | --- | --- |
 | `FS-PUT` | `( data len name namelen type -- ior )` | Append or replace an object |
 | `FS-GET` | `( name namelen -- data len type ior )` | Fetch the latest revision |
+| `FS-VERSION` | `( name namelen -- revision ior )` | Identify the latest live journal record |
 | `FS-DELETE` | `( name namelen -- ior )` | Append a deletion marker |
 | `FS-LOAD` | `( name namelen -- ior )` | Evaluate a source object |
 | `FS-NTH` | `( index -- name namelen size type flag )` | Enumerate live objects, zero-based |
@@ -48,8 +49,19 @@ after another storage operation. `FS-GET` failures return three zero values
 followed by the error. `FS-NTH` exhaustion returns five zero values. The
 implementation uses shared scratch state and must not be entered recursively
 or yield during a storage operation. A running source object also occupies
-the shared data buffer: `FS-GET`, `FS-PUT`, `FS-DELETE`, and nested `FS-LOAD`
+the shared data buffer: `FS-GET`, `FS-VERSION`, `FS-PUT`, `FS-DELETE`, and nested `FS-LOAD`
 return 45 until its evaluation finishes. Directory listing remains available.
+
+`FS-VERSION` returns a record number on success, or zero followed by an error.
+The number identifies a committed revision within the current journal lifetime;
+replacement consumes a new record even if the name, type, and bytes are unchanged.
+It validates the directory header; `FS-GET` additionally checks payload integrity.
+The desktop copies the selected name and type into its own state before waiting
+for input and checks this revision before opening or loading. A changed directory
+selection is redrawn. A changed preview displays the new contents with a `Changed`
+notice and requires another ENTER before source can execute. Deletion keeps the
+original name visible and cannot redirect an action to the next directory entry.
+Future journal compaction must retain revision identity across record relocation.
 
 | Result | Meaning |
 | --- | --- |

@@ -69,10 +69,14 @@ it is released. Views refresh after a navigation event.
   names resolved by `SERVICE@`; LEFT/RIGHT changes the listing page.
 * **Test suite:** runs the interpreter regression suite.
 
-The file viewer resolves names again before every preview. This is necessary
-because storage pointers refer to a shared scratch buffer and must not be kept
-across a scheduling point. Applications should similarly copy data they need
-to retain or reacquire it by name after yielding.
+The file browser copies the displayed name and type into view-owned storage
+and remembers its journal revision before waiting for input. Directory ordinals
+can shift and storage scratch buffers can change while a task runs. Before
+opening or loading, the browser resolves that name and checks `FS-VERSION`.
+A changed directory selection is redrawn; a changed preview is refreshed with
+a notice and requires another ENTER before loading. Applications must retain
+both identity and revision when an action depends on the contents shown before
+yielding; reacquiring a name alone does not detect replacement of that object.
 
 ## Historical influences
 

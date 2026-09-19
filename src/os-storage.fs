@@ -92,6 +92,13 @@ VARIABLE FS-BUSY
   FS-BUF 2+ C@ 0= IF 0 0 0 43 EXIT THEN
   FS-CHECKSUM FS-BUF 6 + @ <> IF 0 0 0 44 EXIT THEN
   FS-BUF 32 + FS-BUF 4 + @ FS-BUF 2+ C@ 0 ;
+\ A revision identifies one committed record for the current journal lifetime.
+\ Records are never reused; future compaction must preserve this distinction.
+: FS-VERSION ( name namelen -- revision ior )
+  FS-BUSY @ IF 2DROP 0 45 EXIT THEN
+  FS-NAME! ?DUP IF 0 SWAP EXIT THEN
+  FS-FIND DUP 65535 = IF DROP 0 43 EXIT THEN
+  DUP FS-HEADER FS-HEAD 2+ C@ 0= IF DROP 0 43 ELSE 0 THEN ;
 : FS-DELETE ( name namelen -- ior )
   FS-BUSY @ IF 2DROP 45 EXIT THEN
   FS-NAME! ?DUP IF EXIT THEN
