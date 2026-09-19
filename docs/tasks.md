@@ -8,6 +8,15 @@ when the task module loads. Jobs advance while waiting for a key or key release.
 Applications should call `YIELD` during long computations. A callback can
 keep its continuation/state in its context object, as a small state machine.
 
+The foreground owns the shared dictionary while a definition is unfinished.
+`YIELD` defers the entire scheduling pass in compilation state or while any
+application definition remains unfinished, including inside `[` interpretation
+and below later completed definitions. Attempt counts and sleep delays do not
+advance during this deferral. Jobs resume on the next eligible `YIELD` after
+completion or rollback. This deliberately pauses jobs during multiline shell
+compilation: callbacks may themselves evaluate source, so restoring `STATE`
+afterward cannot undo code inserted into a foreground definition.
+
 ```forth
 VARIABLE COUNT
 0 COUNT !
@@ -74,5 +83,5 @@ and `BYE`. Use `--emulator` to specify your emulator binary and `--output` to
 retain its screenshots and RAM snapshots in a chosen directory. The binary
 defaults to `$TILEM` or `tilem2`; launch through `nix develop --command` if its
 dependencies require the development environment. Target
-verification passes all 75 assertions; the keyboard regression confirms that
+verification passes all 105 assertions; the keyboard regression confirms that
 background callbacks keep advancing while the shell awaits input.

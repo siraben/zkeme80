@@ -1,6 +1,10 @@
 \ Cooperative services: callbacks ( context -- ) must return promptly.
 \ State: 0 free, 1 runnable, 2 paused, 3 stopped, 4 failed, 5 waiting.
 \ Records: xt, context, state, attempted steps, last error, wait passes.
+\ No unfinished application definition may lend its compiler to a callback.
+\ This resident checkpoint bounds the scan, including bracket interpretation
+\ and unfinished entries hidden below subsequently completed definitions.
+LATEST @ CONSTANT TASK-DICTIONARY
 4 CONSTANT TASK-LIMIT
 12 CONSTANT /TASK
 HERE TASK-LIMIT /TASK * ALLOT CONSTANT TASK-TABLE
@@ -86,6 +90,8 @@ VARIABLE TASK-COUNT
 ;
 : YIELD ( -- )
   TASK-BUSY @ IF EXIT THEN
+  STATE @ IF EXIT THEN
+  TASK-DICTIONARY (EVAL-PARTIAL?) IF EXIT THEN
   1 TASK-BUSY !
   TASK-LIMIT 0 DO I 1+ TASK-TICK LOOP
   0 TASK-BUSY !
