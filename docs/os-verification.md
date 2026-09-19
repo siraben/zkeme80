@@ -34,9 +34,9 @@ leaving the production ROM and its journal unchanged. Each runner accepts
 | RAM / parser | 156 target assertions: allocation bounds, atomic defining words, exact-fit strings, quoted EOF, missing/unknown names, fixed RAM banks, and checked flash mapping |
 | Core services | 133 assertions: scoped banks, service IDs, nested evaluation, token bounds, file-load stack balance, unfinished definitions, and caller compilation recovery |
 | Workspace | Multiline and bracketed definitions, error/exit rollback, deliberately hidden completed words, and definitions retained across desktop visits |
-| Scheduler | 89 target assertions, including bank changes on normal/error returns; counters advance during desktop and shell idle waits |
-| Storage | 74 target assertions, 12 cold-boot checks, and 12 damaged-payload checks; independent flash record verification |
-| Desktop | Empty/multiple objects, source load/error feedback, selection and paging bounds, task lifecycle, page restoration, service paging, and 29 exact LCD comparisons |
+| Scheduler | 167 target assertions, including foreground compiler deferral, callback compiler cleanup, and task references invalidated before evaluator/shell rollback; counters advance during desktop and shell idle waits |
+| Storage | 86 target assertions, 12 cold-boot checks, and 12 damaged-payload checks; independent flash record verification and revision identity |
+| Desktop | Empty/multiple objects, source load/error feedback, selection and paging bounds, task lifecycle, page restoration, service paging, 29 baseline LCD comparisons, and four mutation scenarios with title/footer comparisons |
 | Shell editing | Thirteen cursor/full-buffer states, 512-entry and 4096-byte history boundaries, eviction, compiler rollback, and persistent definitions |
 
 For the original language suite, choose **Test suite** in the workbench or run
