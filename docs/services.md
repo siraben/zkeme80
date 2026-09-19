@@ -14,6 +14,11 @@ callback, and restores the prior raw bank selector after either return or
 `THROW`. Nested calls are supported. The callback must reside outside the
 banked window; raw `(BANK!)` remains an unrestricted low-level primitive.
 
+`WITH-COMPILER ( i*x xt -- j*x ior )` runs a callback through `CATCH` with
+compiler checkpoint, unfinished-definition cleanup, radix, and input-pointer
+restoration. It is shared by the scheduler and `EVALUATE0`; callers needing
+arbitrary `SOURCE`/`>IN` or bank changes scoped must save those separately.
+
 `EVALUATE0 ( zaddr -- ior )` evaluates a zero-terminated source while preserving
 the caller's input pointer, numeric base, and compilation state. Its frame
 uses the return stack, so evaluation can nest. Normal program results remain
@@ -48,6 +53,13 @@ names are limited to 31 bytes; longer defining names throw `-19`.
 An unterminated quoted string returns `-18`. Missing defining names return
 `-16`; unresolved names return `-13`. Standard `EVALUATE` retains its ANS
 source and compiler-state contracts.
+
+Before automatic dictionary rollback, `DICTIONARY-RECLAIM` calls the optional
+resident `RECLAIM-XT` hook with `( first last -- )`, the half-open address range
+about to be discarded. This hook must not allocate, yield, or throw. The task
+module installs reference cleanup so discarded callbacks or contexts cannot
+remain scheduled. Shell line rollback uses the same hook. Raw dictionary
+reclamation remains caller-managed; see [task lifetime rules](tasks.md).
 
 `tests/test-core.py` exercises service lookup, bank restoration, invalid bounds,
 nested evaluation, parser limits, failed-definition cleanup, and interactive

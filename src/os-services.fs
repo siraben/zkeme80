@@ -3,6 +3,13 @@
 16384 CONSTANT STORAGE-SIZE
 8 CONSTANT STORAGE-PAGE
 
+\ Resident owners release references before automatic dictionary rollback.
+\ Hook contract: ( first last -- ), no allocation, yielding, or throwing.
+VARIABLE RECLAIM-XT
+0 RECLAIM-XT !
+: DICTIONARY-RECLAIM ( first -- )
+  HERE RECLAIM-XT @ ?DUP IF EXECUTE ELSE 2DROP THEN ;
+
 \ Callback and source must live outside the banked window (4000-7fff).
 \ Return the callback's CATCH status, restoring the original selector.
 : WITH-PAGE ( xt page -- ior )
@@ -18,7 +25,7 @@
   REPEAT 2DROP 0
 ;
 : (EVAL-ROLLBACK) ( old-latest old-here old-flags -- )
-  >R DP ! DUP LATEST ! 2+ R> SWAP C! CLEAR-FIND-CACHE
+  >R DUP DICTIONARY-RECLAIM DP ! DUP LATEST ! 2+ R> SWAP C! CLEAR-FIND-CACHE
 ;
 \ Compilation must stay inside its entry definition, even across [ and ].
 : (EVAL-CLEANUP) ( ior old-latest old-here old-state old-flags -- ior )
@@ -36,10 +43,9 @@
   STATE ! R> DROP
 ;
 
-\ Nested zero-terminated input, preserving source, radix, and compiler state.
-\ Keep the complete evaluation frame on the return stack for nested calls.
-\ Reject unfinished definitions and discard their partial dictionary entries.
-: EVALUATE0 ( zaddr -- ior )
+\ Scope compiler ownership for source evaluation and cooperative callbacks.
+\ Keep the complete frame on the return stack, including active DO contexts.
+: WITH-COMPILER ( i*x xt -- j*x ior )
   INPUT-PTR @ >R BASE @ >R
   CP-DP @ >R CP-LATEST @ >R CP-LOOPS @ >R CP-BODY @ >R
   \ Reserve only active DO contexts, retaining nested evaluation frames.
@@ -47,13 +53,20 @@
   CP-CONTEXTS RP@ 2 PICK CMOVE >R
   LATEST @ 2+ C@ >R
   STATE @ >R HERE >R LATEST @ >R
-  DUP BEGIN DUP C@ WHILE 1+ REPEAT OVER -
-  ['] EVALUATE CATCH DUP IF >R 2DROP R> THEN
+  CATCH
   R> R> R> R> (EVAL-CLEANUP)
   R> DUP RP@ CP-CONTEXTS ROT CMOVE RP@ + RP!
   R> CP-BODY ! R> CP-LOOPS ! R> CP-LATEST ! R> CP-DP !
   R> BASE ! R> INPUT-PTR !
 ;
+\ Nested zero-terminated input; EVALUATE scopes SOURCE and >IN itself.
+: (EVALUATE0) ( -- )
+  INPUT-PTR @ DUP BEGIN DUP C@ WHILE 1+ REPEAT OVER - EVALUATE ;
+: EVALUATE0 ( zaddr -- ior )
+  \ Keep the source argument outside CATCH's data-stack snapshot, so both a
+  \ thrown error and a normal return with unfinished source yield only ior.
+  INPUT-PTR @ >R INPUT-PTR !
+  ['] (EVALUATE0) WITH-COMPILER R> INPUT-PTR ! ;
 
 VARIABLE IO-OFF
 VARIABLE IO-ADDR

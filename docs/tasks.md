@@ -48,7 +48,7 @@ passes, not wall time. A sleep of zero makes a job runnable immediately. An ID
 can be reused after freeing; callers must discard stale IDs. A newly created
 job in a later slot may execute in the current pass.
 
-`CATCH` contains a callback's `THROW`: the error is retained and that job stops,
+`WITH-COMPILER` contains a callback's `THROW`: the error is retained and that job stops,
 while other jobs continue. A changed data-stack depth throws -4 and stops the
 job. This check detects ordinary callback mistakes; it does not protect against
 arbitrary memory writes, return-stack corruption, or consuming/overwriting
@@ -57,6 +57,13 @@ values beneath the callback's context. The scheduler restores `BASE`, `STATE`,
 steps. Callback code must remain outside the banked window while changing
 its mapping. Callbacks must preserve input handlers and other shared
 interpreter state. Callbacks must not reset the task table, roll back the dictionary, or block for input.
+
+The callback boundary also restores compiler checkpoints and discards unfinished
+definitions left by callbacks, including those using standard `EVALUATE`.
+Returning normally with an unfinished definition reports 22; a thrown error
+retains its original code. Completed definitions remain available. This prevents
+a failed callback from leaving the dictionary permanently owned and starving
+other jobs.
 
 These are cooperative jobs, not isolated processes or stackful threads. A
 callback that never returns prevents all other work. The old
@@ -68,7 +75,13 @@ service API provide a place to attach that later.
 
 Execution tokens and context addresses must remain allocated for a job's
 lifetime. Before reclaiming shell definitions or unloading a module, stop and
-free its jobs. `TASK-INIT` clears all jobs and is intended for boot or a quiescent
+free its jobs. Automatic `EVALUATE0` and shell rollback first clear jobs whose
+callback or context points into the reclaimed dictionary range. Context cells
+are opaque, so a numeric context in that range is conservatively treated as an
+address and cleared too. Jobs referring only to retained storage survive;
+this is reference cleanup, not a transaction over all task side effects.
+Raw `FORGET`, negative `ALLOT`, or direct `DP` changes still require callers
+to release jobs themselves. `TASK-INIT` clears all jobs and is intended for boot or a quiescent
 test environment. Definitions made in a persistent shell remain available
 across desktop visits, which makes that shell a useful service workbench.
 
@@ -83,5 +96,5 @@ and `BYE`. Use `--emulator` to specify your emulator binary and `--output` to
 retain its screenshots and RAM snapshots in a chosen directory. The binary
 defaults to `$TILEM` or `tilem2`; launch through `nix develop --command` if its
 dependencies require the development environment. Target
-verification passes all 105 assertions; the keyboard regression confirms that
+verification passes all 167 assertions; the keyboard regression confirms that
 background callbacks keep advancing while the shell awaits input.
